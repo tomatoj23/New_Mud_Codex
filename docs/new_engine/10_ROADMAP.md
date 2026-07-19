@@ -62,6 +62,14 @@
 - 在源快照产生前，任何报告都不宣称已与 XKX100 权威基线对齐
 - capacity profile、浏览器矩阵或恢复预算缺失时 E0 不得完成
 
+### 3.1 当前执行状态（2026-07-19）
+
+E0 已建立文档与 Git 基线、Django/ASGI/PostgreSQL 工程骨架、初始内容模型与迁移、机器合同、来源快照、双 manifest、复合 bundle、CI 和可执行结构校验。Python 3.14.2 私有运行时、完整依赖锁、PostgreSQL 18.4 迁移往返、静态检查和 9 项测试均已验证。
+
+E0 仍为 `blocked`，不得进入完成态：三个非功能 profile 的审批尚未完成，浏览器矩阵缺精确 tested versions，恢复预算缺隔离恢复报告；seed bootstrap、active batch resolver 与 pinned historical revision resolver 也尚未形成可执行纵向验收。当前证据和精确阻塞项见 `18_IMPLEMENTATION_STATUS.md`。
+
+2026-07-19 已确认的 E0 收口与 E1 连接闭环纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。该计划细化执行顺序与阶段验收，但不改变本路线图的 Engine Stage 边界。
+
 ## 4. Engine Stage E1：认证、会话与 H5 连接闭环
 
 需求追溯：需求里程碑 M0、M1；V5 第 8、9、15.2 节。

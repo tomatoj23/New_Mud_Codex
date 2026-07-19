@@ -94,6 +94,7 @@ try {
     }
 
     & $venvPython -m pip install --disable-pip-version-check --no-deps `
+        --no-build-isolation `
         -e "${repositoryRoot}[dev]"
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to install the project package."

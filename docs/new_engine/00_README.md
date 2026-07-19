@@ -39,6 +39,7 @@
 - 真正准备编码前，按顺序精读 `11_PROTOCOL_CATALOG.md` 到 `16_OPERATIONS_TESTING_CONTRACT.md` 六份实施合同。
 - 协议与会话先读 11、13；Registry 与发布读 12；玩法、H5、运维验收依次读 14、15、16。
 - 从需求定位实施合同、里程碑和证据时，读取 `17_REQUIREMENTS_TRACEABILITY.md`。
+- 核对当前实现、环境、验证结果和阻塞项时，读取 `18_IMPLEMENTATION_STATUS.md`。
 
 ## 3. 本轮源码审计范围
 
@@ -138,6 +139,8 @@ Evennia 6.0 最不适合直接沿用的部分是：
    - 可观测性、备份恢复、发布门禁、黄金测试与上线验收。
 17. `17_REQUIREMENTS_TRACEABILITY.md`
    - 稳定需求 ID，以及 V5、实施合同、里程碑和验收证据的映射。
+18. `18_IMPLEMENTATION_STATUS.md`
+   - 当前实现、环境基线、验证证据、已知警告和阻塞项。
 
 ## 6. 与现有分析文档的关系
 

@@ -40,6 +40,12 @@
 - 代码、迁移、配置和测试反映当前实现状态，但不能反向成为设计权威。
 - 实现必须符合上层需求与合同；偏离时按缺陷或有意变更处理。
 
+### 2.7 实施状态：`docs/new_engine/18_IMPLEMENTATION_STATUS.md`
+
+- 记录当前代码、环境、验证证据、已知警告与阻塞项。
+- 它只陈述可回查事实，不创造需求、实施机制或开发顺序。
+- 状态变化必须同步需求追踪索引；计划工作必须进入路线图或经确认的 `plans/` 文件。
+
 ## 3. 冲突与变更规则
 
 冲突按关注点判定，不再使用覆盖所有问题的单一文件总排序：
@@ -52,6 +58,7 @@
 | 需求到合同和证据的映射 | `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` |
 | 架构理由和模块方向 | `docs/new_engine/00-10` |
 | Evennia 来源事实 | `docs/00-18` 与本地 `evennia-main` 快照 |
+| 当前实现、环境、验证结果与阻塞项 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
 
 代码偏离上层需求或冻结合同即为缺陷，除非该偏离已经按有意变更流程批准。
 
@@ -78,6 +85,7 @@
 - 需要理解分析阶段如何从模块判断收敛到总体方案时，再看 `docs/16-18`。
 - 需要理解概念架构与路线时，看 `docs/new_engine/00-10`。
 - 需要从需求定位合同和验收证据时，看 `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md`。
+- 需要确认当前已经实现、验证或阻塞的范围时，看 `docs/new_engine/18_IMPLEMENTATION_STATUS.md`。
 - 开始编码、联调或验收前，必须读取受影响的冻结合同：
   - `docs/new_engine/11_PROTOCOL_CATALOG.md`：WebSocket 协议名、错误码与事件外壳
   - `docs/new_engine/12_REGISTRY_BLUEPRINT_CONTRACT.md`：Registry、Blueprint 与发布更新
@@ -129,6 +137,12 @@
 | 追踪文档 | 主要职责 |
 | --- | --- |
 | `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` | 维护稳定需求 ID，并连接 V5 来源、实施权威、需求里程碑和必要证据；不创造产品或实施语义 |
+
+### 5.3 实施状态映射
+
+| 状态文档 | 主要职责 |
+| --- | --- |
+| `docs/new_engine/18_IMPLEMENTATION_STATUS.md` | 记录当前实现、环境版本、验证结果、警告与阻塞项，并回链需求 ID 和证据；不创造需求、合同或实施顺序 |
 
 ## 6. 持续治理风险与已核验状态
 
