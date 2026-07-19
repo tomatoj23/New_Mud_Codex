@@ -62,8 +62,8 @@ jobs:
           ruff format --check scripts src tests
           mypy src scripts tests
 
-      - name: Contract structure
-        run: python scripts/verify_m0.py --structural-only
+      - name: Contract baseline
+        run: python scripts/verify_m0.py
 
       - name: Django and migration checks
         run: |

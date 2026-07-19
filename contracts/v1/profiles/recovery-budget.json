@@ -9,8 +9,10 @@
     "requirements_v5.md"
   ],
   "approval": {
-    "status": "pending",
-    "basis": "The frozen minimum budget is recorded; owner approval and an isolated recovery report are still required."
+    "status": "approved",
+    "basis": "The project owner approved the first-release recovery target. The linked report proves the M0 dump/restore toolchain and isolated cleanup only; it is not release-gate eligible until every required persistence scope exists and is exercised.",
+    "approved_by": "project-owner",
+    "approved_at": "2026-07-19T22:57:42+08:00"
   },
   "rpo_minutes_max": 15,
   "rto_minutes_max": 60,
@@ -33,6 +35,15 @@
       "content_batches",
       "world_topology"
     ],
-    "latest_report": null
+    "latest_report": {
+      "artifact_path": "reports/m0-recovery-latest.json",
+      "artifact_sha256": "7be50190df61aba84507f8f086ba1440bd39343fec585f2526edf633e8748f82",
+      "report_id": "m0-recovery-20260719-145739z",
+      "evidence_level": "m0_infrastructure",
+      "release_gate_eligible": false,
+      "measured_rpo_minutes": 0.004057,
+      "measured_rto_minutes": 0.01816,
+      "passed": true
+    }
   }
 }

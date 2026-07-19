@@ -1,0 +1,135 @@
+{
+  "contract_version": "1",
+  "artifact_type": "recovery_report",
+  "report_id": "m0-recovery-20260719-145739z",
+  "report_version": 1,
+  "requirement_ids": [
+    "MILESTONE-001",
+    "NFR-002"
+  ],
+  "source_documents": [
+    "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md",
+    "requirements_v5.md"
+  ],
+  "evidence_level": "m0_infrastructure",
+  "release_gate_eligible": false,
+  "backup": {
+    "format": "postgresql_custom",
+    "sha256": "43add5a9b7c07aced903fb83fbada1f42c69bfcf6f28b45f7b894281914c6ae5",
+    "size_bytes": 78203,
+    "snapshot_exported_at": "2026-07-19T14:57:39.556Z",
+    "completed_at": "2026-07-19T14:57:39.777Z",
+    "stored_in_repository": false,
+    "retained_after_drill": false
+  },
+  "databases": {
+    "source": {
+      "database_name": "new_mud",
+      "server_version": "18.4",
+      "schema_sha256": "bf75b35665003a68890a10a6c3e2b6eec565457d25f4acfd594a0e825e2aad5c",
+      "migration_history_sha256": "a34b05d07846480fbde6826b75fa6267d3f921551da4033972314a7b201ed0ca",
+      "table_counts": {
+        "public.auth_group": 0,
+        "public.auth_group_permissions": 0,
+        "public.auth_permission": 48,
+        "public.auth_user": 0,
+        "public.auth_user_groups": 0,
+        "public.auth_user_user_permissions": 0,
+        "public.content_blueprinthead": 0,
+        "public.content_blueprintrevision": 0,
+        "public.content_contentreleasebatch": 0,
+        "public.content_contentreleasehead": 0,
+        "public.content_contentreleaseitem": 0,
+        "public.content_resolvedblueprintdependency": 0,
+        "public.content_resolvedregistrydependency": 0,
+        "public.django_content_type": 12,
+        "public.django_migrations": 16,
+        "public.django_session": 0
+      }
+    },
+    "restored": {
+      "database_name": "new_mud_recovery_20260719_145739_96e4f7c8",
+      "server_version": "18.4",
+      "schema_sha256": "bf75b35665003a68890a10a6c3e2b6eec565457d25f4acfd594a0e825e2aad5c",
+      "migration_history_sha256": "a34b05d07846480fbde6826b75fa6267d3f921551da4033972314a7b201ed0ca",
+      "table_counts": {
+        "public.auth_group": 0,
+        "public.auth_group_permissions": 0,
+        "public.auth_permission": 48,
+        "public.auth_user": 0,
+        "public.auth_user_groups": 0,
+        "public.auth_user_user_permissions": 0,
+        "public.content_blueprinthead": 0,
+        "public.content_blueprintrevision": 0,
+        "public.content_contentreleasebatch": 0,
+        "public.content_contentreleasehead": 0,
+        "public.content_contentreleaseitem": 0,
+        "public.content_resolvedblueprintdependency": 0,
+        "public.content_resolvedregistrydependency": 0,
+        "public.django_content_type": 12,
+        "public.django_migrations": 16,
+        "public.django_session": 0
+      }
+    }
+  },
+  "metrics": {
+    "rpo_definition": "recovery_start_minus_exported_snapshot",
+    "rto_definition": "recovery_start_to_validation_complete",
+    "measured_rpo_minutes": 0.004057,
+    "measured_rto_minutes": 0.01816,
+    "rpo_minutes_max": 15,
+    "rto_minutes_max": 60,
+    "within_budget": true
+  },
+  "validation": {
+    "schema_sha256_match": true,
+    "migration_history_match": true,
+    "table_counts_match": true,
+    "tool_major_match": true,
+    "required_scopes": [
+      {
+        "scope": "accounts",
+        "status": "not_implemented",
+        "basis": "The accounts persistence slice is not implemented in M0."
+      },
+      {
+        "scope": "characters",
+        "status": "not_implemented",
+        "basis": "The characters persistence slice is not implemented in M0."
+      },
+      {
+        "scope": "world_topology",
+        "status": "not_implemented",
+        "basis": "The world_topology persistence slice is not implemented in M0."
+      },
+      {
+        "scope": "content_batches",
+        "status": "not_implemented",
+        "basis": "The table contract exists but no release batch row is present; release-data recovery is not yet exercised."
+      },
+      {
+        "scope": "audit_chain",
+        "status": "not_implemented",
+        "basis": "The audit_chain persistence slice is not implemented in M0."
+      }
+    ]
+  },
+  "passed": true,
+  "execution": {
+    "started_at": "2026-07-19T14:57:39.461Z",
+    "runner": "project-owner-controlled-environment",
+    "runner_platform": "Windows 10",
+    "isolated_database": {
+      "database_name": "new_mud_recovery_20260719_145739_96e4f7c8",
+      "created_at": "2026-07-19T14:57:40.102Z",
+      "dropped_at": "2026-07-19T14:57:41.230Z",
+      "deleted": true
+    },
+    "tool_versions": {
+      "server": "18.4",
+      "pg_dump": "pg_dump (PostgreSQL) 18.4",
+      "pg_restore": "pg_restore (PostgreSQL) 18.4"
+    },
+    "completed_at": "2026-07-19T14:57:41.319Z"
+  }
+}

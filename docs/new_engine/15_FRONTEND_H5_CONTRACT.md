@@ -162,6 +162,8 @@ PC H5：
 
 每个发布候选必须在测试证据中固定实际浏览器与操作系统版本，不能只记录“最新版”。
 
+M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用于确定后续测试对象；它不创建测试事实。只有实际完成对应浏览器、操作系统、视口和交互测试后，发布候选证据才能填写 `tested_versions`。两者不得互相代填，空的 `tested_versions` 在 M0 合同基线中是合法状态，但在发布候选门禁中仍然阻断。
+
 ## 6. 安全与隐私
 
 - Access token 只存放在受控内存状态，不得写入 localStorage、sessionStorage、IndexedDB、Cookie 或容器持久存储。未来若改变该边界，必须先修订本合同与威胁模型。

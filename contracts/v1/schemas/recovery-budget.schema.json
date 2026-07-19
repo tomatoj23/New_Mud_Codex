@@ -75,9 +75,22 @@
         "latest_report": {
           "type": ["object", "null"],
           "additionalProperties": false,
-          "required": ["artifact_path", "measured_rpo_minutes", "measured_rto_minutes", "passed"],
+          "required": [
+            "artifact_path",
+            "artifact_sha256",
+            "report_id",
+            "evidence_level",
+            "release_gate_eligible",
+            "measured_rpo_minutes",
+            "measured_rto_minutes",
+            "passed"
+          ],
           "properties": {
             "artifact_path": {"type": "string", "pattern": "^(?!/)(?![A-Za-z]:)[^\\\\]+(?:/[^\\\\]+)*$"},
+            "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "report_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,95}$"},
+            "evidence_level": {"enum": ["m0_infrastructure", "release_candidate"]},
+            "release_gate_eligible": {"type": "boolean"},
             "measured_rpo_minutes": {"type": "number", "minimum": 0},
             "measured_rto_minutes": {"type": "number", "minimum": 0},
             "passed": {"type": "boolean"}

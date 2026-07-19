@@ -72,31 +72,44 @@
 | 锁文件与当前 `.venv` 对比 | 通过，0 个缺失、0 个版本偏差 |
 | PyPI 过时依赖检查 | 通过，结果为空 |
 | 空环境锁文件重建 | 通过 |
-| Ruff lint / format | 通过，30 个文件格式一致 |
-| mypy | 通过，30 个源文件无问题 |
+| Ruff lint / format | 通过，32 个文件格式一致 |
+| mypy | 通过，32 个源文件无问题 |
 | Django system check | 通过，0 个问题 |
 | `makemigrations --check --dry-run` | 通过，无模型漂移 |
 | PostgreSQL 迁移往返 | 通过 |
-| pytest | 9 项通过，其中 3 项为 PostgreSQL 合同测试 |
-| M0 结构校验 | 56,849 项通过 |
+| pytest | 12 项通过，其中 3 项为 PostgreSQL 合同测试 |
+| M0 合同校验 | 56,883 项通过，profile blocker 为空 |
+| PostgreSQL 隔离恢复 | 通过；实测 RPO 0.004057 分钟，RTO 0.01816 分钟 |
 
 pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两条弃用警告。当前运行时为 Python 3.14.2，且检查当日没有可升级的 Daphne 版本，因此该警告记录为上游兼容性观察项，不构成当前失败。
+
+### 3.7 非功能 M0 基线收口
+
+- browser matrix 已由 `project-owner` 批准，基于 Apple、Google、Microsoft 与 Mozilla 官方版本源冻结桌面和移动精确目标组合；iOS Safari 保留在首发目标中。所有 `tested_versions` 仍为空，等待真实 H5 浏览器 E2E 填写。
+- capacity profile 已批准首发环境、数据量、负载、采样窗口和阈值；本次没有生成容量或两小时 soak 报告。
+- 新增 `recovery-report.schema.json` 与 `run_recovery_drill.py`。最终演练使用 PostgreSQL/pg_dump/pg_restore 18.4，在同一导出快照上生成临时 custom dump，恢复到随机隔离数据库，并验证 schema 哈希、16 张表逐表行数、16 条 Django 迁移历史及工具主版本一致。
+- 恢复报告 `m0-recovery-20260719-145739z` 的文件 SHA-256 为 `7be50190df61aba84507f8f086ba1440bd39343fec585f2526edf633e8748f82`。临时 dump 与隔离数据库均已删除，报告不含数据库凭据。
+- 账号、角色、世界拓扑、非空内容批次和审计链尚未形成发布样本，因此报告固定为 `release_gate_eligible=false`；它只证明 M0 恢复工具链，不把 `NFR-002` 提前标记为通过。
+- CI 已从仅结构检查切换到完整 M0 合同门禁，报告路径、报告 ID、文件哈希、指标、范围集合和内部通过条件均自动复核。
 
 ## 4. 当前状态
 
 | 对象 | 状态 | 依据 |
 | --- | --- | --- |
 | 文档基线 | `verified` | 审计归档与 Git `e7a3717` |
-| M0 机器合同结构 | `verified` | `verify_m0.py` 的 56,849 项结构检查 |
+| M0 机器合同基线 | `verified` | `verify_m0.py` 的 56,883 项检查，profile blocker 为空 |
 | `CONTENT-001` | `implemented` | 初始模型、迁移与 PostgreSQL 合同测试已存在；seed bootstrap、resolver 与完整发布服务仍待后续纵切 |
 | `CONVERT-001` | `implemented` | 来源快照、双 manifest、bundle、生成器与篡改检查已存在；M4 黄金差分仍未实现 |
-| `MILESTONE-001` / Engine Stage E0 | `blocked` | 三个非功能 profile 尚未全部批准，浏览器精确测试版本和隔离恢复报告缺失；E0 的 seed bootstrap 与内容解析服务也尚未完成 |
+| 非功能 M0 profile 基线 | `verified` | browser、capacity、recovery 三份 profile 已批准，恢复报告路径/ID/哈希与指标已纳入自动校验 |
+| `MILESTONE-001` / Engine Stage E0 | `blocked` | 非功能 M0 基线已收口；seed bootstrap、active batch resolver 与 pinned historical revision resolver 尚未完成 |
 
-M0 结构门禁当前明确报告以下阻塞项：
+M0 机器合同当前通过且没有 profile blocker。E0 仍有以下实施阻塞项：
 
-- `browser-matrix.json`、`capacity-profile.json` 和 `recovery-budget.json` 的审批状态仍为 pending。
-- 浏览器矩阵没有精确 tested versions。
-- 恢复预算没有绑定隔离恢复报告。
+- 受审计 seed bootstrap 尚未原子创建完整活动发布批次。
+- 新选择读取 active batch 的 resolver 尚未实现。
+- 已钉定对象读取 exact historical revision 的 resolver 尚未实现。
+
+浏览器实际执行、容量报告与五个业务恢复范围仍是 M1/发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批而提前转为 `verified`。
 
 经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。该计划先用两个切片收口 E0，再用三个切片完成 E1 的注册登录、连接恢复和跨设备接管闭环。
 
@@ -107,9 +120,9 @@ M0 结构门禁当前明确报告以下阻塞项：
 | `MILESTONE-001` | `contracts/v1/`、`scripts/verify_m0.py`、`.github/workflows/m0.yml`、本文件第 3.6 节 |
 | `CONTENT-001` | `src/new_mud/apps/content/models.py`、`0001_initial.py`、`tests/test_postgres_content_contract.py` |
 | `CONVERT-001` | `contracts/v1/artifacts/`、`scripts/generate_source_contracts.py`、`tests/test_contracts.py` |
-| `CLIENT-001` | `contracts/v1/profiles/browser-matrix.json`；当前仍缺精确版本、审批与浏览器执行证据 |
-| `NFR-001` | `contracts/v1/profiles/capacity-profile.json`；当前仍缺审批及后续容量报告 |
-| `NFR-002` | `contracts/v1/profiles/recovery-budget.json`；当前仍缺审批与隔离恢复报告 |
+| `CLIENT-001` | `browser-matrix.json` 已批准且冻结目标版本；实际 `tested_versions` 与浏览器 E2E 尚缺 |
+| `NFR-001` | `capacity-profile.json` 已批准；容量报告与两小时 soak 尚缺 |
+| `NFR-002` | `recovery-budget.json`、`m0-recovery-latest.json` 与 `run_recovery_drill.py`；发布级五范围恢复证据尚缺 |
 
 ## 6. 变更边界
 
@@ -117,6 +130,7 @@ M0 结构门禁当前明确报告以下阻塞项：
 - `evennia-main/` 只用于架构事实回查，本轮未新增或修改其中的文件。
 - `.venv`、PostgreSQL 数据目录和本机服务属于本地开发环境，不进入 Git。
 - 临时锁文件重建环境已经清理，不构成新的长期环境依赖。
+- 恢复演练的 dump 位于系统临时目录并已删除，随机隔离数据库已删除；仓库只保留不含凭据的 JSON 报告。
 - 本文记录的本机通过结果不能替代 CI、浏览器、容量、恢复或发布候选环境的独立证据。
 
 ## 7. 更新规则

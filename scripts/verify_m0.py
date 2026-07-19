@@ -45,6 +45,7 @@ EXPECTED_INSTANCE_FILES = {
     "profiles/browser-matrix.json",
     "profiles/capacity-profile.json",
     "profiles/recovery-budget.json",
+    "reports/m0-recovery-latest.json",
 }
 
 SCHEMA_BY_ARTIFACT_TYPE = {
@@ -55,6 +56,7 @@ SCHEMA_BY_ARTIFACT_TYPE = {
     "fixture_manifest": "fixture-manifest.schema.json",
     "protocol_catalog": "machine-catalog.schema.json",
     "recovery_budget": "recovery-budget.schema.json",
+    "recovery_report": "recovery-report.schema.json",
     "registry_catalog": "registry-catalog.schema.json",
     "source_snapshot": "source-snapshot.schema.json",
     "state_catalog": "machine-catalog.schema.json",
@@ -121,6 +123,14 @@ WORLD_ROOTS = {
     "d/village/npc/dipi.c",
     "d/village/npc/obj/cloth.c",
     "d/village/npc/punk.c",
+}
+
+REQUIRED_RECOVERY_SCOPES = {
+    "accounts",
+    "characters",
+    "world_topology",
+    "content_batches",
+    "audit_chain",
 }
 
 SKILL_COMBAT_ROOTS = {
@@ -249,7 +259,7 @@ def validate_instances(
     instances: dict[str, Any] = {}
     actual_files = {
         path.relative_to(contract_root).as_posix()
-        for directory in ("artifacts", "catalogs", "profiles")
+        for directory in ("artifacts", "catalogs", "profiles", "reports")
         for path in (contract_root / directory).glob("*.json")
     }
     result.check(actual_files == EXPECTED_INSTANCE_FILES, "contract instance file set has drifted")
@@ -628,7 +638,144 @@ def validate_generated_catalogs(
     result.check(actual == expected, "generated catalog enums are missing or stale")
 
 
-def validate_profiles(instances: dict[str, Any], result: VerificationResult) -> None:
+def validate_recovery_report(
+    repository_root: Path,
+    recovery_budget: dict[str, Any],
+    instances: dict[str, Any],
+    result: VerificationResult,
+) -> None:
+    report_reference = recovery_budget["exercise"]["latest_report"]
+    if report_reference is None:
+        result.block("profiles/recovery-budget.json: isolated recovery report is missing")
+        return
+
+    relative = report_reference["artifact_path"]
+    report = instances.get(relative)
+    if report is None:
+        result.error(f"profiles/recovery-budget.json: report artifact is missing: {relative}")
+        return
+    report_path = repository_root / "contracts" / "v1" / relative
+    try:
+        report_hash = hashlib.sha256(report_path.read_bytes()).hexdigest()
+    except OSError as error:
+        result.error(f"{relative}: cannot hash recovery report: {error}")
+        return
+
+    result.check(
+        report_reference["artifact_sha256"] == report_hash,
+        "profiles/recovery-budget.json: recovery report hash mismatch",
+    )
+    result.check(
+        report_reference["report_id"] == report["report_id"],
+        "profiles/recovery-budget.json: recovery report id mismatch",
+    )
+    result.check(
+        report_reference["evidence_level"] == report["evidence_level"],
+        "profiles/recovery-budget.json: recovery evidence level mismatch",
+    )
+    result.check(
+        report_reference["release_gate_eligible"] == report["release_gate_eligible"],
+        "profiles/recovery-budget.json: recovery release eligibility mismatch",
+    )
+    metrics = report["metrics"]
+    for key in ("measured_rpo_minutes", "measured_rto_minutes"):
+        result.check(
+            report_reference[key] == metrics[key],
+            f"profiles/recovery-budget.json: recovery report {key} mismatch",
+        )
+    result.check(
+        metrics["rpo_minutes_max"] == recovery_budget["rpo_minutes_max"],
+        "recovery report: RPO budget mismatch",
+    )
+    result.check(
+        metrics["rto_minutes_max"] == recovery_budget["rto_minutes_max"],
+        "recovery report: RTO budget mismatch",
+    )
+    calculated_within_budget = (
+        metrics["measured_rpo_minutes"] <= metrics["rpo_minutes_max"]
+        and metrics["measured_rto_minutes"] <= metrics["rto_minutes_max"]
+    )
+    result.check(
+        metrics["within_budget"] == calculated_within_budget,
+        "recovery report: budget result is inconsistent",
+    )
+    validation = report["validation"]
+    scope_names = [entry["scope"] for entry in validation["required_scopes"]]
+    result.check(
+        len(scope_names) == len(set(scope_names)),
+        "recovery report: duplicate required scope results",
+    )
+    result.check(
+        set(scope_names) == REQUIRED_RECOVERY_SCOPES,
+        "recovery report: required scope set mismatch",
+    )
+    if report["release_gate_eligible"]:
+        result.check(
+            report["evidence_level"] == "release_candidate",
+            "recovery report: release eligibility requires release-candidate evidence",
+        )
+        result.check(
+            all(entry["status"] == "verified" for entry in validation["required_scopes"]),
+            "recovery report: release eligibility requires every scope to be verified",
+        )
+    if report["evidence_level"] == "m0_infrastructure":
+        result.check(
+            not report["release_gate_eligible"],
+            "recovery report: M0 infrastructure evidence cannot pass the release gate",
+        )
+    source = report["databases"]["source"]
+    restored = report["databases"]["restored"]
+    result.check(
+        validation["schema_sha256_match"] == (source["schema_sha256"] == restored["schema_sha256"]),
+        "recovery report: schema match result is inconsistent",
+    )
+    result.check(
+        validation["migration_history_match"]
+        == (source["migration_history_sha256"] == restored["migration_history_sha256"]),
+        "recovery report: migration match result is inconsistent",
+    )
+    result.check(
+        validation["table_counts_match"] == (source["table_counts"] == restored["table_counts"]),
+        "recovery report: table count match result is inconsistent",
+    )
+    tool_versions = report["execution"]["tool_versions"]
+    version_matches = [
+        re.search(r"\b(\d+)(?:\.\d+)", tool_versions[key])
+        for key in ("server", "pg_dump", "pg_restore")
+    ]
+    result.check(
+        all(match is not None for match in version_matches),
+        "recovery report: cannot parse PostgreSQL tool versions",
+    )
+    if all(match is not None for match in version_matches):
+        tool_major_match = len({match.group(1) for match in version_matches if match}) == 1
+        result.check(
+            validation["tool_major_match"] == tool_major_match,
+            "recovery report: tool major match result is inconsistent",
+        )
+    expected_pass = all(
+        (
+            validation["schema_sha256_match"],
+            validation["migration_history_match"],
+            validation["table_counts_match"],
+            validation["tool_major_match"],
+            metrics["within_budget"],
+        )
+    )
+    result.check(report["passed"] == expected_pass, "recovery report: pass result is inconsistent")
+    result.check(
+        report_reference["passed"] == report["passed"],
+        "profiles/recovery-budget.json: recovery pass result mismatch",
+    )
+    if not report["passed"]:
+        result.block("profiles/recovery-budget.json: latest recovery exercise did not pass")
+
+
+def validate_profiles(
+    repository_root: Path,
+    instances: dict[str, Any],
+    result: VerificationResult,
+) -> None:
     profile_paths = sorted(path for path in instances if path.startswith("profiles/"))
     for relative in profile_paths:
         profile = instances[relative]
@@ -638,15 +785,27 @@ def validate_profiles(instances: dict[str, Any], result: VerificationResult) -> 
     browser = instances.get("profiles/browser-matrix.json")
     if browser is not None:
         targets = [*browser["desktop_targets"], *browser["mobile_targets"]]
-        if any(not target["tested_versions"] for target in targets):
-            result.block("profiles/browser-matrix.json: exact tested browser versions are missing")
+        if any(not target["target_versions"] for target in targets):
+            result.block("profiles/browser-matrix.json: exact target browser versions are missing")
+        for target in targets:
+            target_versions = target["target_versions"]
+            tested_versions = target["tested_versions"]
+            result.check(
+                all(version in target_versions for version in tested_versions),
+                "profiles/browser-matrix.json: tested version is not an approved target",
+            )
+            if target["version_policy"] == "latest_two_stable_major":
+                target_majors = {
+                    version["browser_version"].split(".", maxsplit=1)[0]
+                    for version in target_versions
+                }
+                result.check(
+                    len(target_majors) >= 2,
+                    "profiles/browser-matrix.json: latest-two policy lacks two browser majors",
+                )
     recovery = instances.get("profiles/recovery-budget.json")
     if recovery is not None:
-        report = recovery["exercise"]["latest_report"]
-        if report is None:
-            result.block("profiles/recovery-budget.json: isolated recovery report is missing")
-        elif not report["passed"]:
-            result.block("profiles/recovery-budget.json: latest recovery exercise did not pass")
+        validate_recovery_report(repository_root, recovery, instances, result)
 
 
 def verify_repository(
@@ -666,7 +825,7 @@ def verify_repository(
     validate_source_artifacts(instances, result)
     generated_path = repository_root / GENERATED_CATALOGS.relative_to(REPOSITORY_ROOT)
     validate_generated_catalogs(instances, generated_path, write_generated, result)
-    validate_profiles(instances, result)
+    validate_profiles(repository_root, instances, result)
     return result
 
 
@@ -699,7 +858,8 @@ def main() -> int:
         for blocker in result.blockers:
             print(f"BLOCKED: {blocker}")
         return 0 if args.structural_only else 2
-    print("M0 STATUS: READY")
+    print("M0 CONTRACT BASELINE: READY")
+    print("MILESTONE-001 status remains governed by docs/new_engine/18_IMPLEMENTATION_STATUS.md")
     return 0
 
 

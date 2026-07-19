@@ -4,16 +4,21 @@ import copy
 import json
 from pathlib import Path
 
-from scripts.verify_m0 import VerificationResult, validate_source_artifacts, verify_repository
+from scripts.verify_m0 import (
+    VerificationResult,
+    validate_recovery_report,
+    validate_source_artifacts,
+    verify_repository,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_contract_repository_is_structurally_valid() -> None:
+def test_contract_repository_is_ready() -> None:
     result = verify_repository(REPOSITORY_ROOT)
 
     assert result.errors == []
-    assert result.blockers
+    assert result.blockers == []
 
 
 def test_source_artifact_hash_tampering_is_rejected() -> None:
@@ -47,3 +52,24 @@ def test_source_artifact_hash_tampering_is_rejected() -> None:
 
     assert any("file hash mismatch" in error for error in result.errors)
     assert any("aggregate hash mismatch" in error for error in result.errors)
+
+
+def test_recovery_report_hash_tampering_is_rejected() -> None:
+    contract_root = REPOSITORY_ROOT / "contracts" / "v1"
+    budget = json.loads(
+        (contract_root / "profiles" / "recovery-budget.json").read_text(encoding="utf-8")
+    )
+    report = json.loads(
+        (contract_root / "reports" / "m0-recovery-latest.json").read_text(encoding="utf-8")
+    )
+    budget["exercise"]["latest_report"]["artifact_sha256"] = "0" * 64
+    result = VerificationResult()
+
+    validate_recovery_report(
+        REPOSITORY_ROOT,
+        budget,
+        {"reports/m0-recovery-latest.json": report},
+        result,
+    )
+
+    assert "profiles/recovery-budget.json: recovery report hash mismatch" in result.errors

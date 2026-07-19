@@ -9,8 +9,10 @@
     "requirements_v5.md"
   ],
   "approval": {
-    "status": "pending",
-    "basis": "The frozen minimums are recorded; owner approval and an execution report are still required."
+    "status": "approved",
+    "basis": "The project owner approved these version-controlled M0 minimums as the first-release capacity test target. Approval does not claim that the M1 capacity and soak reports exist.",
+    "approved_by": "project-owner",
+    "approved_at": "2026-07-19T22:12:19+08:00"
   },
   "environment": {
     "application": {"vcpu": 4, "memory_gib": 8},

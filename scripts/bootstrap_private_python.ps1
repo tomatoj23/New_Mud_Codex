@@ -105,9 +105,9 @@ try {
         throw "The private environment has dependency conflicts."
     }
 
-    & $venvPython (Join-Path $repositoryRoot "scripts\verify_m0.py") --structural-only
+    & $venvPython (Join-Path $repositoryRoot "scripts\verify_m0.py")
     if ($LASTEXITCODE -ne 0) {
-        throw "The private environment failed the M0 structural gate."
+        throw "The private environment failed the M0 contract baseline gate."
     }
 }
 catch {
