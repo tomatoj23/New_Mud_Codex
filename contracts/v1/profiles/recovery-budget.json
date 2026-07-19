@@ -1,0 +1,38 @@
+{
+  "contract_version": "1",
+  "artifact_type": "recovery_budget",
+  "budget_id": "first-release-production",
+  "budget_version": 1,
+  "requirement_ids": ["MILESTONE-001", "NFR-002"],
+  "source_documents": [
+    "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md",
+    "requirements_v5.md"
+  ],
+  "approval": {
+    "status": "pending",
+    "basis": "The frozen minimum budget is recorded; owner approval and an isolated recovery report are still required."
+  },
+  "rpo_minutes_max": 15,
+  "rto_minutes_max": 60,
+  "backup": {
+    "full_backup": true,
+    "incremental_or_wal": true,
+    "encrypted": true,
+    "access_restricted": true,
+    "daily_retention_count_min": 7,
+    "weekly_retention_count_min": 4,
+    "release_boundary_snapshots": true
+  },
+  "exercise": {
+    "frequency": "each_release_cycle",
+    "isolated_environment": true,
+    "required_scopes": [
+      "accounts",
+      "audit_chain",
+      "characters",
+      "content_batches",
+      "world_topology"
+    ],
+    "latest_report": null
+  }
+}

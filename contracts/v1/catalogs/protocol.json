@@ -1,0 +1,43 @@
+{
+  "contract_version": "1",
+  "artifact_type": "protocol_catalog",
+  "requirement_ids": ["AUTH-003", "MILESTONE-001"],
+  "source_document": "docs/new_engine/11_PROTOCOL_CATALOG.md",
+  "values": {
+    "protocol_versions": ["1"],
+    "client_envelope_fields": ["payload", "request_id", "type", "version"],
+    "server_envelope_fields": ["payload", "seq", "ts", "type", "version"],
+    "terminal_types": ["request.failed", "request.succeeded"],
+    "request_types": [
+      "action.invoke",
+      "presence.enter",
+      "presence.leave",
+      "presence.takeover",
+      "session.authenticate",
+      "session.ping",
+      "session.resume",
+      "state.sync",
+      "ui.actions.resolve"
+    ],
+    "event_types": [
+      "character.snapshot",
+      "chat.channel_message",
+      "chat.private_message",
+      "combat.snapshot",
+      "presence.entered",
+      "presence.left",
+      "presence.taken_over",
+      "room.actor_entered",
+      "room.actor_left",
+      "room.output",
+      "scene.snapshot",
+      "session.ready",
+      "session.resumed",
+      "system.maintenance",
+      "system.notice",
+      "ui.actions.resolved"
+    ],
+    "action_sources": ["shortcut", "text_command", "ui_button", "ui_menu"],
+    "application_close_codes": [4400]
+  }
+}

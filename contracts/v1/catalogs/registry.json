@@ -1,0 +1,207 @@
+{
+  "contract_version": "1",
+  "artifact_type": "registry_catalog",
+  "requirement_ids": ["CONTENT-001", "MILESTONE-001"],
+  "source_document": "docs/new_engine/12_REGISTRY_BLUEPRINT_CONTRACT.md",
+  "key_pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+  "semver_pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+  "entries": [
+    {
+      "registry_kind": "handler",
+      "definition_type": "HandlerDefinition",
+      "required_fields": [
+        "callable_path",
+        "definition_hash",
+        "idempotency",
+        "input_schema",
+        "key",
+        "result_schema_version",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "rule",
+      "definition_type": "RuleDefinition",
+      "required_fields": [
+        "definition_hash",
+        "determinism",
+        "handler_key",
+        "input_schema",
+        "key",
+        "output_schema",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "permission_policy",
+      "definition_type": "PermissionPolicyDefinition",
+      "required_fields": [
+        "combine",
+        "default_decision",
+        "definition_hash",
+        "key",
+        "rule_keys",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "hook_set",
+      "definition_type": "HookSetDefinition",
+      "required_fields": [
+        "definition_hash",
+        "hook_schema_version",
+        "hooks",
+        "key",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "action_provider",
+      "definition_type": "ActionProviderDefinition",
+      "required_fields": [
+        "action_keys",
+        "definition_hash",
+        "key",
+        "priority",
+        "source_module",
+        "source_scopes",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "render_policy",
+      "definition_type": "RenderPolicyDefinition",
+      "required_fields": [
+        "definition_hash",
+        "handler_key",
+        "input_schema",
+        "key",
+        "output_schema",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "blueprint_seed_provider",
+      "definition_type": "BlueprintSeedProviderDefinition",
+      "required_fields": [
+        "content_hash",
+        "definition_hash",
+        "key",
+        "loader_handler_key",
+        "seed_bundle_id",
+        "source_module",
+        "summary",
+        "target_content_release",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "action",
+      "definition_type": "ActionDefinition",
+      "required_fields": [
+        "argument_schema",
+        "definition_hash",
+        "handler_key",
+        "help",
+        "key",
+        "permission_policy_key",
+        "requires_inventory_version",
+        "source_module",
+        "source_scopes",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "behavior_profile",
+      "definition_type": "BehaviorProfileDefinition",
+      "required_fields": [
+        "definition_hash",
+        "entity_kinds",
+        "key",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "effect_type",
+      "definition_type": "EffectTypeDefinition",
+      "required_fields": [
+        "definition_hash",
+        "handler_key_apply",
+        "handler_key_expire",
+        "key",
+        "payload_schema",
+        "persistence",
+        "recovery_policy",
+        "reference_rule_key",
+        "source_module",
+        "stacking_policy",
+        "summary",
+        "tick_policy",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "job_type",
+      "definition_type": "JobTypeDefinition",
+      "required_fields": [
+        "concurrency_key_template",
+        "definition_hash",
+        "handler_key",
+        "key",
+        "max_runtime_s",
+        "overlap_policy",
+        "payload_schema",
+        "retry_policy",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "world_process_type",
+      "definition_type": "WorldProcessTypeDefinition",
+      "required_fields": [
+        "definition_hash",
+        "handler_key",
+        "key",
+        "payload_schema",
+        "recovery_policy",
+        "singleton_scope",
+        "source_module",
+        "summary",
+        "version"
+      ]
+    },
+    {
+      "registry_kind": "startup_plan",
+      "definition_type": "StartupPlanEntry",
+      "required_fields": [
+        "definition_hash",
+        "enabled",
+        "idempotency_key",
+        "key",
+        "payload",
+        "source_module",
+        "summary",
+        "target_kind",
+        "type_key",
+        "type_version",
+        "version"
+      ]
+    }
+  ]
+}

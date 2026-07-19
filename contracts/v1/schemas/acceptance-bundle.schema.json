@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://new-mud.local/contracts/v1/acceptance-bundle.schema.json",
+  "title": "New_Mud composite acceptance bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "artifact_type",
+    "requirement_ids",
+    "bundle_id",
+    "bundle_version",
+    "source_snapshot_id",
+    "world_manifest",
+    "skill_combat_manifest",
+    "alignment_status"
+  ],
+  "properties": {
+    "contract_version": {"const": "1"},
+    "artifact_type": {"const": "acceptance_bundle"},
+    "requirement_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z]+-[0-9]{3}$"}},
+    "bundle_id": {"const": "xkx100-village-skill-combat-v1"},
+    "bundle_version": {"const": 1},
+    "source_snapshot_id": {"type": "string", "minLength": 1},
+    "world_manifest": {"$ref": "#/$defs/manifest_ref"},
+    "skill_combat_manifest": {"$ref": "#/$defs/manifest_ref"},
+    "golden_case": {"$ref": "#/$defs/artifact_ref"},
+    "compatibility_envelope": {"$ref": "#/$defs/artifact_ref"},
+    "alignment_status": {"enum": ["blocked", "unverified", "verified"]}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "manifest_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_name", "fixture_version", "source_snapshot_id", "aggregate_sha256"],
+      "properties": {
+        "manifest_name": {"type": "string"},
+        "fixture_version": {"type": "integer", "minimum": 1},
+        "source_snapshot_id": {"type": "string"},
+        "aggregate_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "path", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "pattern": "^(?!/)(?![A-Za-z]:)[^\\\\]+(?:/[^\\\\]+)*$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

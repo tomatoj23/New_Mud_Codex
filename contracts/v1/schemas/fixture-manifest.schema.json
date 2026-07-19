@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://new-mud.local/contracts/v1/fixture-manifest.schema.json",
+  "title": "New_Mud XKX100 fixture manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "artifact_type",
+    "requirement_ids",
+    "fixture_kind",
+    "manifest_name",
+    "fixture_version",
+    "source_snapshot_id",
+    "hash_algorithm",
+    "canonicalization",
+    "root_files",
+    "dependency_files",
+    "aggregate_sha256",
+    "dependency_closure"
+  ],
+  "properties": {
+    "contract_version": {"const": "1"},
+    "artifact_type": {"const": "fixture_manifest"},
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z]+-[0-9]{3}$"}
+    },
+    "fixture_kind": {"enum": ["world", "skill_combat"]},
+    "manifest_name": {"enum": ["xkx100-village-alley-v1", "xkx100-skill-combat-v1"]},
+    "fixture_version": {"type": "integer", "minimum": 1},
+    "source_snapshot_id": {"type": "string", "minLength": 1},
+    "hash_algorithm": {"const": "sha256"},
+    "canonicalization": {"const": "RFC8785-JCS/UTF-8"},
+    "root_files": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/file"}},
+    "dependency_files": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/file"}},
+    "aggregate_sha256": {"$ref": "#/$defs/sha256"},
+    "dependency_closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "implicit_global_include", "unresolved"],
+      "properties": {
+        "algorithm": {"const": "lpc-static-include-inherit-v1"},
+        "implicit_global_include": {"const": "include/globals.h"},
+        "unresolved": {"type": "array", "maxItems": 0}
+      }
+    },
+    "external_boundaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "direction", "target", "runtime_traversable"],
+        "properties": {
+          "source": {"type": "string"},
+          "direction": {"type": "string"},
+          "target": {"type": "string"},
+          "runtime_traversable": {"const": false}
+        }
+      }
+    },
+    "expected_definition_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "expected_runtime_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "review_scope": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"fixture_kind": {"const": "world"}}},
+      "then": {
+        "required": ["external_boundaries", "expected_definition_counts", "expected_runtime_counts"],
+        "properties": {"root_files": {"minItems": 5, "maxItems": 5}}
+      }
+    },
+    {
+      "if": {"properties": {"fixture_kind": {"const": "skill_combat"}}},
+      "then": {"required": ["review_scope"]}
+    }
+  ],
+  "$defs": {
+    "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f]+$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "contract_version": "1",
+  "artifact_type": "state_catalog",
+  "requirement_ids": ["CONTENT-001", "MILESTONE-001"],
+  "source_document": "docs/new_engine/12_REGISTRY_BLUEPRINT_CONTRACT.md",
+  "values": {
+    "blueprint_dependency_kinds": [
+      "blueprint_ref",
+      "parent"
+    ],
+    "blueprint_revision_kinds": [
+      "draft",
+      "published"
+    ],
+    "publication_reasons": [
+      "content_publish",
+      "dependency_recompile",
+      "rollback_recompile",
+      "seed_bootstrap"
+    ]
+  }
+}

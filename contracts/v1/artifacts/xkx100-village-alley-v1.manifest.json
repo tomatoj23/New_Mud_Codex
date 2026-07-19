@@ -1,0 +1,241 @@
+{
+  "contract_version": "1",
+  "artifact_type": "fixture_manifest",
+  "requirement_ids": [
+    "CONVERT-001",
+    "MILESTONE-001"
+  ],
+  "fixture_kind": "world",
+  "manifest_name": "xkx100-village-alley-v1",
+  "fixture_version": 1,
+  "source_snapshot_id": "xkx100-20201118-sha256-1b101b7a99c60803",
+  "hash_algorithm": "sha256",
+  "canonicalization": "RFC8785-JCS/UTF-8",
+  "root_files": [
+    {
+      "path": "d/village/alley1.c",
+      "sha256": "745c490017449dd7c0319e9e57c6083a23c7f259f716800717de398521b6d9b9"
+    },
+    {
+      "path": "d/village/alley2.c",
+      "sha256": "1bdfe5b0ebc8c919e33dbbb7cfb80740ad8912d81259ebbffa2ff28500e2b734"
+    },
+    {
+      "path": "d/village/npc/dipi.c",
+      "sha256": "e5b9f2e39398e0df179971a0689bbb724b64ba40199f23a5b3a8822db61e94be"
+    },
+    {
+      "path": "d/village/npc/obj/cloth.c",
+      "sha256": "542949da73840d2309a99b868105d24d1f04dbb880898ad5b77bbc0cf402984d"
+    },
+    {
+      "path": "d/village/npc/punk.c",
+      "sha256": "482f705e4a1a71c6d4d4827afcbb9a80c639a6b127a6d6135aacd12b6c163734"
+    }
+  ],
+  "dependency_files": [
+    {
+      "path": "feature/action.c",
+      "sha256": "cd182642c53649ca1d2dd211bf8d4235ef1f6e2103267b9629aae45b26e9a8ba"
+    },
+    {
+      "path": "feature/alias.c",
+      "sha256": "d00aeaffaed50e6006aaacf9519ee7fd513c1ceb8f764451e734e36928dfc3f8"
+    },
+    {
+      "path": "feature/apprentice.c",
+      "sha256": "662d51570b36fa33dacfccbf0ec72ffe2ec79a36e93273ea109f37cba0322924"
+    },
+    {
+      "path": "feature/attack.c",
+      "sha256": "419bb24a0e276c5bbbdf1decd08979502bf472978961244af5c20621e97cabbb"
+    },
+    {
+      "path": "feature/attribute.c",
+      "sha256": "1bab6c3cb5453a8b12265cdad7efeeaaa87e9058e2b41cb1bb73dea40fbaa01b"
+    },
+    {
+      "path": "feature/clean_up.c",
+      "sha256": "5fcd2d803f35c78fe8e75bb6eae8d2683632c84c4401738261139f81879d15be"
+    },
+    {
+      "path": "feature/command.c",
+      "sha256": "9e878ccdcf78589b0b6a673ea83fb7e877a7c97632baac5022f9eba6ee5ffa76"
+    },
+    {
+      "path": "feature/condition.c",
+      "sha256": "4eb10c4bc92a4ca34d529d761aa50a7bf91a7be7296ffe977e930c2f40e8eb70"
+    },
+    {
+      "path": "feature/damage.c",
+      "sha256": "b3208533401161e116b1d115254b239d07440de3ca31801f742232e35597c5b2"
+    },
+    {
+      "path": "feature/dbase.c",
+      "sha256": "a03df9afce7b77a4f064ba3cd1574874f8458e5583293bf7783b8a5dab23f2ea"
+    },
+    {
+      "path": "feature/edit.c",
+      "sha256": "58549a6eb29088b9f8f4b62803bf3b509245d9d6b0be3af9d0a39d44a768fe04"
+    },
+    {
+      "path": "feature/equip.c",
+      "sha256": "6f961c9554a1a64b307bd8d086cd161d5d703baf2252e54df1500f31f8ca7c47"
+    },
+    {
+      "path": "feature/finance.c",
+      "sha256": "f5d967705ee6990e93745f17110121731dce2b0510bfeb0541d7cf33000dc75a"
+    },
+    {
+      "path": "feature/message.c",
+      "sha256": "4bc068343d416f19c99711a3e0b7f509a13f4f0eb727aaa84a9b440269591f18"
+    },
+    {
+      "path": "feature/more.c",
+      "sha256": "a73062e49fa158d0ff26f2982d29ffe05afe290854cb21a9f402ee4939620681"
+    },
+    {
+      "path": "feature/move.c",
+      "sha256": "14f7d202b9f231e3849357fcf3dacfd5211f50de28cfd9fcad0c602622dcb20d"
+    },
+    {
+      "path": "feature/name.c",
+      "sha256": "2ceb6c512f51111715892ae4d413c9eee3c70654c90cff0d19884a0d4fbd72f2"
+    },
+    {
+      "path": "feature/skill.c",
+      "sha256": "540b1415ed8f8d54635558e9ed0eff098f56c14a10b19f6cab9f929eb9da0322"
+    },
+    {
+      "path": "feature/team.c",
+      "sha256": "4219d176b323272963f07d9cd8e58e02a773b067df88037c1eaf27de385f8799"
+    },
+    {
+      "path": "feature/treemap.c",
+      "sha256": "74de633d5b6546d2dbc4e767aa371253e5860c0696459614a3c993a0799cffa0"
+    },
+    {
+      "path": "include/action.h",
+      "sha256": "922306523f225609da92ec05fea6814fe698fd13f3a52ae3bfc82c5e0e5a018a"
+    },
+    {
+      "path": "include/ansi.h",
+      "sha256": "8c5195c1f474205b92e9ee9f89a4acdf684e114b79a61716369080f1585d4431"
+    },
+    {
+      "path": "include/armor.h",
+      "sha256": "fae18a8a6bf30f4e43a062c32e379eb5c760fe849aed10f85d25fcde995d7779"
+    },
+    {
+      "path": "include/combat.h",
+      "sha256": "1d1c5419b1aa4e223d08a321acc528dc2e1c4a737601f457d85e17a76785418b"
+    },
+    {
+      "path": "include/command.h",
+      "sha256": "31fed2e0465b7aa871204e2cae696ed8b578fdd42eb3208fd1251b57991168ea"
+    },
+    {
+      "path": "include/condition.h",
+      "sha256": "1e1d5866bc4a42c87ac91e2769360821deb83c033a7d89cb3d16be7131214fcc"
+    },
+    {
+      "path": "include/dbase.h",
+      "sha256": "5e21d1be5c4355da2f9970130b2dcb4618c896bc4ee3d9636e67795121bdaabd"
+    },
+    {
+      "path": "include/globals.h",
+      "sha256": "52fd2942e5345f08979bc1b2b9bed03777c141dd6dc688b1a1e18f797681b365"
+    },
+    {
+      "path": "include/login.h",
+      "sha256": "23f02460307d88ab536068451c530376af127929af279c81370dc892a6075b60"
+    },
+    {
+      "path": "include/move.h",
+      "sha256": "b79e918faf7fc97301e71c6d399e89f2dcd024234fe898a5bdf9d83a3e19a5d2"
+    },
+    {
+      "path": "include/name.h",
+      "sha256": "069dcedae374f4285c5c62ad9d897591ca2a2d8dc482d7688ed3454a0742aa63"
+    },
+    {
+      "path": "include/origin.h",
+      "sha256": "a33b0535243dc71f02f55d084dfa0d5147a81a1ad19d16af652e5e340f049ba3"
+    },
+    {
+      "path": "include/room.h",
+      "sha256": "b82245885d78d7cfb6b05de9edf670891ad2747c5042bf452b8f319d1a7622c4"
+    },
+    {
+      "path": "include/skill.h",
+      "sha256": "4a3da77222aae7f25b02e815d43e03bad1a10cd7c377674eadf3c3d5a2874f9d"
+    },
+    {
+      "path": "include/team.h",
+      "sha256": "d1dad6d21c6f53245bf0536d6f605475eb5a8c37d05d158e0645c4d1fefb1be2"
+    },
+    {
+      "path": "include/user.h",
+      "sha256": "59d0086aff474a63e65dc68daf954c9d5cebbda25adf548168b3a6c6fd4c2480"
+    },
+    {
+      "path": "include/weapon.h",
+      "sha256": "949bbacd56e4384ba96afaccac5a98028f1154fa89cf06c672b3049d6bcee927"
+    },
+    {
+      "path": "inherit/armor/cloth.c",
+      "sha256": "acf5aeae8c0909a3eea9e9179ec8d8279eead45d9aba678e76cc542ae7d6d91c"
+    },
+    {
+      "path": "inherit/char/char.c",
+      "sha256": "97ed3d553a054b903757d2495b86ea03fbfc257dea7aed03efffcdc37978f96e"
+    },
+    {
+      "path": "inherit/char/npc.c",
+      "sha256": "709422c710ce9026009d7959d3b8fe50000ddc03646c8dc3edbec4573ce8acb7"
+    },
+    {
+      "path": "inherit/item/item.c",
+      "sha256": "326173ac42197f05a7b967d02b1c40f6e74e3e4b2f0ce9e62d44186fd6e7674f"
+    },
+    {
+      "path": "inherit/misc/equip.c",
+      "sha256": "3a626f3c897376094a7af714f51de8e47394b2755c5d176c50f774057327e6ed"
+    },
+    {
+      "path": "inherit/room/room.c",
+      "sha256": "52d8342fdf318915cef1f0ea2ac219431cad9d1eff6a0c2ce44d959083c0eea3"
+    },
+    {
+      "path": "inherit/weapon/poisoned_weapon.c",
+      "sha256": "65e37380b3d2e9e476486dbdd8ca06fd3e04f17cb0d8a149bcfd8708c32ee88e"
+    }
+  ],
+  "aggregate_sha256": "94ecbc713988962c97e0311ba7a0dad7dfb256eea35c486cdd78bbe253c8206c",
+  "dependency_closure": {
+    "algorithm": "lpc-static-include-inherit-v1",
+    "implicit_global_include": "include/globals.h",
+    "unresolved": []
+  },
+  "external_boundaries": [
+    {
+      "source": "d/village/alley1.c",
+      "direction": "east",
+      "target": "d/village/sroad3.c",
+      "runtime_traversable": false
+    }
+  ],
+  "expected_definition_counts": {
+    "rooms": 2,
+    "exits": 2,
+    "external_boundaries": 1,
+    "npcs": 2,
+    "items": 1
+  },
+  "expected_runtime_counts": {
+    "rooms": 2,
+    "exits": 2,
+    "npcs": 2,
+    "items": 2
+  }
+}

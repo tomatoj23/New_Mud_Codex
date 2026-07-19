@@ -1,0 +1,67 @@
+{
+  "contract_version": "1",
+  "artifact_type": "browser_matrix",
+  "matrix_id": "first-release-h5",
+  "matrix_version": 1,
+  "requirement_ids": ["CLIENT-001", "MILESTONE-001"],
+  "source_documents": [
+    "docs/new_engine/15_FRONTEND_H5_CONTRACT.md",
+    "requirements_v5.md"
+  ],
+  "approval": {
+    "status": "pending",
+    "basis": "Exact browser and operating-system versions must come from an approved execution environment."
+  },
+  "desktop_targets": [
+    {
+      "browser": "Chrome",
+      "os": "Windows",
+      "version_policy": "latest_two_stable_major",
+      "tested_versions": []
+    },
+    {
+      "browser": "Edge",
+      "os": "Windows",
+      "version_policy": "latest_two_stable_major",
+      "tested_versions": []
+    },
+    {
+      "browser": "Firefox",
+      "os": "Windows",
+      "version_policy": "latest_two_stable_major",
+      "tested_versions": []
+    },
+    {
+      "browser": "Safari",
+      "os": "macOS",
+      "version_policy": "latest_two_stable_major",
+      "tested_versions": []
+    }
+  ],
+  "mobile_targets": [
+    {
+      "browser": "Safari",
+      "os": "iOS",
+      "minimum_os_version": "16",
+      "version_policy": "supported_os_browser",
+      "tested_versions": []
+    },
+    {
+      "browser": "Chrome",
+      "os": "Android",
+      "minimum_os_version": "10",
+      "version_policy": "latest_two_stable_major",
+      "tested_versions": []
+    }
+  ],
+  "viewports": [
+    {"width": 360, "height": 640},
+    {"width": 768, "height": 1024},
+    {"width": 1280, "height": 720},
+    {"width": 1920, "height": 1080}
+  ],
+  "desktop_zoom_percent": 200,
+  "touch_target_min_css_px": 44,
+  "accessibility_contrast": "WCAG 2.1 AA",
+  "ime_composition_guard": true
+}

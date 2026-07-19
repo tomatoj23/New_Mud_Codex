@@ -1,0 +1,53 @@
+{
+  "contract_version": "1",
+  "artifact_type": "capacity_profile",
+  "profile_id": "first-release-default",
+  "profile_version": 1,
+  "requirement_ids": ["MILESTONE-001", "NFR-001"],
+  "source_documents": [
+    "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md",
+    "requirements_v5.md"
+  ],
+  "approval": {
+    "status": "pending",
+    "basis": "The frozen minimums are recorded; owner approval and an execution report are still required."
+  },
+  "environment": {
+    "application": {"vcpu": 4, "memory_gib": 8},
+    "database": {"vcpu": 4, "memory_gib": 8},
+    "network": "same_region",
+    "production_build": true,
+    "redis_enabled": false
+  },
+  "dataset": {
+    "accounts": 10000,
+    "characters": 10000,
+    "blueprint_revisions": 10000,
+    "item_entities": 100000
+  },
+  "load_model": {
+    "websocket_connections": 200,
+    "active_presences": 100,
+    "concurrent_combats": 25,
+    "auth_requests_per_second": 5,
+    "public_chat_messages_per_second": 20
+  },
+  "sample_window": {
+    "baseline_minutes": 120,
+    "burst_minutes": 5
+  },
+  "thresholds": {
+    "auth_rest_p95_ms": 750,
+    "auth_rest_error_rate_percent_lt": 1,
+    "action_terminal_p95_ms": 300,
+    "public_chat_delivery_p95_ms": 500,
+    "state_rebuild_p95_ms": 2000,
+    "forbidden_baseline_failures": [
+      "data_inconsistency",
+      "duplicate_settlement",
+      "unhandled_exception",
+      "unplanned_disconnect"
+    ]
+  },
+  "reporting_percentiles": ["p50", "p95", "p99"]
+}

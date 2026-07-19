@@ -1,0 +1,57 @@
+{
+  "contract_version": "1",
+  "artifact_type": "state_catalog",
+  "requirement_ids": ["AUTH-002", "AUTH-003", "MILESTONE-001"],
+  "source_document": "docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md",
+  "values": {
+    "auth_session_states": [
+      "active",
+      "expired",
+      "logged_out",
+      "revoked"
+    ],
+    "connection_session_states": [
+      "active",
+      "closed",
+      "closing",
+      "opening"
+    ],
+    "credential_states": [
+      "active",
+      "expired",
+      "revoked",
+      "used"
+    ],
+    "delivery_classes": [
+      "activation_success",
+      "committed_revocation"
+    ],
+    "outbox_states": [
+      "canceled",
+      "delivered",
+      "delivering",
+      "pending"
+    ],
+    "presence_runtime_states": [
+      "active",
+      "closed",
+      "pending_enter",
+      "taken_over"
+    ],
+    "presence_snapshot_states": [
+      "active",
+      "closed",
+      "grace_disconnected",
+      "taken_over"
+    ],
+    "refresh_family_states": [
+      "active",
+      "expired",
+      "revoked"
+    ],
+    "terminal_kinds": [
+      "failed",
+      "succeeded"
+    ]
+  }
+}

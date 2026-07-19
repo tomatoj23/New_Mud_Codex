@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://new-mud.local/contracts/v1/recovery-budget.schema.json",
+  "title": "New_Mud recovery budget",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "artifact_type",
+    "budget_id",
+    "budget_version",
+    "requirement_ids",
+    "source_documents",
+    "approval",
+    "rpo_minutes_max",
+    "rto_minutes_max",
+    "backup",
+    "exercise"
+  ],
+  "properties": {
+    "contract_version": {"const": "1"},
+    "artifact_type": {"const": "recovery_budget"},
+    "budget_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "budget_version": {"type": "integer", "minimum": 1},
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z]+-[0-9]{3}$"}
+    },
+    "source_documents": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"enum": ["requirements_v5.md", "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md"]}
+    },
+    "approval": {"$ref": "#/$defs/approval"},
+    "rpo_minutes_max": {"type": "integer", "minimum": 1, "maximum": 15},
+    "rto_minutes_max": {"type": "integer", "minimum": 1, "maximum": 60},
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_backup",
+        "incremental_or_wal",
+        "encrypted",
+        "access_restricted",
+        "daily_retention_count_min",
+        "weekly_retention_count_min",
+        "release_boundary_snapshots"
+      ],
+      "properties": {
+        "full_backup": {"const": true},
+        "incremental_or_wal": {"const": true},
+        "encrypted": {"const": true},
+        "access_restricted": {"const": true},
+        "daily_retention_count_min": {"type": "integer", "minimum": 7},
+        "weekly_retention_count_min": {"type": "integer", "minimum": 4},
+        "release_boundary_snapshots": {"const": true}
+      }
+    },
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frequency", "isolated_environment", "required_scopes", "latest_report"],
+      "properties": {
+        "frequency": {"const": "each_release_cycle"},
+        "isolated_environment": {"const": true},
+        "required_scopes": {
+          "type": "array",
+          "minItems": 5,
+          "uniqueItems": true,
+          "items": {"enum": ["accounts", "characters", "world_topology", "content_batches", "audit_chain"]}
+        },
+        "latest_report": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["artifact_path", "measured_rpo_minutes", "measured_rto_minutes", "passed"],
+          "properties": {
+            "artifact_path": {"type": "string", "pattern": "^(?!/)(?![A-Za-z]:)[^\\\\]+(?:/[^\\\\]+)*$"},
+            "measured_rpo_minutes": {"type": "number", "minimum": 0},
+            "measured_rto_minutes": {"type": "number", "minimum": 0},
+            "passed": {"type": "boolean"}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "basis"],
+      "properties": {
+        "status": {"enum": ["pending", "approved"]},
+        "basis": {"type": "string", "minLength": 1},
+        "approved_by": {"type": "string", "minLength": 1},
+        "approved_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "approved"}}},
+          "then": {"required": ["approved_by", "approved_at"]}
+        },
+        {
+          "if": {"properties": {"status": {"const": "pending"}}},
+          "then": {"not": {"anyOf": [{"required": ["approved_by"]}, {"required": ["approved_at"]}]}}
+        }
+      ]
+    }
+  }
+}

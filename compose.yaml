@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:18.4-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-new_mud}
+      POSTGRES_USER: ${POSTGRES_USER:-new_mud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-new_mud}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+volumes:
+  postgres-data:

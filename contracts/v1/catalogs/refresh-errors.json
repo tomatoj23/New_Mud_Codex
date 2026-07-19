@@ -1,0 +1,15 @@
+{
+  "contract_version": "1",
+  "artifact_type": "error_code_catalog",
+  "requirement_ids": ["AUTH-002", "MILESTONE-001"],
+  "source_document": "docs/new_engine/08_PERMISSIONS_ADMIN_API.md",
+  "values": {
+    "refresh": [
+      "REFRESH_IDEMPOTENCY_CONFLICT",
+      "REFRESH_IDEMPOTENCY_KEY_INVALID",
+      "REFRESH_REQUEST_SUPERSEDED",
+      "REFRESH_TOKEN_REPLAYED",
+      "REFRESH_UNAVAILABLE"
+    ]
+  }
+}

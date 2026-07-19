@@ -1,0 +1,133 @@
+{
+  "contract_version": "1",
+  "artifact_type": "fixture_manifest",
+  "requirement_ids": [
+    "CONVERT-001",
+    "MILESTONE-001"
+  ],
+  "fixture_kind": "skill_combat",
+  "manifest_name": "xkx100-skill-combat-v1",
+  "fixture_version": 1,
+  "source_snapshot_id": "xkx100-20201118-sha256-1b101b7a99c60803",
+  "hash_algorithm": "sha256",
+  "canonicalization": "RFC8785-JCS/UTF-8",
+  "root_files": [
+    {
+      "path": "cmds/skill/enable.c",
+      "sha256": "79ddcb06cb4ee550b317254e1cb321601ff6da3c6a8b80baba9f97bc6e2b1d55"
+    },
+    {
+      "path": "cmds/skill/exert.c",
+      "sha256": "81cd973605277716e339c092589d36bf7628c8ae6755be21908a9c5f60e0936f"
+    },
+    {
+      "path": "cmds/skill/perform.c",
+      "sha256": "7636757f5cd8a7cb3340df446bc5f38f416231ebcf3d4e60328c7e5f45861754"
+    },
+    {
+      "path": "cmds/skill/prepare.c",
+      "sha256": "3b1b7a3cdd0b1f6b3f6ea0f1943d1439e3c7f89a7c04082f2d525c124a647fc5"
+    },
+    {
+      "path": "feature/attack.c",
+      "sha256": "419bb24a0e276c5bbbdf1decd08979502bf472978961244af5c20621e97cabbb"
+    },
+    {
+      "path": "feature/skill.c",
+      "sha256": "540b1415ed8f8d54635558e9ed0eff098f56c14a10b19f6cab9f929eb9da0322"
+    },
+    {
+      "path": "kungfu/skill/bahuang-gong.c",
+      "sha256": "b4e30a78532fed14ee7c69b3a4d0047798d060a3cadd19b5fa2549f892794f12"
+    },
+    {
+      "path": "kungfu/skill/bahuang-gong/heal.c",
+      "sha256": "804410578c37fdd7a97645a074de1af9d6db99dfba06ec9c4e9cc1fedb4952b7"
+    },
+    {
+      "path": "kungfu/skill/bahuang-gong/powerup.c",
+      "sha256": "8ea8259e1bc433347af606c761f839162dfdaa73a50d0063077125e8dc8f3e88"
+    },
+    {
+      "path": "kungfu/skill/bahuang-gong/qudu.c",
+      "sha256": "40edc8e659b171cc4ea98e5570dd98d951ca2edbfa0298f586ef108464e038c1"
+    },
+    {
+      "path": "kungfu/skill/baihua-cuoquan.c",
+      "sha256": "b20b8203f6eecc6892608364b32d954d07fe6c800da7705824a1f123571cc447"
+    },
+    {
+      "path": "kungfu/skill/baihua-cuoquan/cuo.c",
+      "sha256": "5d7eddee1b59d7bfe9e5ea9b0df34c06e4ceda7117d63b274b87adf1f3d777a1"
+    },
+    {
+      "path": "kungfu/skill/benlei-shou.c",
+      "sha256": "7434a4cc12a107d38f5b14e8a788f04a9b3592dc8cffa2dd647a21f7c3829063"
+    },
+    {
+      "path": "kungfu/skill/benlei-shou/yunkai.c",
+      "sha256": "4c13d930723a5e8530a8e5c07840d980a70d0e8e5aa5973478c7c9f807ef1f6f"
+    }
+  ],
+  "dependency_files": [
+    {
+      "path": "feature/clean_up.c",
+      "sha256": "5fcd2d803f35c78fe8e75bb6eae8d2683632c84c4401738261139f81879d15be"
+    },
+    {
+      "path": "feature/sserver.c",
+      "sha256": "cf673ea30ecba9ad91d802fc6e786366f740aab94f8b88a77e5bc8318acee696"
+    },
+    {
+      "path": "include/ansi.h",
+      "sha256": "8c5195c1f474205b92e9ee9f89a4acdf684e114b79a61716369080f1585d4431"
+    },
+    {
+      "path": "include/dbase.h",
+      "sha256": "5e21d1be5c4355da2f9970130b2dcb4618c896bc4ee3d9636e67795121bdaabd"
+    },
+    {
+      "path": "include/globals.h",
+      "sha256": "52fd2942e5345f08979bc1b2b9bed03777c141dd6dc688b1a1e18f797681b365"
+    },
+    {
+      "path": "include/origin.h",
+      "sha256": "a33b0535243dc71f02f55d084dfa0d5147a81a1ad19d16af652e5e340f049ba3"
+    },
+    {
+      "path": "include/skill.h",
+      "sha256": "4a3da77222aae7f25b02e815d43e03bad1a10cd7c377674eadf3c3d5a2874f9d"
+    },
+    {
+      "path": "include/xiaoyao.h",
+      "sha256": "3f758529de6854d3b99624da82d55a4a9fb94ee6051bee08cdde0b7a3716e8bf"
+    },
+    {
+      "path": "inherit/skill/force.c",
+      "sha256": "ee116d5e2b4686b942a4d115a9b27951c1efa8a128baf056647be53fcb9565fe"
+    },
+    {
+      "path": "inherit/skill/skill.c",
+      "sha256": "a356dcfb51ec800d8b83aa966c4e1ccda0fca1352ac7520d0b8dfc43c65b3caf"
+    },
+    {
+      "path": "kungfu/skill/force.h",
+      "sha256": "51f804e7e568b2ea6e5355960b5a1da9a311bf873a0dea429b55acf21703f42d"
+    }
+  ],
+  "aggregate_sha256": "3819f3bdd02e58dd4b835265cee1b60611694a2878760cec4fdd62e2473298bd",
+  "dependency_closure": {
+    "algorithm": "lpc-static-include-inherit-v1",
+    "implicit_global_include": "include/globals.h",
+    "unresolved": []
+  },
+  "review_scope": [
+    "enable_and_jifa",
+    "prepare_and_valid_combine",
+    "perform_dispatch",
+    "exert_dispatch",
+    "skill_progression_feature",
+    "attack_resolution_feature",
+    "selected_perform_and_exert_actions"
+  ]
+}

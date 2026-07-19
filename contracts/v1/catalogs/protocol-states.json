@@ -1,0 +1,19 @@
+{
+  "contract_version": "1",
+  "artifact_type": "state_catalog",
+  "requirement_ids": ["AUTH-003", "MILESTONE-001"],
+  "source_document": "docs/new_engine/11_PROTOCOL_CATALOG.md",
+  "values": {
+    "activation_states": [
+      "active",
+      "activation_pending",
+      "compensated",
+      "not_required"
+    ],
+    "delivery_statuses": [
+      "bound",
+      "resume_required",
+      "superseded"
+    ]
+  }
+}

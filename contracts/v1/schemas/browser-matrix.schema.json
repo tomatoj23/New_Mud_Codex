@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://new-mud.local/contracts/v1/browser-matrix.schema.json",
+  "title": "New_Mud browser acceptance matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "artifact_type",
+    "matrix_id",
+    "matrix_version",
+    "requirement_ids",
+    "source_documents",
+    "approval",
+    "desktop_targets",
+    "mobile_targets",
+    "viewports",
+    "desktop_zoom_percent",
+    "touch_target_min_css_px",
+    "accessibility_contrast",
+    "ime_composition_guard"
+  ],
+  "properties": {
+    "contract_version": {"const": "1"},
+    "artifact_type": {"const": "browser_matrix"},
+    "matrix_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "matrix_version": {"type": "integer", "minimum": 1},
+    "requirement_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z]+-[0-9]{3}$"}
+    },
+    "source_documents": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"enum": ["requirements_v5.md", "docs/new_engine/15_FRONTEND_H5_CONTRACT.md"]}
+    },
+    "approval": {"$ref": "#/$defs/approval"},
+    "desktop_targets": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"$ref": "#/$defs/browser_target"}
+    },
+    "mobile_targets": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/browser_target"}
+    },
+    "viewports": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["width", "height"],
+        "properties": {
+          "width": {"type": "integer", "minimum": 1},
+          "height": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "desktop_zoom_percent": {"type": "integer", "minimum": 200},
+    "touch_target_min_css_px": {"type": "integer", "minimum": 44},
+    "accessibility_contrast": {"const": "WCAG 2.1 AA"},
+    "ime_composition_guard": {"const": true}
+  },
+  "$defs": {
+    "browser_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["browser", "os", "version_policy", "tested_versions"],
+      "properties": {
+        "browser": {"enum": ["Chrome", "Edge", "Firefox", "Safari"]},
+        "os": {"enum": ["Windows", "macOS", "iOS", "Android"]},
+        "minimum_os_version": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)*$"},
+        "version_policy": {"enum": ["latest_two_stable_major", "supported_os_browser"]},
+        "tested_versions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){0,3}$"}
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "basis"],
+      "properties": {
+        "status": {"enum": ["pending", "approved"]},
+        "basis": {"type": "string", "minLength": 1},
+        "approved_by": {"type": "string", "minLength": 1},
+        "approved_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "approved"}}},
+          "then": {"required": ["approved_by", "approved_at"]}
+        },
+        {
+          "if": {"properties": {"status": {"const": "pending"}}},
+          "then": {"not": {"anyOf": [{"required": ["approved_by"]}, {"required": ["approved_at"]}]}}
+        }
+      ]
+    }
+  }
+}

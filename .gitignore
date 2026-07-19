@@ -8,7 +8,11 @@ __pycache__/
 .coverage
 htmlcov/
 .venv/
+.venv-build/
 venv/
+.bootstrap-venv/
+.python/
+.uv-cache/
 
 # Django and local runtime
 .env

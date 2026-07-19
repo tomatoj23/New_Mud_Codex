@@ -1,0 +1,52 @@
+{
+  "contract_version": "1",
+  "artifact_type": "error_code_catalog",
+  "requirement_ids": ["AUTH-003", "MILESTONE-001"],
+  "source_document": "docs/new_engine/11_PROTOCOL_CATALOG.md",
+  "values": {
+    "protocol": [
+      "INVALID_ENVELOPE",
+      "PAYLOAD_INVALID",
+      "RATE_LIMITED",
+      "REQUEST_CONTEXT_CHANGED",
+      "REQUEST_ID_CONFLICT",
+      "REQUEST_ID_INVALID",
+      "REQUEST_TYPE_UNSUPPORTED",
+      "UNSUPPORTED_PROTOCOL_VERSION"
+    ],
+    "authentication_presence": [
+      "ALREADY_AUTHENTICATED",
+      "AUTH_REQUIRED",
+      "CHARACTER_FORBIDDEN",
+      "CHARACTER_NOT_FOUND",
+      "CHARACTER_OCCUPIED",
+      "PRESENCE_ACTIVATION_FAILED",
+      "PRESENCE_NOT_ACTIVE",
+      "PRESENCE_REQUIRED",
+      "RESUME_TICKET_EXPIRED",
+      "RESUME_TICKET_INVALID",
+      "SESSION_RESUME_FAILED",
+      "SESSION_REVOKED",
+      "TAKEOVER_CONFIRMATION_REQUIRED",
+      "TOKEN_EXPIRED",
+      "TOKEN_INVALID"
+    ],
+    "action_domain": [
+      "ACTION_AMBIGUOUS",
+      "ACTION_ARGUMENT_INVALID",
+      "ACTION_FORBIDDEN",
+      "ACTION_NOT_FOUND",
+      "ACTION_SOURCE_FORBIDDEN",
+      "CHAT_FORBIDDEN",
+      "CHAT_RATE_LIMITED",
+      "COMBAT_STATE_CONFLICT",
+      "ENTITY_LOCATION_INVALID",
+      "INVENTORY_VERSION_CONFLICT",
+      "ITEM_CONTAINER_CYCLE",
+      "ITEM_CONTAINER_FULL",
+      "ITEM_CONTAINER_NOT_ALLOWED",
+      "ITEM_NOT_AVAILABLE",
+      "ROOM_EXIT_BLOCKED"
+    ]
+  }
+}

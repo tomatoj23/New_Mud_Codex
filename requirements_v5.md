@@ -195,12 +195,12 @@ M1 的产品成功必须同时满足：
 
 ### 3.2 后端核心必选栈
 
-- 语言：Python 3.12+
+- 语言：Python 3.14+
 - Web 框架：Django
 - REST API：Django REST Framework
 - 实时通信：Django Channels
 - ASGI 服务：Daphne
-- 数据库：PostgreSQL
+- 数据库：PostgreSQL 18+
 
 ### 3.3 前端核心栈
 

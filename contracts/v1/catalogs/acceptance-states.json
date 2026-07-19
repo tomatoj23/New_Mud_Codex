@@ -1,0 +1,18 @@
+{
+  "contract_version": "1",
+  "artifact_type": "state_catalog",
+  "requirement_ids": ["COMBAT-001", "CONVERT-001", "MILESTONE-001"],
+  "source_document": "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md",
+  "values": {
+    "alignment_statuses": [
+      "blocked",
+      "unverified",
+      "verified"
+    ],
+    "non_passing_review_statuses": [
+      "blocked",
+      "manual_review",
+      "unverified"
+    ]
+  }
+}

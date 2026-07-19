@@ -1,0 +1,25 @@
+{
+  "contract_version": "1",
+  "artifact_type": "acceptance_bundle",
+  "requirement_ids": [
+    "COMBAT-001",
+    "CONVERT-001",
+    "MILESTONE-001"
+  ],
+  "bundle_id": "xkx100-village-skill-combat-v1",
+  "bundle_version": 1,
+  "source_snapshot_id": "xkx100-20201118-sha256-1b101b7a99c60803",
+  "world_manifest": {
+    "manifest_name": "xkx100-village-alley-v1",
+    "fixture_version": 1,
+    "source_snapshot_id": "xkx100-20201118-sha256-1b101b7a99c60803",
+    "aggregate_sha256": "94ecbc713988962c97e0311ba7a0dad7dfb256eea35c486cdd78bbe253c8206c"
+  },
+  "skill_combat_manifest": {
+    "manifest_name": "xkx100-skill-combat-v1",
+    "fixture_version": 1,
+    "source_snapshot_id": "xkx100-20201118-sha256-1b101b7a99c60803",
+    "aggregate_sha256": "3819f3bdd02e58dd4b835265cee1b60611694a2878760cec4fdd62e2473298bd"
+  },
+  "alignment_status": "blocked"
+}

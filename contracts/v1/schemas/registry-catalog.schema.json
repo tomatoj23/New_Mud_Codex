@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://new-mud.local/contracts/v1/registry-catalog.schema.json",
+  "title": "New_Mud typed registry catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "artifact_type", "requirement_ids", "source_document", "key_pattern", "semver_pattern", "entries"],
+  "properties": {
+    "contract_version": {"const": "1"},
+    "artifact_type": {"const": "registry_catalog"},
+    "requirement_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z]+-[0-9]{3}$"}},
+    "source_document": {"const": "docs/new_engine/12_REGISTRY_BLUEPRINT_CONTRACT.md"},
+    "key_pattern": {"type": "string", "minLength": 1},
+    "semver_pattern": {"type": "string", "minLength": 1},
+    "entries": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["registry_kind", "definition_type", "required_fields"],
+        "properties": {
+          "registry_kind": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "definition_type": {"type": "string", "pattern": "^[A-Z][A-Za-z]+(?:Definition|Entry)$"},
+          "required_fields": {"type": "array", "minItems": 3, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}}
+        }
+      }
+    }
+  }
+}
