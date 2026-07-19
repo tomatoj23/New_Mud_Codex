@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Django and local runtime
+.env
+.env.*
+!.env.example
+staticfiles/
+media/
+logs/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local agent skill mirrors and machine-specific configuration
+.agent/
+.agents/
+.claude/
+.qoder/
+.trae/
+skills-lock.json
+
+# Upstream reference snapshot; it is not a New_Mud runtime dependency
+evennia-main/
+
+# Test and build outputs
+artifacts/reports/
+dist/
+build/
