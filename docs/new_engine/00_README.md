@@ -149,9 +149,9 @@ Evennia 6.0 最不适合直接沿用的部分是：
 ### 5.1 过程与交接文档
 
 - `NEXT_SESSION_HANDOFF.md`
-  - 新会话的最小阅读顺序、工作树边界和当前续作入口。
-- `PHASE2_CONTENT_STARTUP_WORKLOG.md`
-  - `Engine Stage E0 / Slice 2` 的实施过程快照；不作为需求或完成证明。
+  - 无会话记忆时的现行启动入口，集中给出当前检查点、固定决策、未完成边界和下一步顺序。
+- `archive/handoffs/2026-08-26-e0-closeout/PHASE2_CONTENT_STARTUP_WORKLOG.md`
+  - `Engine Stage E0 / Slice 2` 的已归档实施过程快照；只用于历史回溯，不作为现行需求或完成证明。
 
 20. `../20_evennia_modernity_assessment.md`
    - Evennia 6.0 的现代性、历史包袱与项目适配边界；它是分析入口，不覆盖本目录的设计权威。

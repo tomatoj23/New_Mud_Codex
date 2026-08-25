@@ -6,6 +6,7 @@
 
 - `requirements/`：已被 `requirements_v5.md` 取代的历史需求版本；V5 现又被根目录 `requirements_v6.md` 取代。
 - `audits/2026-07-19-requirements-v5/`：2026-07-19 已完成的 V5 文档审计过程与结论。
+- `handoffs/2026-08-26-e0-closeout/`：Engine Stage E0 / Slice 2 的完整工作日志和被替换的会话交接快照。
 
 现行入口：
 

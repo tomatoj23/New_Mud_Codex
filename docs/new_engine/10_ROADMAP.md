@@ -66,7 +66,7 @@
 
 E0 已建立文档与 Git 基线、Django/ASGI/PostgreSQL 工程骨架、初始内容模型与迁移、机器合同、来源快照、双 manifest、复合 bundle、CI 和可执行结构校验。Python 3.14.2 私有运行时、完整依赖锁、PostgreSQL 18.4 迁移往返和静态检查均已验证。三个非功能 profile 已批准；浏览器矩阵冻结官方精确目标组合，恢复预算绑定了 schema、迁移历史和逐表行数均一致的 M0 隔离恢复报告。Engine Stage E0 / Slice 2 的实现已通过 Issues #1–#4 完成 Registry exact dependency、冻结 seed artifact、受审计 bootstrap、active/pinned resolver、服务器启动生命周期、只读 readiness、并发收敛、事务回滚和失败审计。
 
-Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合同与启动 E2E、内容/seed/runtime/health 集成、启用真库的全量 pytest、Ruff、mypy、Django、迁移漂移、依赖、M0 与 Markdown 门禁均通过。因此产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 为 `verified`；`ENGINE-001 / Engine Stage E0` 也为 `verified` 并已关闭，后续 frontier 交给 E1。完整命令、环境、结果和失败边界见 `18_IMPLEMENTATION_STATUS.md` 与 `PHASE2_CONTENT_STARTUP_WORKLOG.md`。
+Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合同与启动 E2E、内容/seed/runtime/health 集成、启用真库的全量 pytest、Ruff、mypy、Django、迁移漂移、依赖、M0 与 Markdown 门禁均通过。因此产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 为 `verified`；`ENGINE-001 / Engine Stage E0` 也为 `verified` 并已关闭，后续 frontier 交给 E1。现行结果见 `18_IMPLEMENTATION_STATUS.md`；完整历史命令、环境、结果和失败边界见 `archive/handoffs/2026-08-26-e0-closeout/PHASE2_CONTENT_STARTUP_WORKLOG.md`。
 
 该结论不改变后续产品边界：`CONTENT-001` 仍为 `implemented`，完整后台发布服务待 M1；`WORLD-001` 仍为 `specified`，固定小巷世界物化与玩法 E2E 待 M1；浏览器实测、容量/soak、五业务范围恢复和公开试运行仍未完成，`RELEASE-001 / PublicV1Gate` 继续 `blocked`。
 

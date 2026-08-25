@@ -2249,7 +2249,7 @@ M1-A 不是独立需求里程碑。只有 M1-B 通过，需求里程碑 M1 才�
 - `docs/new_engine/11_PROTOCOL_CATALOG.md` 到 `docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md`
 - `docs/new_engine/14_COMBAT_SKILL_ITEM_CONTRACT.md` 到 `docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md`
 - `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md`
-- `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md`、`docs/new_engine/PHASE2_CONTENT_STARTUP_WORKLOG.md` 与 `docs/new_engine/NEXT_SESSION_HANDOFF.md`（仅同步/过程材料，不取代 11-18）
+- `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md` 与 `docs/new_engine/NEXT_SESSION_HANDOFF.md`（仅同步/交接材料，不取代 11-18），以及 `archive/handoffs/2026-08-26-e0-closeout/`（只读历史过程）
 - `plans/` 与 `contracts/v1/` 中受 V6 影响的计划、机器合同和验收制品（语义仍回链 V6 与对应冻结合同）
 - `docs/00-20` 中涉及现行术语、权威顺序、路线图编号或 Evennia 参考边界的分析或治理说明
 - 根目录 `UBIQUITOUS_LANGUAGE.md`

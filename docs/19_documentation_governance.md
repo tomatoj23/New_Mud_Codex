@@ -51,7 +51,8 @@
 ### 2.8 同步清单与过程记录
 
 - `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md` 只记录 V6 相对 V5 的同步落点，不取代产品需求、冻结合同或追踪索引。
-- `docs/new_engine/PHASE2_CONTENT_STARTUP_WORKLOG.md` 是 Engine Stage E0 / Slice 2 的实施过程快照；`docs/new_engine/NEXT_SESSION_HANDOFF.md` 是会话交接入口。二者都不得创造需求、合同或完成状态。
+- `docs/new_engine/NEXT_SESSION_HANDOFF.md` 是无会话记忆时的现行会话交接入口；它不得创造需求、合同或完成状态。
+- `archive/handoffs/2026-08-26-e0-closeout/` 保存已退出当前工作面的 E0 工作日志与旧交接快照；归档内容不再维护，不能作为现行状态来源。
 - `plans/` 保存经确认的纵向实施计划；`contracts/v1/` 保存冻结合同的机器可读伴随制品和证据，语义仍以对应冻结合同为准。
 
 ## 3. 冲突与变更规则
@@ -68,7 +69,8 @@
 | Evennia 来源事实与现代性评估 | `docs/00-18`、`docs/20` 与本地 `evennia-main` 快照 |
 | 当前实现、环境、验证结果与阻塞项 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
 | V6 与冻结合同的同步落点 | `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md`（仅映射，不取代权威） |
-| 当前纵向实施过程与会话入口 | `docs/new_engine/PHASE2_CONTENT_STARTUP_WORKLOG.md`、`docs/new_engine/NEXT_SESSION_HANDOFF.md`、`plans/`（仅过程/计划） |
+| 当前纵向实施计划与会话入口 | `docs/new_engine/NEXT_SESSION_HANDOFF.md`、`plans/`（仅交接/计划） |
+| 已退出当前工作面的历史过程 | `archive/`（只用于回溯，不覆盖现行权威或状态） |
 | 机器可读合同与验收证据 | `contracts/v1/`（语义以对应冻结合同为准） |
 
 代码偏离上层需求或冻结合同即为缺陷，除非该偏离已经按有意变更流程批准。
@@ -98,7 +100,7 @@
 - 需要理解概念架构与路线时，看 `docs/new_engine/00-10`。
 - 需要从需求定位合同和验收证据时，看 `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md`。
 - 需要确认当前已经实现、验证或阻塞的范围时，看 `docs/new_engine/18_IMPLEMENTATION_STATUS.md`。
-- 需要回查 V6 同步差异、当前纵向工作或会话交接时，再看 `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md`、`docs/new_engine/PHASE2_CONTENT_STARTUP_WORKLOG.md`、`docs/new_engine/NEXT_SESSION_HANDOFF.md` 与 `plans/`；这些材料不能覆盖上面的权威来源。
+- 需要回查 V6 同步差异、当前纵向计划或会话交接时，再看 `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md`、`docs/new_engine/NEXT_SESSION_HANDOFF.md` 与 `plans/`；需要追溯已完成的 E0 实施过程时再看 `archive/handoffs/2026-08-26-e0-closeout/`。这些材料不能覆盖上面的权威来源。
 - 开始编码、联调或验收前，必须读取受影响的冻结合同：
   - `docs/new_engine/11_PROTOCOL_CATALOG.md`：WebSocket 协议名、错误码与事件外壳
   - `docs/new_engine/12_REGISTRY_BLUEPRINT_CONTRACT.md`：Registry、Blueprint 与发布更新
@@ -163,8 +165,8 @@
 | 文档 | 主要职责 |
 | --- | --- |
 | `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md` | 记录 V6 产品结果对冻结合同、路线图和追踪索引的同步落点；不取代任一权威文档 |
-| `docs/new_engine/PHASE2_CONTENT_STARTUP_WORKLOG.md` | 按日期保存 Engine Stage E0 / Slice 2 的 WIP、续作边界与最终验收证据；它是历史执行记录，当前状态仍回到 17/18 |
-| `docs/new_engine/NEXT_SESSION_HANDOFF.md` | 提供新会话的最小阅读清单、工作树边界和当前交接元数据；冲突时回到本治理文件及对应权威 |
+| `docs/new_engine/NEXT_SESSION_HANDOFF.md` | 提供无会话记忆时所需的当前检查点、固定决策、未完成边界和启动顺序；冲突时回到本治理文件及对应权威 |
+| `archive/handoffs/2026-08-26-e0-closeout/` | 保存 E0 / Slice 2 工作日志与旧交接入口的原始快照；归档后不再维护，当前状态仍回到 17/18 |
 | `plans/m0-e1-tracer-bullets.md` | 记录已确认的 E0/E1 纵向计划和验收条件；不创造产品结果或冻结协议 |
 | `contracts/v1/` | 提供冻结合同的 schema、catalog、profile 与报告制品；语义和批准边界由对应冻结合同与 V6 负责 |
 

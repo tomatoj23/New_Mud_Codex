@@ -134,7 +134,7 @@ M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `c
 | 需求 ID | 当前证据 |
 | --- | --- |
 | `MILESTONE-001` | `contracts/v1/`、`scripts/verify_m0.py`、`.github/workflows/m0.yml`、本文件第 3.6 节与 Issue #5 clean-baseline checklist |
-| `ENGINE-001` | Issues #1–#4 的提交、V6 基线 `d14ce67`、`PHASE2_CONTENT_STARTUP_WORKLOG.md` 第 8 节与 Issue #5 分层验收 |
+| `ENGINE-001` | Issues #1–#4 的提交、V6 基线 `d14ce67`、`archive/handoffs/2026-08-26-e0-closeout/PHASE2_CONTENT_STARTUP_WORKLOG.md` 第 8 节与 Issue #5 分层验收 |
 | `CONTENT-001` | `src/new_mud/apps/content/models.py`、`migrations/0001_initial.py`–`0002_contentstartupfailure.py`、seed/registry/startup/resolver 实现与 PostgreSQL 合同测试 |
 | `CONVERT-001` | `contracts/v1/artifacts/`、`scripts/generate_source_contracts.py`、`tests/test_contracts.py` |
 | `CLIENT-001` | `browser-matrix.json` 已批准且冻结目标版本；实际 `tested_versions` 与浏览器 E2E 尚缺 |
