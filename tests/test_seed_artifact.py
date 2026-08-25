@@ -14,6 +14,7 @@ from new_mud.apps.content.models import (
     ContentReleaseBatch,
     ContentReleaseHead,
     ContentReleaseItem,
+    ContentStartupFailure,
     ResolvedRegistryDependency,
 )
 from new_mud.apps.content.registry import (
@@ -132,12 +133,8 @@ def test_management_command_is_a_repeatable_real_artifact_entrypoint() -> None:
     first_output = StringIO()
     second_output = StringIO()
 
-    call_command(
-        "bootstrap_content_seed", instance_id="command-instance", stdout=first_output
-    )
-    call_command(
-        "bootstrap_content_seed", instance_id="command-instance", stdout=second_output
-    )
+    call_command("bootstrap_content_seed", instance_id="command-instance", stdout=first_output)
+    call_command("bootstrap_content_seed", instance_id="command-instance", stdout=second_output)
 
     assert '"status": "bootstrapped"' in first_output.getvalue()
     assert '"status": "verified"' in second_output.getvalue()
@@ -183,6 +180,28 @@ def test_artifact_identity_mismatch_fails_before_database_writes() -> None:
     assert_no_content_state()
 
 
+def test_failure_audit_does_not_persist_untrusted_artifact_values(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    secret = "token.secret.signature"
+    raw = read_real_artifact()
+    raw["mudlib_key"] = secret
+    artifact_path = write_artifact(tmp_path / "untrusted-identity.json", raw)
+
+    with pytest.raises(ContentStartupError):
+        bootstrap_seed_artifact(
+            instance_id="artifact-instance",
+            expectation=expectation(),
+            artifact_path=artifact_path,
+        )
+
+    audit = ContentStartupFailure.objects.get()
+    assert secret not in audit.error_message
+    assert audit.error_message == "content release scope mismatch"
+    assert secret not in caplog.text
+
+
 def test_artifact_and_content_hash_tampering_fail_before_writes(tmp_path: Path) -> None:
     artifact_tamper = read_real_artifact()
     artifact_tamper["blueprints"][0]["data"]["display_name"] = "篡改"
@@ -199,6 +218,9 @@ def test_artifact_and_content_hash_tampering_fail_before_writes(tmp_path: Path) 
         )
     assert artifact_error.value.code == "CONTENT_RELEASE_VALIDATION_FAILED"
     assert_no_content_state()
+    artifact_audit = ContentStartupFailure.objects.get()
+    assert artifact_audit.artifact_hash is None
+    assert artifact_audit.error_message == "content release validation failed"
 
     content_tamper = read_real_artifact()
     content_tamper["blueprints"][0]["data"]["display_name"] = "另一个篡改"
@@ -211,12 +233,14 @@ def test_artifact_and_content_hash_tampering_fail_before_writes(tmp_path: Path) 
         )
     assert content_error.value.code == "CONTENT_RELEASE_VALIDATION_FAILED"
     assert_no_content_state()
+    assert ContentStartupFailure.objects.count() == 2
+    content_audit = ContentStartupFailure.objects.latest("created_at")
+    assert content_audit.artifact_hash is None
+    assert content_audit.error_message == "content release validation failed"
 
 
 def test_registry_context_mismatch_fails_before_database_writes(tmp_path: Path) -> None:
-    artifact_path = write_artifact(
-        tmp_path / "registry-mismatch.json", read_real_artifact()
-    )
+    artifact_path = write_artifact(tmp_path / "registry-mismatch.json", read_real_artifact())
 
     with pytest.raises(ContentStartupError) as captured:
         bootstrap_seed_artifact(

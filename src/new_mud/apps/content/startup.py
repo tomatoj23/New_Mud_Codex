@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from new_mud.contracts.generated import (
     RegistryErrorsBlueprint,
@@ -106,6 +107,19 @@ class ContentReleaseIdentity:
 class ContentStartupResult:
     status: ContentStartupStatus
     identity: ContentReleaseIdentity
+
+
+def _lock_startup_namespace(
+    *,
+    instance_id: str,
+    mudlib_key: str,
+    target_content_release: str,
+) -> None:
+    namespace = "\0".join((instance_id, mudlib_key, target_content_release)).encode()
+    lock_key = int.from_bytes(hashlib.sha256(namespace).digest()[:8], signed=True)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key,))
+        cursor.fetchone()
 
 
 @dataclass(frozen=True)
@@ -857,6 +871,11 @@ def bootstrap_seed_bundle(
             message="seed bundle content hash does not match its normalized payload",
         )
     with transaction.atomic():
+        _lock_startup_namespace(
+            instance_id=instance_id,
+            mudlib_key=mudlib_key,
+            target_content_release=bundle.target_content_release,
+        )
         existing = _verify_existing_release(
             instance_id=instance_id,
             mudlib_key=mudlib_key,

@@ -260,3 +260,23 @@ class ContentReleaseItem(ImmutableModel):
                 fields=("batch", "blueprint_key"), name="content_item_batch_key_uniq"
             ),
         ]
+
+
+class ContentStartupFailure(ImmutableModel):
+    failure_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    instance_id = models.CharField(max_length=128)
+    mudlib_key = models.CharField(max_length=128)
+    target_content_release = models.CharField(max_length=128)
+    seed_bundle_id = models.CharField(max_length=128)
+    artifact_hash = models.CharField(max_length=64, null=True, blank=True)
+    error_code = models.CharField(max_length=128)
+    error_message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=("instance_id", "mudlib_key", "target_content_release", "created_at"),
+                name="content_startup_failure_ns_idx",
+            )
+        ]

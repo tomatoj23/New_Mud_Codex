@@ -11,6 +11,7 @@ from new_mud.apps.content.models import (
     ContentReleaseBatch,
     ContentReleaseHead,
     ContentReleaseItem,
+    ContentStartupFailure,
     ResolvedRegistryDependency,
 )
 from new_mud.apps.content.registry import (
@@ -24,6 +25,18 @@ from new_mud.apps.content.startup import ContentStartupStatus
 from new_mud.mudlibs.jinyong_core.registry import build_registry_catalog
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
+
+def assert_single_startup_failure(
+    *,
+    instance_id: str,
+    error_code: str,
+    error_message: str,
+) -> None:
+    audit = ContentStartupFailure.objects.get()
+    assert audit.instance_id == instance_id
+    assert audit.error_code == error_code
+    assert audit.error_message == error_message
 
 
 def test_content_runtime_start_is_repeatable_and_returns_release_identity() -> None:
@@ -71,6 +84,11 @@ def test_content_runtime_start_reports_partial_namespace_failure() -> None:
     assert failure.error_code == "CONTENT_RELEASE_SCOPE_MISMATCH"
     assert failure.error_message == "content namespace is partially initialized"
     assert failure.identity is None
+    assert_single_startup_failure(
+        instance_id="partial-instance",
+        error_code="CONTENT_RELEASE_SCOPE_MISMATCH",
+        error_message="content release scope mismatch",
+    )
 
 
 def test_content_runtime_readiness_reports_missing_active_batch() -> None:
@@ -82,11 +100,19 @@ def test_content_runtime_readiness_reports_missing_active_batch() -> None:
     )
 
     readiness = runtime.readiness()
+    assert ContentStartupFailure.objects.count() == 0
+    failure = runtime.start()
 
     assert readiness.status is ContentRuntimeStatus.NOT_READY
     assert readiness.error_code == "CONTENT_RELEASE_VALIDATION_FAILED"
     assert readiness.error_message == "content release has no active batch"
     assert readiness.identity is None
+    assert failure.status is ContentRuntimeStatus.NOT_READY
+    assert_single_startup_failure(
+        instance_id="missing-active-instance",
+        error_code="CONTENT_RELEASE_VALIDATION_FAILED",
+        error_message="content release validation failed",
+    )
 
 
 def test_content_runtime_readiness_reports_active_release_hash_mismatch() -> None:
@@ -118,10 +144,18 @@ def test_content_runtime_readiness_reports_active_release_hash_mismatch() -> Non
     )
 
     readiness = runtime.readiness()
+    assert ContentStartupFailure.objects.count() == 0
+    failure = runtime.start()
 
     assert readiness.status is ContentRuntimeStatus.NOT_READY
     assert readiness.error_code == "CONTENT_RELEASE_VALIDATION_FAILED"
     assert readiness.error_message == "active content release hash does not match its items"
+    assert failure.status is ContentRuntimeStatus.NOT_READY
+    assert_single_startup_failure(
+        instance_id="release-hash-instance",
+        error_code="CONTENT_RELEASE_VALIDATION_FAILED",
+        error_message="content release validation failed",
+    )
 
 
 def test_content_runtime_readiness_reports_missing_registry_dependency() -> None:
@@ -131,11 +165,20 @@ def test_content_runtime_readiness_reports_missing_registry_dependency() -> None
     ResolvedRegistryDependency.objects.all().delete()
 
     readiness = runtime.readiness()
+    assert ContentStartupFailure.objects.count() == 0
+    failure = runtime.start()
 
     assert readiness.status is ContentRuntimeStatus.NOT_READY
     assert readiness.error_code == "BLUEPRINT_REGISTRY_DEFINITION_HASH_MISMATCH"
     assert readiness.error_message is not None
     assert readiness.error_message.startswith("compiled registry dependencies mismatch revision ")
+    assert failure.status is ContentRuntimeStatus.NOT_READY
+    assert failure.error_message is not None
+    assert_single_startup_failure(
+        instance_id="missing-registry-instance",
+        error_code="BLUEPRINT_REGISTRY_DEFINITION_HASH_MISMATCH",
+        error_message="registry dependency validation failed",
+    )
 
 
 def test_content_runtime_rejects_compiler_contract_mismatch(tmp_path: Path) -> None:
@@ -166,6 +209,15 @@ def test_content_runtime_rejects_compiler_contract_mismatch(tmp_path: Path) -> N
     assert readiness.error_code == "CONTENT_RELEASE_VALIDATION_FAILED"
     assert readiness.error_message is not None
     assert "compiler_contract_version" in readiness.error_message
+    audit = ContentStartupFailure.objects.get()
+    assert audit.instance_id == "compiler-mismatch-instance"
+    assert audit.mudlib_key == "jinyong.core"
+    assert audit.target_content_release == "jinyong.release"
+    assert audit.seed_bundle_id == "jinyong.seed.v1"
+    assert audit.artifact_hash is None
+    assert audit.error_code == "CONTENT_RELEASE_VALIDATION_FAILED"
+    assert audit.error_message == "content release validation failed"
+    assert ContentReleaseBatch.objects.count() == 0
 
 
 def test_content_runtime_readiness_rejects_published_revision_compiler_mismatch() -> None:
@@ -215,11 +267,20 @@ def test_content_runtime_readiness_rejects_published_revision_compiler_mismatch(
     )
 
     readiness = runtime.readiness()
+    assert ContentStartupFailure.objects.count() == 0
+    failure = runtime.start()
 
     assert readiness.status is ContentRuntimeStatus.NOT_READY
     assert readiness.error_code == "CONTENT_RELEASE_VALIDATION_FAILED"
     assert readiness.error_message is not None
     assert readiness.error_message.startswith("published revision compiler contract mismatch for ")
+    assert failure.status is ContentRuntimeStatus.NOT_READY
+    assert failure.error_message is not None
+    assert_single_startup_failure(
+        instance_id="published-compiler-instance",
+        error_code="CONTENT_RELEASE_VALIDATION_FAILED",
+        error_message="content release validation failed",
+    )
 
 
 def test_content_runtime_readiness_rejects_active_registry_drift() -> None:
@@ -258,15 +319,24 @@ def test_content_runtime_readiness_rejects_active_registry_drift() -> None:
         compatibility_definitions=old_catalog.definitions,
     )
 
-    readiness = ContentRuntime(
+    drifted_runtime = ContentRuntime(
         instance_id="registry-drift-instance",
         registry_catalog=drifted_catalog,
-    ).readiness()
+    )
+    readiness = drifted_runtime.readiness()
+    assert ContentStartupFailure.objects.count() == 0
+    failure = drifted_runtime.start()
 
     assert readiness.status is ContentRuntimeStatus.NOT_READY
     assert readiness.error_code == "BLUEPRINT_REGISTRY_DEFINITION_HASH_MISMATCH"
     assert readiness.error_message == (
         "seed artifact Registry context differs from active definitions"
+    )
+    assert failure.status is ContentRuntimeStatus.NOT_READY
+    assert_single_startup_failure(
+        instance_id="registry-drift-instance",
+        error_code="BLUEPRINT_REGISTRY_DEFINITION_HASH_MISMATCH",
+        error_message="registry dependency validation failed",
     )
 
 

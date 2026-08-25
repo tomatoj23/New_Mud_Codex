@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from django.db import DatabaseError
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
@@ -15,6 +16,7 @@ from new_mud.contracts.generated import (
     RegistryErrorsContentRelease,
 )
 
+from .models import ContentStartupFailure
 from .registry import RegistryCatalog, canonical_sha256
 from .startup import (
     COMPILER_CONTRACT_VERSION,
@@ -26,6 +28,31 @@ from .startup import (
 )
 
 logger = logging.getLogger(__name__)
+
+_SAFE_FAILURE_MESSAGES: dict[str, str] = {
+    RegistryErrorsContentRelease.CONTENT_RELEASE_CONFLICT: "content release conflict",
+    RegistryErrorsContentRelease.CONTENT_RELEASE_SCOPE_MISMATCH: ("content release scope mismatch"),
+    RegistryErrorsContentRelease.CONTENT_RELEASE_VALIDATION_FAILED: (
+        "content release validation failed"
+    ),
+    RegistryErrorsBlueprint.BLUEPRINT_PARENT_NOT_FOUND: ("blueprint dependency validation failed"),
+    RegistryErrorsBlueprint.BLUEPRINT_REFERENCE_KIND_MISMATCH: (
+        "blueprint dependency validation failed"
+    ),
+    RegistryErrorsBlueprint.BLUEPRINT_REFERENCE_NOT_FOUND: (
+        "blueprint dependency validation failed"
+    ),
+    RegistryErrorsBlueprint.BLUEPRINT_PROFILE_NOT_FOUND: ("registry dependency validation failed"),
+    RegistryErrorsBlueprint.BLUEPRINT_REGISTRY_DEFINITION_HASH_MISMATCH: (
+        "registry dependency validation failed"
+    ),
+    RegistryErrorsBlueprint.BLUEPRINT_REGISTRY_REFERENCE_NOT_FOUND: (
+        "registry dependency validation failed"
+    ),
+    RegistryErrorsBlueprint.BLUEPRINT_REGISTRY_VERSION_UNAVAILABLE: (
+        "registry dependency validation failed"
+    ),
+}
 
 _SHA256_PATTERN = "^[0-9a-f]{64}$"
 _REGISTRY_KEY_PATTERN = "^[a-z][a-z0-9_.-]{2,63}$"
@@ -265,6 +292,35 @@ def load_seed_artifact(
     )
 
 
+def _record_startup_failure(
+    *,
+    instance_id: str,
+    expectation: SeedArtifactExpectation,
+    artifact_hash: str | None,
+    error: ContentStartupError,
+) -> None:
+    try:
+        ContentStartupFailure.objects.create(
+            instance_id=instance_id,
+            mudlib_key=expectation.mudlib_key,
+            target_content_release=expectation.target_content_release,
+            seed_bundle_id=expectation.seed_bundle_id,
+            artifact_hash=artifact_hash,
+            error_code=error.code,
+            error_message=_SAFE_FAILURE_MESSAGES.get(error.code, "content startup failed"),
+        )
+    except DatabaseError:
+        logger.error(
+            "content startup failure audit could not be persisted",
+            extra={
+                "instance_id": instance_id,
+                "mudlib_key": expectation.mudlib_key,
+                "seed_bundle_id": expectation.seed_bundle_id,
+                "error_code": error.code,
+            },
+        )
+
+
 def bootstrap_seed_artifact(
     *,
     instance_id: str,
@@ -273,6 +329,7 @@ def bootstrap_seed_artifact(
     registry_catalog: RegistryCatalog | None = None,
 ) -> SeedArtifactBootstrapResult:
     catalog = registry_catalog or RegistryCatalog.empty()
+    artifact: LoadedSeedArtifact | None = None
     try:
         artifact = load_seed_artifact(
             artifact_path,
@@ -285,17 +342,44 @@ def bootstrap_seed_artifact(
             bundle=artifact.bundle,
             registry_catalog=catalog,
         )
-    except ContentStartupError:
-        logger.exception(
+    except ContentStartupError as error:
+        _record_startup_failure(
+            instance_id=instance_id,
+            expectation=expectation,
+            artifact_hash=artifact.artifact_hash if artifact is not None else None,
+            error=error,
+        )
+        logger.error(
             "content seed artifact bootstrap failed",
             extra={
                 "instance_id": instance_id,
                 "mudlib_key": expectation.mudlib_key,
                 "seed_bundle_id": expectation.seed_bundle_id,
-                "artifact_path": str(artifact_path),
+                "error_code": error.code,
             },
         )
         raise
+    except DatabaseError as error:
+        startup_error = ContentStartupError(
+            code=RegistryErrorsContentRelease.CONTENT_RELEASE_VALIDATION_FAILED,
+            message="content bootstrap transaction failed",
+        )
+        _record_startup_failure(
+            instance_id=instance_id,
+            expectation=expectation,
+            artifact_hash=artifact.artifact_hash if artifact is not None else None,
+            error=startup_error,
+        )
+        logger.error(
+            "content seed artifact bootstrap transaction failed",
+            extra={
+                "instance_id": instance_id,
+                "mudlib_key": expectation.mudlib_key,
+                "seed_bundle_id": expectation.seed_bundle_id,
+                "error_code": startup_error.code,
+            },
+        )
+        raise startup_error from error
     logger.info(
         "content seed artifact bootstrap completed",
         extra={
