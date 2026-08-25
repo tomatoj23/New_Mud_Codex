@@ -2,7 +2,7 @@
 
 > 状态：分析层文档。本文用于记录 Evennia 6.0 源码事实、优缺点与初步判断，不是 New_Mud 当前权威实施规范。若与 `docs/new_engine/` 冲突，以 `docs/new_engine/` 为准。详见 `docs/19_documentation_governance.md`。
 
-> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v6.md` 第八章、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md` 为准；`requirements_v5.md` 仅作历史对照。
+> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前领域术语，以 `requirements_v6.md` 第八章与根目录 `CONTEXT.md` 为权威；`UBIQUITOUS_LANGUAGE.md` 仅作非权威工程术语索引，`requirements_v5.md` 仅作历史对照。
 
 ## 1. 分析范围
 
@@ -112,7 +112,7 @@ Evennia 把命令系统拆成两层：
 
 - `docs/new_engine/01_BORROW_REWRITE_MATRIX.md`
 - `docs/new_engine/05_COMMAND_INTERACTION.md`
-- `requirements_v6.md`（第八章术语定义）、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md`
+- 术语权威：`requirements_v6.md` 第八章与根目录 `CONTEXT.md`；工程名称索引：`UBIQUITOUS_LANGUAGE.md`
 
 ## 5. 结论
 

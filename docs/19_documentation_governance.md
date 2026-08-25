@@ -10,7 +10,7 @@
 
 - 定义产品目标、范围、M1 内部边界、PublicV1Gate、里程碑与验收结果，是这些关注点的权威来源。
 - `requirements_v5.md` 已冻结为历史基线；V6 的实质变化不得回写 V5。
-- `CONTEXT.md` 是项目特有领域词汇表，`UBIQUITOUS_LANGUAGE.md` 是更细的工程术语伴随文档；二者不得覆盖产品需求。
+- `CONTEXT.md` 是项目特有领域词汇表，也是领域概念的唯一词汇权威；`UBIQUITOUS_LANGUAGE.md` 是非权威工程术语索引，不得重复定义领域概念或复制冻结合同规则；二者均不得覆盖产品需求。
 
 ### 2.2 冻结实施合同：`docs/new_engine/11-16`
 
@@ -62,7 +62,7 @@
 | --- | --- |
 | 产品目标、范围、里程碑、发布方式和验收结果 | `requirements_v6.md` |
 | 协议字段、状态机、持久结构、事务、失败语义和测试机制 | 对应的 `docs/new_engine/11-16` |
-| 术语边界 | `CONTEXT.md` 与 V6 第八章；`UBIQUITOUS_LANGUAGE.md` 负责统一表达 |
+| 术语边界 | `CONTEXT.md` 与 V6 第八章；`UBIQUITOUS_LANGUAGE.md` 只索引非重复工程名称和常见歧义 |
 | 需求到合同和证据的映射 | `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` |
 | 架构理由和模块方向 | `docs/new_engine/00-10` |
 | Evennia 来源事实与现代性评估 | `docs/00-18`、`docs/20` 与本地 `evennia-main` 快照 |
@@ -85,12 +85,13 @@
 
 ## 3.1 术语权威来源
 
-- 当前术语权威来源为根目录 `CONTEXT.md` 与 `requirements_v6.md` 第八章；`UBIQUITOUS_LANGUAGE.md` 负责跨文档统一命名与工程边界说明。
+- 当前术语权威来源为根目录 `CONTEXT.md` 与 `requirements_v6.md` 第八章；`CONTEXT.md` 只定义项目领域概念，`UBIQUITOUS_LANGUAGE.md` 只索引未进入领域词汇表的工程名称、来源名称、合同归属和常见歧义。
+- 同一个领域术语不得在 `UBIQUITOUS_LANGUAGE.md` 中保留第二份定义；协议字段、状态转换、事务步骤、持久化约束和失败语义不得复制到任一词汇表，而应回链对应冻结合同。
 - `docs/new_engine/*` 与分析层文档若涉及 New_Mud 当前正式术语，应同时对齐 `CONTEXT.md` 与 V6；若为了描述 Evennia 现状而出现旧词，应在上下文中明确那是来源术语，而不是 New_Mud 设计术语。
 
 ## 4. 推荐阅读顺序
 
-- 需要先确认名词边界时，先看 `CONTEXT.md` 与 `requirements_v6.md` 第八章，再看 `UBIQUITOUS_LANGUAGE.md`。
+- 需要先确认领域名词边界时，看 `CONTEXT.md` 与 `requirements_v6.md` 第八章；只有需要工程名称、来源别名或合同导航时，再看 `UBIQUITOUS_LANGUAGE.md`。
 - 需要追源码依据时，先看 `docs/01-15`。
 - 需要理解分析阶段如何从模块判断收敛到总体方案时，再看 `docs/16-18`。
 - 需要判断 Evennia 6.0 是否仍适合作为参考时，看 `docs/20_evennia_modernity_assessment.md`。
@@ -178,7 +179,7 @@
 
 仍需持续防范：
 
-- 术语漂移：新增或改写 New_Mud 设计名词时，未先对齐 `CONTEXT.md`、V6 与 `UBIQUITOUS_LANGUAGE.md`。
+- 术语漂移：新增或改写领域概念时未先更新 `CONTEXT.md` 与 V6，或把同一领域定义、协议规则和事务约束重新复制到 `UBIQUITOUS_LANGUAGE.md`。
 - 实现漂移：代码、迁移或测试偏离冻结合同，却反向修改文档为未经批准的实现背书。
 - 分层回退：把实施 schema、协议字段或当前代码细节重新写入分析层，导致分析文档与冻结合同再次形成双重权威。
 

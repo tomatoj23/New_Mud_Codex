@@ -8,9 +8,17 @@ New_Mud is a Chinese wuxia MUD that rebuilds selected XKX100 experiences on a se
 The platform login and administrative authorization subject. A User is not a game-world Character and does not itself represent a Presence.
 _Avoid_: player character, GameAccount, AuthSession
 
+**AuthIdentity**:
+An external authentication identity associated with a User. It identifies an authentication source without owning game-world relationships.
+_Avoid_: login source, credential record, GameAccount
+
 **GameAccount**:
 The per-instance game identity permanently associated with one User. It owns CharacterOwnership and player-domain relationships but does not carry PlatformRole permissions.
 _Avoid_: User, login session, character slot
+
+**PlatformRole**:
+An administrative authorization role held by a User. It does not express Character ownership, player status, or world capabilities.
+_Avoid_: game permission, Character role, GameAccount permission
 
 **Character**:
 A persistent playable game persona controlled through CharacterOwnership. The first release allows at most one Character per GameAccount while retaining the ownership relation for future expansion.
@@ -40,6 +48,34 @@ _Avoid_: scene snapshot, region
 A world Entity representing a carried, equipped, contained or dropped game object. An Item can be an action target but is not an Actor.
 _Avoid_: LootClaim, inventory row
 
+**Exit**:
+A directed world Entity connecting one Room to another within the world topology.
+_Avoid_: portal implementation, generic link, Region
+
+**Region**:
+A named grouping used to organize Rooms and world content. It is not itself a location occupied by an Actor.
+_Avoid_: Room, scene, zone server
+
+**Blueprint**:
+The stable content identity whose revisions describe how a kind of world or gameplay content is defined.
+_Avoid_: Prototype, mutable template row, Entity
+
+**BlueprintRevision**:
+An immutable version of a Blueprint definition, with an explicit draft or published lifecycle position.
+_Avoid_: mutable Blueprint, runtime Entity, latest template
+
+**ContentReleaseBatch**:
+An immutable set of published BlueprintRevisions selected to become active together as one content release decision.
+_Avoid_: partial release diff, latest drafts, deployment
+
+**MUDLib**:
+The runtime content package selected for a New_Mud instance. Historical LPC source is conversion input, not a runtime MUDLib.
+_Avoid_: Source LPC MUDLib, plugin pack, source tree
+
+**ConnectionSession**:
+A single live client transport connection. It is distinct from authenticated identity and from control of a Character.
+_Avoid_: AuthSession, Presence, socket user
+
 **AuthSession**:
 The authenticated session lifecycle created by login for one User. It is distinct from a physical ConnectionSession and may exist without an active Presence.
 _Avoid_: WebSocket connection, access token
@@ -47,6 +83,10 @@ _Avoid_: WebSocket connection, access token
 **Presence**:
 A temporary control lease binding an AuthSession to a Character. It is not the Character's identity and can move through active, grace_disconnected, taken_over and closed states.
 _Avoid_: AuthSession, resume ticket, online flag
+
+**PresenceSnapshot**:
+A short-lived recovery checkpoint associated with a Presence lease. It is neither a Character identity nor a Presence itself.
+_Avoid_: persisted Presence, Character save, session archive
 
 **GameAccountLifecycle**:
 The account-control lifecycle `active -> cooling_off -> retired`. A cooling-off account can be reopened only with a valid RecoveryCode; a retired account cannot be restored, while stable identifiers and required history remain auditable.
@@ -92,6 +132,18 @@ _Avoid_: player block, GM mute, channel ban
 The auditable record that joins a player report, immutable message evidence, review decisions, sanctions, and any appeal.
 _Avoid_: report message, support ticket, chat log
 
+**ChatChannel**:
+A named shared conversation space with explicit participation and delivery boundaries.
+_Avoid_: room broadcast, DirectMessage, generic channel
+
+**DirectMessage**:
+A private message sent from one Actor to another outside a ChatChannel.
+_Avoid_: whisper command, ChatChannel, support ticket
+
+**SystemNotice**:
+A server-authored message for operational, safety, or game-wide communication rather than player speech.
+_Avoid_: ChatMessage, GM impersonation, public chat
+
 **PresenceRecovery**:
 The same-AuthSession recovery of its own active or grace Presence after the in-memory resume credential is lost; it is never cross-session takeover.
 _Avoid_: session resume, takeover, re-enter
@@ -120,13 +172,33 @@ _Avoid_: unknown command, stub behavior, partial support
 The end of an Item's active world lifecycle while preserving the identity and history needed by authoritative records.
 _Avoid_: item deletion, despawn, database cleanup
 
+**EffectTypeDefinition**:
+The named and versioned meaning of a kind of ongoing effect. It defines the category a ConditionDefinition may express, not a particular effect on an Entity.
+_Avoid_: EffectInstance, condition row, handler class
+
+**ConditionDefinition**:
+A versioned content definition of a condition tied to one EffectTypeDefinition.
+_Avoid_: EffectInstance, runtime status, arbitrary payload
+
+**EffectInstance**:
+A concrete occurrence of a ConditionDefinition affecting a particular target over its lifecycle.
+_Avoid_: ConditionDefinition, buff template, effect type
+
 **SourceSnapshot**:
 An immutable, content-addressed description of the exact XKX100 source bytes and inclusion rules used as evidence for a conversion or compatibility claim.
 _Avoid_: source folder, local checkout, latest source
 
+**CompatibilityEnvelope**:
+The source-bound scope within which a specific XKX100 compatibility claim is supported by explicit evidence.
+_Avoid_: full compatibility, tested sample, general parity
+
 **ReleaseManifest**:
 The immutable record that identifies the code, requirements, contracts, migrations, active content batch, source snapshot, compatibility envelopes, and test evidence that are released together.
 _Avoid_: deployment note, build metadata, version string
+
+**CapacityProfile**:
+A versioned statement of the reference environment, load, latency, stability, and recovery targets used for release evidence.
+_Avoid_: load script, deployment size, informal performance target
 
 **PublicV1**:
 The first publicly operated product version that has passed `PublicV1Gate`; it is distinct from the internal M1 delivery and from a general claim of XKX100 parity.

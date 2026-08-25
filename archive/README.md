@@ -10,6 +10,7 @@
 现行入口：
 
 - 产品需求：`../requirements_v6.md`（`../requirements_v5.md` 仅作历史基线）
-- 术语：`../UBIQUITOUS_LANGUAGE.md`
+- 领域词汇：`../CONTEXT.md`
+- 工程术语索引：`../UBIQUITOUS_LANGUAGE.md`
 - 文档治理：`../docs/19_documentation_governance.md`
 - 设计与实施合同：`../docs/new_engine/00_README.md`

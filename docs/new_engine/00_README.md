@@ -36,7 +36,7 @@
 
 ## 2.1 阅读顺序
 
-- 先看 `requirements_v6.md` 与根目录 `CONTEXT.md`，再看 `UBIQUITOUS_LANGUAGE.md`，明确当前术语边界与跨文档统一用词。
+- 先看 `requirements_v6.md` 与根目录 `CONTEXT.md`，确定产品和领域术语边界；只有需要工程名称、来源别名或合同导航时，再看非权威索引 `UBIQUITOUS_LANGUAGE.md`。
 - 再看本目录中的架构、运行时、领域模型与路线图。
 - 真正准备编码前，按顺序精读 `11_PROTOCOL_CATALOG.md` 到 `16_OPERATIONS_TESTING_CONTRACT.md` 六份实施合同。
 - 协议与会话先读 11、13；Registry 与发布读 12；玩法、H5、运维验收依次读 14、15、16。

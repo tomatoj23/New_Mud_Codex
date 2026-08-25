@@ -177,7 +177,7 @@ seed input / admin edit
 
 ### 4.2 三类帮助来源
 
-以下三个名词当前以 `requirements_v6.md` 第八章、根目录 `CONTEXT.md`、`UBIQUITOUS_LANGUAGE.md` 与本目录相关设计文档中的约束为准；其中 `UBIQUITOUS_LANGUAGE.md` 负责术语统一，不单独决定帮助子域分类：
+以下三个名词的领域定义以 `requirements_v6.md` 第八章与根目录 `CONTEXT.md` 为准；`UBIQUITOUS_LANGUAGE.md` 仅索引工程名称和合同归属，不单独决定帮助子域分类，具体设计约束仍由本目录相关文档负责：
 
 - `CommandHelp`
   - 从动作元数据生成
