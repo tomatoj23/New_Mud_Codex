@@ -16,7 +16,8 @@
 
 | 基线 | 身份 | 当前结论 |
 | --- | --- | --- |
-| 文档审计基线 | Git `HEAD`（本 V6 前置检查点） | V6 权威、V5 历史边界、CONTEXT/ADR、冻结合同、机器制品与审计记录在同一检查点同步 |
+| V6 权威基线 | Git `d14ce67` | V6 权威、V5 历史边界、CONTEXT/ADR、冻结合同、机器制品与审计记录在同一检查点同步 |
+| E0 / Slice 2 验收基线 | GitHub Issue #5 检查点（2026-08-25） | Issues #1–#4 的实现已在 V6 基线上完成真库、服务集成、启动 E2E、全量和静态门禁，`ENGINE-001` 与 `MILESTONE-001` 可验证关闭 |
 | M0 工程基线 | Git `7bd76a3` | Django/ASGI 骨架、PostgreSQL 初始迁移、机器合同、来源制品、CI 与自动校验已建立 |
 | M0 profile 基线 | Git `97659ce` | browser、capacity、recovery profile 已批准，M0 基础设施恢复报告已绑定 |
 | 实施计划基线 | Git `b4798fb` | 已验证环境与 Engine Stage E0/E1 五切片计划已建立；当前计划已改用命名空间化 Slice |
@@ -42,7 +43,7 @@
 - 以 `e7a3717` 建立审计后的正式文档基线。
 - 以 `7bd76a3` 建立 M0 可执行合同与工程骨架基线。
 - 以 `97659ce` 建立 M0 非功能 profile 基线，以 `b4798fb` 建立已验证环境与五切片实施计划基线。
-- 上述四个历史提交保留需求、合同、实现与验收证据之间的追溯关系；本 V6 前置检查点同步当前权威、合同、制品和审计记录，E0 / Slice 2 实现另由 Issues #1–#4 的提交固定。
+- 上述四个历史提交保留需求、合同、实现与验收证据之间的追溯关系；`d14ce67` 同步当前 V6 权威、合同、制品和审计记录，E0 / Slice 2 实现由 Issues #1–#4 的提交固定，Issue #5 在其上建立最终验收检查点。
 
 ### 3.3 M0 工程骨架与合同制品
 
@@ -87,6 +88,10 @@
 | M0 合同校验（2026-07-19 历史基线） | 56,883 项通过，profile blocker 为空 |
 | M0 合同校验（2026-08-23 当前工作树） | 56,981 项通过，profile blocker 为空；命令为 `.venv\\Scripts\\python.exe scripts/verify_m0.py`（生成代码已先用 `--write-generated` 同步） |
 | PostgreSQL 隔离恢复 | 通过；实测 RPO 0.004057 分钟，RTO 0.01816 分钟 |
+| pytest（2026-08-25，未启用真库） | 57 passed、16 skipped；跳过项全部显式要求 `RUN_POSTGRES_TESTS=1`，并由下一项覆盖 |
+| pytest（2026-08-25，`RUN_POSTGRES_TESTS=1`） | PostgreSQL 合同/启动 E2E 16 passed；内容/seed/startup/runtime/health/真库集合 66 passed；全量 73 passed |
+| 静态与 Django（2026-08-25） | Ruff lint 通过；52 files formatted；mypy 52 source files 通过；Django 0 问题；无 migration drift；`pip check` 通过 |
+| M0 / Markdown（2026-08-25） | 56,981 项 M0 检查、0 个 profile blocker；76 项 Markdown 检查、0 errors |
 
 pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两条弃用警告。当前运行时为 Python 3.14.2，且检查当日没有可升级的 Daphne 版本，因此该警告记录为上游兼容性观察项，不构成当前失败。
 
@@ -104,17 +109,16 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 | 对象 | 状态 | 依据 |
 | --- | --- | --- |
 | 文档基线 | `verified` | 本 V6 前置检查点同步 `requirements_v6.md`、CONTEXT/ADR、冻结合同、机器制品、审计和导航；V5 保持历史来源 |
-| M0 机器合同基线 | `verified` | 2026-08-23 `verify_m0.py` 通过 56,981 项检查，profile blocker 为空；56,883、56,904、56,928、56,979 仅作为带日期的历史执行数保留 |
+| M0 机器合同基线 | `verified` | 2026-08-25 `verify_m0.py` 通过 56,981 项检查，profile blocker 为空；56,883、56,904、56,928、56,979 仅作为带日期的历史执行数保留 |
 | `CONTENT-001` | `implemented` | Issues #1–#4 已实现两类 exact dependency、冻结 seed bootstrap、active/pinned resolver、启动/readiness、并发/回滚与失败审计；完整后台发布服务仍待 M1 |
+| `WORLD-001` | `specified` | 冻结来源与 seed/startup 验证不等于固定小巷世界物化、移动、战斗和战利品 E2E；这些仍待 M1 |
 | `CONVERT-001` | `implemented` | 来源快照、双 manifest、bundle、生成器与篡改检查已存在；M4 黄金差分仍未实现 |
 | 非功能 M0 profile 基线 | `verified` | browser、capacity、recovery 三份 profile 已批准，恢复报告路径/ID/哈希与指标已纳入自动校验 |
-| `MILESTONE-001` / M0 | `implemented` | M0 机器合同和 profile 基线已收口；仅剩干净 Git 基线上的最终 checklist 才能标记 complete |
-| `ENGINE-001` / Engine Stage E0 | `blocked` | Issues #1–#4 已完成实现；Issue #5 尚需在当前 V6 基线上完成分层验收、证据索引和正式状态同步 |
+| `MILESTONE-001` / M0 | `verified` | M0 机器合同、profile 基线与 Issue #5 clean-baseline checklist 已全部通过 |
+| `ENGINE-001` / Engine Stage E0 | `verified` | Issues #1–#4 完成实现；Issue #5 在 V6 基线上完成 PostgreSQL、服务集成、启动 E2E、全量和静态验收 |
 | `RELEASE-001` / PublicV1Gate | `blocked` | V6 gate 已定义，尚无公开试运行、完整恢复、ReleaseManifest 或公开资料证据；不影响 M1/E0 的内部状态 |
 
-M0 机器合同当前通过且没有 profile blocker；`MILESTONE-001 / M0` 为 `implemented`，`ENGINE-001 / Engine Stage E0` 在最终验收前独立保持 `blocked`。E0 实现已经由 Issues #1–#4 固定，当前仅剩以下收口项：
-
-- 在本 V6 基线上串行取得 PostgreSQL 合同、服务集成、启动级 E2E 与全量 pytest 证据，并完成静态、Django、迁移、依赖、M0 和 Markdown 门禁；随后由 Issue #5 同步正式状态并建立提交检查点。
+M0 机器合同当前通过且没有 profile blocker；`MILESTONE-001 / M0` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issues #1–#4 固定实现，Issue #5 固定分层证据、状态同步和提交检查点；E0 已关闭，后续实现可从 E1 的独立 ticket 开始。
 
 浏览器实际执行、容量报告与五个业务恢复范围仍是 M1/发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批而提前转为 `verified`。
 
@@ -124,8 +128,8 @@ M0 机器合同当前通过且没有 profile blocker；`MILESTONE-001 / M0` 为 
 
 | 需求 ID | 当前证据 |
 | --- | --- |
-| `MILESTONE-001` | `contracts/v1/`、`scripts/verify_m0.py`、`.github/workflows/m0.yml`、本文件第 3.6 节；最终 clean-baseline checklist 待补 |
-| `ENGINE-001` | Issues #1–#4 的提交、`PHASE2_CONTENT_STARTUP_WORKLOG.md` 与待 Issue #5 收口的当前基线分层验收 |
+| `MILESTONE-001` | `contracts/v1/`、`scripts/verify_m0.py`、`.github/workflows/m0.yml`、本文件第 3.6 节与 Issue #5 clean-baseline checklist |
+| `ENGINE-001` | Issues #1–#4 的提交、V6 基线 `d14ce67`、`PHASE2_CONTENT_STARTUP_WORKLOG.md` 第 8 节与 Issue #5 分层验收 |
 | `CONTENT-001` | `src/new_mud/apps/content/models.py`、`migrations/0001_initial.py`–`0002_contentstartupfailure.py`、seed/registry/startup/resolver 实现与 PostgreSQL 合同测试 |
 | `CONVERT-001` | `contracts/v1/artifacts/`、`scripts/generate_source_contracts.py`、`tests/test_contracts.py` |
 | `CLIENT-001` | `browser-matrix.json` 已批准且冻结目标版本；实际 `tested_versions` 与浏览器 E2E 尚缺 |

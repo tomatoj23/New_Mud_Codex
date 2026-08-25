@@ -119,13 +119,9 @@ def test_exact_registry_resolution_reports_missing_and_hash_mismatch() -> None:
     catalog = RegistryCatalog.from_definitions((definition(key="rule.exact"),))
 
     with pytest.raises(RegistryError) as missing:
-        catalog.resolve_exact(
-            RegistryReference("rule", "rule.other", "1.0.0", "a" * 64)
-        )
+        catalog.resolve_exact(RegistryReference("rule", "rule.other", "1.0.0", "a" * 64))
     assert missing.value.code == "REGISTRY_COMPAT_DEFINITION_MISSING"
 
     with pytest.raises(RegistryError) as mismatch:
-        catalog.resolve_exact(
-            RegistryReference("rule", "rule.exact", "1.0.0", "a" * 64)
-        )
+        catalog.resolve_exact(RegistryReference("rule", "rule.exact", "1.0.0", "a" * 64))
     assert mismatch.value.code == "REGISTRY_VERSION_CONTENT_MISMATCH"

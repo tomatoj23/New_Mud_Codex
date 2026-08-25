@@ -108,14 +108,13 @@ def _resolved_blueprint(
         }
         for dependency in registry_dependencies
     ]
-    compiled_registry_payload = revision.compiled_payload.get(
-        "resolved_registry_dependencies"
-    )
+    compiled_registry_payload = revision.compiled_payload.get("resolved_registry_dependencies")
     if not isinstance(compiled_registry_payload, list):
         raise ContentResolutionError(
             f"published blueprint {revision.blueprint_key!r} has invalid registry dependencies",
             code=RegistryErrorsBlueprint.BLUEPRINT_REGISTRY_DEFINITION_HASH_MISMATCH,
         )
+
     def sort_key(dependency: object) -> tuple[str, int]:
         if not isinstance(dependency, dict):
             raise ContentResolutionError(

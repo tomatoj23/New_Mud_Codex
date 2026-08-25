@@ -1,10 +1,10 @@
 # Engine Stage E0 / Slice 2 内容启动闭环工作记录
 
 > 记录起始日期：2026-08-22；实现完成复核：2026-08-25
-> 当前状态：`implementation_complete_validation_pending`
+> 当前状态：`verified`
 > 性质：实施过程快照，不是产品需求、冻结合同或阶段完成证明。权威需求、实施机制和状态分别以 `requirements_v6.md`、`docs/new_engine/11_PROTOCOL_CATALOG.md`–`docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md`、`docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` 与 `docs/new_engine/18_IMPLEMENTATION_STATUS.md` 为准。
 
-> 第 1–6 节保留 2026-08-23 的实现中间快照，其中的 `partial` / `pending` / `blocked` 只描述当时状态。Issues #1–#4 已在随后完成实现；当前边界由第 7 节取代，最终分层验收和正式状态同步仍由 Issue #5 收口。
+> 第 1–6 节保留 2026-08-23 的实现中间快照，其中的 `partial` / `pending` / `blocked` 只描述当时状态。第 7 节是 Issues #1–#4 完成后的验收前快照；当前结论由第 8 节的 Issue #5 验收记录取代。
 
 ## 1. 本轮目标与起点
 
@@ -146,3 +146,37 @@
 因此真实冻结制品加载、两类 exact dependency、active/pinned resolver、启动集成、并发收敛、事务回滚和失败审计不再是实现缺口。当前唯一剩余 frontier 是 Issue #5：在已提交的 V6 权威基线上取得 PostgreSQL 合同、服务集成、启动级 E2E、全量 pytest、静态、Django、迁移、依赖、M0 和 Markdown 证据，建立完整证据索引，再按实际结果同步 `ENGINE-001`、`CONTENT-001`、`WORLD-001` 与 `MILESTONE-001`。
 
 在 Issue #5 完成前，`ENGINE-001 / Engine Stage E0` 仍保持 `blocked`，`MILESTONE-001 / M0` 保持 `implemented`；这表示最终验收尚未固定，不否定 Issues #1–#4 已提交的实现。`RELEASE-001 / PublicV1Gate` 未开始，E1 也未开始。
+
+## 8. 2026-08-25 Issue #5 分层验收与状态收口
+
+Issue #5 在 V6 权威基线 `d14ce67` 上执行。环境为 Windows 10 `10.0.19045`、CPython `3.14.2`、PostgreSQL `18.4-2`；数据库测试和全量 pytest 严格串行，统一使用 `--basetemp artifacts\reports\pytest-temp`。未记录或提交数据库凭据。
+
+### 8.1 可执行证据索引
+
+| 层 | 命令 | 结果 | 对应边界 |
+| --- | --- | --- | --- |
+| PostgreSQL 合同与启动 E2E | `$env:RUN_POSTGRES_TESTS='1'; .\.venv\Scripts\python.exe -m pytest tests\test_postgres_content_contract.py tests\test_postgres_content_startup.py -q --basetemp artifacts\reports\pytest-temp` | 16 passed | `ENGINE-001`；合同 12 第 14 节、16 第 2/8 节 |
+| 内容服务集成 | `$env:RUN_POSTGRES_TESTS='1'; .\.venv\Scripts\python.exe -m pytest tests\test_content_registry.py tests\test_content_runtime.py tests\test_content_startup.py tests\test_health.py tests\test_seed_artifact.py tests\test_postgres_content_contract.py tests\test_postgres_content_startup.py -q --basetemp artifacts\reports\pytest-temp` | 66 passed | Registry、seed、startup、runtime、readiness、并发与失败审计 |
+| 启用真库的全量测试 | `$env:RUN_POSTGRES_TESTS='1'; .\.venv\Scripts\python.exe -m pytest -q --basetemp artifacts\reports\pytest-temp` | 73 passed | E0 / Slice 2 全量回归 |
+| 默认全量与跳过边界 | `.\.venv\Scripts\python.exe -m pytest -q --basetemp artifacts\reports\pytest-temp` | 57 passed、16 skipped | 16 项仅因未设置 `RUN_POSTGRES_TESTS=1` 跳过，已由真库全量覆盖 |
+| Ruff lint | `.\.venv\Scripts\ruff.exe check scripts src tests` | All checks passed | 代码质量门禁 |
+| Ruff format | `.\.venv\Scripts\ruff.exe format --check scripts src tests` | 52 files already formatted | 格式门禁 |
+| mypy | `.\.venv\Scripts\mypy.exe src scripts tests` | 52 source files，0 issues | 类型门禁 |
+| Django | `.\.venv\Scripts\python.exe manage.py check` | 0 issues | Django 配置 / 模型门禁 |
+| 迁移漂移 | `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run --skip-checks` | No changes detected | schema 与 migration 一致性 |
+| 依赖 | `.\.venv\Scripts\python.exe -m pip check` | No broken requirements | 锁定环境完整性 |
+| M0 合同 | `.\.venv\Scripts\python.exe scripts\verify_m0.py` | 56,981 checks；READY；0 profile blocker | `MILESTONE-001` |
+| Markdown | `.\.venv\Scripts\python.exe -c "from pathlib import Path; from scripts.verify_m0 import VerificationResult, validate_documents; result = VerificationResult(); validate_documents(Path.cwd(), result); print(f'{result.checks} Markdown checks, {len(result.errors)} errors'); raise SystemExit(bool(result.errors))"` | 76 checks、0 errors | 文档结构与本地链接 |
+| 暂存快照 | `git diff --cached --check` | 通过 | 提交边界与空白错误 |
+| 双轴审查 | `code-review`：Standards + Issue #5 Spec | 0 blocking findings / 0 blocking findings | 仓库规范与 Issue 验收一致性 |
+
+### 8.2 失败边界与正式状态
+
+- pytest 仅报告 Daphne 使用的 asyncio policy API 将在 Python 3.16 移除；当前运行时为 Python 3.14.2，属于已记录的上游兼容性观察项，不构成失败。
+- 默认测试的 16 个 skip 不是未执行证据：同一工作树随后以 `RUN_POSTGRES_TESTS=1` 取得 73 passed；任何只引用 57 passed 的记录都必须同时保留该边界。
+- `ENGINE-001` 与 `MILESTONE-001` 的 E0/M0 必做证据已齐备，正式状态同步为 `verified`。
+- `CONTENT-001` 保持 `implemented`：E0 启动闭环已验证，但 M1 完整后台编辑、发布与回滚服务尚未实现。
+- `WORLD-001` 保持 `specified`：冻结来源、seed 与启动验证不等于固定小巷世界物化、移动、战斗和战利品 E2E。
+- `RELEASE-001` 保持 `blocked`：浏览器实测、容量/soak、五业务范围恢复、公开试运行、ReleaseManifest 与公开资料均未完成；本检查点不宣称 Public V1。
+
+Issue #5 的提交检查点关闭 E0 / Slice 2。E1 在该检查点提交、双轴审查清零并关闭 Issue 后才可从独立 ticket 开始；本轮未实现任何 E1 行为。

@@ -455,8 +455,7 @@ class RegistryCatalog:
             not isinstance(definition.declaration.get("handler_key"), str)
             or not isinstance(definition.declaration.get("input_schema"), Mapping)
             or not isinstance(definition.declaration.get("output_schema"), Mapping)
-            or definition.declaration.get("determinism")
-            not in {"deterministic", "seeded"}
+            or definition.declaration.get("determinism") not in {"deterministic", "seeded"}
         ):
             raise RegistryError(
                 code=RegistryErrorsRegistry.REGISTRY_SCHEMA_INVALID,

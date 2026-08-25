@@ -170,6 +170,7 @@ def test_pinned_resolver_keeps_the_historical_revision_after_batch_switch() -> N
             release_hash="9" * 64,
             created_by="contract-test",
         )
+        assert isinstance(original_revision.compiled_payload, dict)
         next_payload = {**original_revision.compiled_payload, "version": "1.1.0"}
         next_revision = BlueprintRevision.objects.create(
             head=blueprint_head,
@@ -424,6 +425,7 @@ def test_existing_start_rejects_tampered_compiled_payload() -> None:
         bundle=bundle,
     )
     revision = BlueprintRevision.objects.get(blueprint_key="room.test.start")
+    assert isinstance(revision.compiled_payload, dict)
     revision.compiled_payload = {**revision.compiled_payload, "version": "9.9.9"}
 
     with pytest.raises(ContentStartupError) as captured:

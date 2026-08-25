@@ -26,12 +26,12 @@
 | `AUTH-003` | `specified` | 每账号最多一个角色和一个 active/grace Presence | 8.6 | 11、13 | M1 | 数据库约束、并发 enter/takeover E2E |
 | `WORLD-001` | `specified` | 固定小巷纵切可进入、查看、移动、生成、战斗和查看战利品 | 7.3、11.4 | 12、14、16 第 8 节 | M1 | fixture、世界物化、端到端测试 |
 | `COMBAT-001` | `specified` | 只有兼容包络内 verified 行为可声明与 XKX100 对齐 | 7.2.1、10.4、11.4 | 14、16 第 8 节 | M1、M4 | envelope、golden case、差分报告 |
-| `CONTENT-001` | `implemented` | 内容通过不可变 revision、完整批次、冷发布和批次回滚生效 | 5.4、6.13-6.14 | 12 | M0、M1 | Issues #1–#4 已实现两类 exact dependency、冻结 seed bootstrap、active/pinned resolver、启动/readiness 与并发/回滚审计；完整后台发布服务仍待 M1，最终 E0 分层验收待 Issue #5 |
+| `CONTENT-001` | `implemented` | 内容通过不可变 revision、完整批次、冷发布和批次回滚生效 | 5.4、6.13-6.14 | 12 | M0、M1 | Issues #1–#5 已验证两类 exact dependency、冻结 seed bootstrap、active/pinned resolver、启动/readiness 与并发/回滚审计；完整后台发布服务仍待 M1 |
 | `ADMIN-001` | `specified` | M1 后台只编辑白名单对象，并实施角色分权和自批禁止 | 12.1-12.4 | 08 第 1-3 节、12 | M1 | 权限矩阵、审计、发布 E2E |
 | `CLIENT-001` | `blocked` | PC 与移动 H5 在固定浏览器、视口、中文输入和无障碍矩阵通过 | 9.2.1、9.3-9.5 | 15 | M1 | `browser-matrix.json` 已批准并冻结官方精确目标；实际 `tested_versions`、视觉和交互 E2E 尚未执行 |
 | `NFR-001` | `blocked` | 默认 capacity profile 的负载、延迟和稳定运行目标全部达标 | 13.4-13.7 | 16 第 3/7 节 | M0、M1 | `capacity-profile.json` 的 M0 目标已批准；容量报告与两小时 soak 尚未执行 |
 | `NFR-002` | `blocked` | 备份保留、RPO、RTO 和隔离恢复演练全部达标 | 13.2、14.4、13.7 | 16 第 5-6 节 | M0、M1 | `recovery-budget.json` 已批准并绑定 M0 基础设施恢复报告；保留/WAL 与五个业务范围的发布级演练尚未完成 |
-| `MILESTONE-001` | `implemented` | M0 候选基线：制品、合同、发布契约和非功能 profile 已形成，等待干净 Git 基线上的最终 checklist 才可标记 complete | V6 15.0-15.1 | 10 E0、16 | M0 | M0 机器合同与三个 profile 已就绪；最终 checklist 与 clean-baseline 记录待完成 |
+| `MILESTONE-001` | `verified` | M0 基线：制品、合同、发布契约、非功能 profile 与 clean-baseline checklist 已完成 | V6 15.0-15.1 | 10 E0、16 | M0 | V6 基线 `d14ce67`、Issue #5 分层证据、56,981 项 M0 检查与 0 个 profile blocker |
 | `MILESTONE-002` | `specified` | M1-A 仅为内部可玩验证，M1-B 才等同 M1 完成 | 15.0、15.2 | 10 E1-E9、16 第 10 节 | M1 | 两阶段门禁与发布候选报告 |
 | `MILESTONE-003` | `specified` | M2：后台与内容深化，完成白名单内容后台、运营工具和相应验收证据 | 15.3 | 08、12、16 | M2 | 后台权限矩阵、审计、发布/回滚与验收报告 |
 | `MILESTONE-004` | `specified` | M3：原版玩法补齐，按兼容包络扩展玩法、经济、任务与社交能力 | 15.4 | 06、07、14、16 | M3 | 兼容包络、golden cases、玩法与恢复测试 |
@@ -39,7 +39,7 @@
 | `MILESTONE-006` | `specified` | M5：内容与玩法扩展，完成后续可选内容的受控扩展 | 15.6 | 06、07、09、12、14、16 | M5 | 扩展内容制品、发布批次、回滚和验收证据 |
 | `MILESTONE-007` | `specified` | M6：微信小程序交付，完成微信 AuthIdentity、授权登录与客户端适配 | 15.7 | 03、08、15、16 | M6 | 小程序 E2E、AuthIdentity、兼容矩阵与发布证据 |
 | `CONVERT-001` | `implemented` | 转换和黄金验收绑定不可变 source snapshot、双 manifest 与 bundle | 7.2-7.16 | 09、16 第 8 节 | M0、M4 | `contracts/v1/artifacts/`、`generate_source_contracts.py` 与哈希篡改测试；M4 差分制品仍待实现 |
-| `ENGINE-001` | `blocked` | Engine Stage E0 readiness：真实 seed loading、Registry exact dependencies、并发、审计和 readiness 集成可执行 | V6 15.0、17 | 06、10、12、16 | Engine Stage E0 | Issues #1–#4 已完成实现；Issue #5 的当前基线分层验收、证据索引和正式状态同步尚待收口 |
+| `ENGINE-001` | `verified` | Engine Stage E0 readiness：真实 seed loading、Registry exact dependencies、并发、审计和 readiness 集成可执行 | V6 15.0、17 | 06、10、12、16 | Engine Stage E0 | Issues #1–#4 实现提交；Issue #5 的 PostgreSQL、服务集成、启动 E2E、全量与静态门禁全部通过 |
 | `AUTH-004` | `specified` | 每实例一个 User 永久映射一个 GameAccount；RecoveryCode 恢复撤销旧会话、Presence 与票据；同一 AuthSession 可用 `presence.recover` 恢复自有 Presence | V6 8.2-8.5、11.13 | 08 第 2.2/4.4 节、11、13 第 10.1 节、16 第 2.1 节 | M1、RELEASE-001 | 注册 / 恢复 / 轮换 / 撤销 / PresenceRecovery、后台冻结/撤销/持 code 最小修复矩阵 |
 | `CHARACTER-001` | `specified` | CharacterCreationProfile、CharacterDisplayName 与 RetiredCharacter 生命周期可审计且不自助重建 | V6 8.8 | 08 V6 增量、15 | M1、RELEASE-001 | NFKC/策略测试、GM 审计、关闭恢复 E2E |
 | `WORLD-002` | `specified` | Public V1 完整 Village topology 与逐项交互包络可声明，未验证交互显式不可用 | V6 7.2.1、7.3、11.7 | 04、09、12 | RELEASE-001 | topology / interaction envelope、UnavailableInteraction 报告 |
