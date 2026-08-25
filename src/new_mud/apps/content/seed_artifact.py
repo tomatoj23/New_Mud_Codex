@@ -204,7 +204,8 @@ def _read_artifact(path: Path) -> dict[str, Any]:
         Draft202012Validator.check_schema(SEED_ARTIFACT_SCHEMA)
         Draft202012Validator(SEED_ARTIFACT_SCHEMA).validate(raw)
     except (SchemaError, ValidationError) as error:
-        message = f"seed artifact schema validation failed: {error.message}"
+        location = "/" + "/".join(str(part) for part in error.absolute_path)
+        message = f"seed artifact schema validation failed at {location}: {error.message}"
         raise _validation_error(message) from error
     return cast(dict[str, Any], raw)
 

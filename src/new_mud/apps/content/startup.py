@@ -359,9 +359,7 @@ def _prepare_blueprints(
         resolved_data: object = {}
         source_lineage: list[dict[str, str]] = []
         dependencies: list[_PreparedBlueprintDependency] = []
-        inherited_registry_dependencies: dict[
-            tuple[str, int], _PreparedRegistryDependency
-        ] = {}
+        inherited_registry_dependencies: dict[tuple[str, int], _PreparedRegistryDependency] = {}
         for ordinal, parent_key_value in enumerate(raw_payload.get("parent_keys", [])):
             parent_key = str(parent_key_value)
             parent_identity = identities.get(parent_key)
@@ -533,6 +531,11 @@ def _verify_published_revision(
     active_registry: bool,
 ) -> None:
     """Recompute immutable revision material before exposing it at startup."""
+    if revision.compiler_contract_version != COMPILER_CONTRACT_VERSION:
+        raise ContentStartupError(
+            code=RegistryErrorsContentRelease.CONTENT_RELEASE_VALIDATION_FAILED,
+            message=f"published revision compiler contract mismatch for {revision.revision_id}",
+        )
     if not isinstance(revision.raw_payload, Mapping) or not isinstance(
         revision.compiled_payload, Mapping
     ):
@@ -583,9 +586,7 @@ def _verify_published_revision(
             for dependency in registry_dependencies
         ],
     }
-    compiled_registry_payload = revision.compiled_payload.get(
-        "resolved_registry_dependencies"
-    )
+    compiled_registry_payload = revision.compiled_payload.get("resolved_registry_dependencies")
     expected_registry_payload = [
         {
             "source_revision_id": str(revision.revision_id),
@@ -600,10 +601,9 @@ def _verify_published_revision(
         }
         for dependency in dependency_payload["blueprint_dependencies"]
     ]
+
     def registry_sort_key(value: object) -> tuple[str, int]:
-        if not isinstance(value, Mapping) or not isinstance(
-            value.get("dependency_path"), str
-        ):
+        if not isinstance(value, Mapping) or not isinstance(value.get("dependency_path"), str):
             raise ContentStartupError(
                 code=RegistryErrorsBlueprint.BLUEPRINT_REGISTRY_DEFINITION_HASH_MISMATCH,
                 message=f"compiled registry dependencies are malformed for {revision.revision_id}",
@@ -804,6 +804,38 @@ def _verify_existing_release(
             blueprint_count=len(active_items),
         ),
     )
+
+
+def verify_seed_bundle(
+    *,
+    instance_id: str,
+    mudlib_key: str,
+    bundle: SeedBundle,
+    registry_catalog: RegistryCatalog | None = None,
+) -> ContentStartupResult:
+    catalog = registry_catalog or RegistryCatalog.empty()
+    if bundle.compiler_contract_version != COMPILER_CONTRACT_VERSION:
+        raise ContentStartupError(
+            code=RegistryErrorsContentRelease.CONTENT_RELEASE_VALIDATION_FAILED,
+            message=(f"seed bundle compiler contract does not match {COMPILER_CONTRACT_VERSION}"),
+        )
+    if bundle.calculated_content_hash() != bundle.content_hash:
+        raise ContentStartupError(
+            code=RegistryErrorsContentRelease.CONTENT_RELEASE_VALIDATION_FAILED,
+            message="seed bundle content hash does not match its normalized payload",
+        )
+    existing = _verify_existing_release(
+        instance_id=instance_id,
+        mudlib_key=mudlib_key,
+        bundle=bundle,
+        registry_catalog=catalog,
+    )
+    if existing is None:
+        raise ContentStartupError(
+            code=RegistryErrorsContentRelease.CONTENT_RELEASE_VALIDATION_FAILED,
+            message="content release is not initialized",
+        )
+    return existing
 
 
 def bootstrap_seed_bundle(
