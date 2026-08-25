@@ -4,6 +4,8 @@ New_Mud is a Chinese wuxia MUD that rebuilds selected XKX100 experiences on a se
 
 ## Language
 
+### Identity and ownership
+
 **User**:
 The platform login and administrative authorization subject. A User is not a game-world Character and does not itself represent a Presence.
 _Avoid_: player character, GameAccount, AuthSession
@@ -27,6 +29,8 @@ _Avoid_: User, Actor, Presence
 **CharacterOwnership**:
 The explicit relationship by which a GameAccount owns and may control a Character. It is separate from the User-to-GameAccount identity mapping.
 _Avoid_: account membership, Presence
+
+### World and content
 
 **Entity**:
 A world object with a stable identity and lifecycle, including Character, NPC, Room, Exit and Item. An Entity may be persistent without being controllable by a player.
@@ -72,6 +76,8 @@ _Avoid_: partial release diff, latest drafts, deployment
 The runtime content package selected for a New_Mud instance. Historical LPC source is conversion input, not a runtime MUDLib.
 _Avoid_: Source LPC MUDLib, plugin pack, source tree
 
+### Sessions and character lifecycle
+
 **ConnectionSession**:
 A single live client transport connection. It is distinct from authenticated identity and from control of a Character.
 _Avoid_: AuthSession, Presence, socket user
@@ -100,14 +106,6 @@ _Avoid_: character template, birth config, starter preset
 The public, instance-unique name by which a Character is identified to players, distinct from an account name and the Character's stable identity.
 _Avoid_: username, account name, character ID
 
-**Sparring**:
-A mutually accepted, non-lethal fight between Characters that cannot become involuntary or lethal player combat.
-_Avoid_: PvP, duel, player kill
-
-**SafeDefeat**:
-The non-permanent outcome applied to a defeated Character, preserving items and irreversible progress while returning the Character to a safe playable state.
-_Avoid_: death, resurrection, permadeath
-
 **RecoveryCode**:
 A player-held proof used to recover access when a password is lost; it is not a login credential, AuthSession, or gameplay identity.
 _Avoid_: recovery token, backup password, refresh token
@@ -116,9 +114,25 @@ _Avoid_: recovery token, backup password, refresh token
 A Character that can no longer be controlled after its GameAccount is closed, while its stable identity and historical relationships remain meaningful.
 _Avoid_: deleted character, banned character, dead character
 
+**PresenceRecovery**:
+The same-AuthSession recovery of its own active or grace Presence after the in-memory resume credential is lost; it is never cross-session takeover.
+_Avoid_: session resume, takeover, re-enter
+
+### Gameplay and evidence
+
+**Sparring**:
+A mutually accepted, non-lethal fight between Characters that cannot become involuntary or lethal player combat.
+_Avoid_: PvP, duel, player kill
+
+**SafeDefeat**:
+The non-permanent outcome applied to a defeated Character, preserving items and irreversible progress while returning the Character to a safe playable state.
+_Avoid_: death, resurrection, permadeath
+
 **GoldenSkillChain**:
 A deterministic, source-bound sequence used to verify one complete martial-arts behavior path against the frozen XKX100 baseline.
 _Avoid_: combat smoke test, sample skill, synthetic fixture
+
+### Community and communication
 
 **PlayerBlock**:
 A player's private boundary against another Actor, preventing direct contact and suppressing that Actor's ordinary public messages without changing what other players receive.
@@ -144,9 +158,7 @@ _Avoid_: whisper command, ChatChannel, support ticket
 A server-authored message for operational, safety, or game-wide communication rather than player speech.
 _Avoid_: ChatMessage, GM impersonation, public chat
 
-**PresenceRecovery**:
-The same-AuthSession recovery of its own active or grace Presence after the in-memory resume credential is lost; it is never cross-session takeover.
-_Avoid_: session resume, takeover, re-enter
+### World compatibility and active lifecycles
 
 **VillageTopologyEnvelope**:
 The source-bound scope that fixes the Village's Rooms, Exits, boundaries, and static Entity identities without claiming that every interaction is behaviorally aligned.
@@ -159,10 +171,6 @@ _Avoid_: village topology, implemented NPCs, supported commands
 **LootClaim**:
 A temporary, authoritative right to pick up a dropped Item before it becomes publicly available; it is not permanent Item ownership.
 _Avoid_: item owner, instanced loot, inventory binding
-
-**PublicV1Gate**:
-The release gate that determines whether a completed M1 build may accept real public players; it is independent of the numbered requirement milestones.
-_Avoid_: M1-B, public beta, release candidate
 
 **UnavailableInteraction**:
 A source-known behavior outside the active interaction envelope that must resolve explicitly as unavailable instead of being approximated or claimed as aligned.
@@ -184,6 +192,8 @@ _Avoid_: EffectInstance, runtime status, arbitrary payload
 A concrete occurrence of a ConditionDefinition affecting a particular target over its lifecycle.
 _Avoid_: ConditionDefinition, buff template, effect type
 
+### Source and public release
+
 **SourceSnapshot**:
 An immutable, content-addressed description of the exact XKX100 source bytes and inclusion rules used as evidence for a conversion or compatibility claim.
 _Avoid_: source folder, local checkout, latest source
@@ -199,6 +209,10 @@ _Avoid_: deployment note, build metadata, version string
 **CapacityProfile**:
 A versioned statement of the reference environment, load, latency, stability, and recovery targets used for release evidence.
 _Avoid_: load script, deployment size, informal performance target
+
+**PublicV1Gate**:
+The release gate that determines whether a completed M1 build may accept real public players; it is independent of the numbered requirement milestones.
+_Avoid_: M1-B, public beta, release candidate
 
 **PublicV1**:
 The first publicly operated product version that has passed `PublicV1Gate`; it is distinct from the internal M1 delivery and from a general claim of XKX100 parity.
