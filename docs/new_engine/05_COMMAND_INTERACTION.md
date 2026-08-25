@@ -82,7 +82,7 @@ New_Mud 必须同时支持两种交互：
 client input
   -> input adapter
   -> ActionContext
-  -> collect ActionProviders
+  -> collect ActionProviderDefinitions
   -> resolve available actions
   -> parse args
   -> permission / state / anti-spam checks

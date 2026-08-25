@@ -14,7 +14,7 @@
 - **REST 路由**：首发认证入口固定为 `/api/v1/auth/register`、`/api/v1/auth/login`、`/api/v1/auth/refresh` 和 `/api/v1/auth/logout`。
 - **WebSocket 协议**：连接后依次使用 `session.authenticate`、`presence.enter`、`session.resume`；跨设备替换只能使用显式 `presence.takeover`。
 - **认证边界**：注册不隐式登录；login 创建 AuthSession 与唯一 RefreshTokenFamily；access token 只在内存，Refresh Token 只进入受保护 Cookie 与 refresh/logout REST 边界。
-- **账号与角色**：首发每个 GameAccount 最多一个 Character，同时最多一个 `active` 或 `grace_disconnected` Presence 租约。
+- **账号与角色**：首发每个 GameAccount 最多一个 Character，同时最多一个 `active` 或 `grace_disconnected` PresenceSnapshot 租约。
 - **客户端**：uni-app + Vue 3 H5 与服务端共享机器合同；PC 与移动浏览器在同一纵向切片内验收，不维护独立业务语义。
 - **失败语义**：协议错误码、终结重放、generation、ticket 和 takeover 语义只引用冻结合同，不在实现中创建平行枚举。
 - **证据规则**：每个阶段必须同时提交需求 ID、迁移/合同兼容证据、自动测试和可重复执行命令；结构门禁通过不等同于阶段完成。
@@ -22,6 +22,8 @@
 ---
 
 ## Engine Stage E0 / Slice 1: 非功能证据收口
+
+**Status**: `completed`（2026-08-25）
 
 **User stories**: 作为发布负责人，我可以看到经过批准且身份明确的最低浏览器、容量和恢复基线，并能通过自动门禁确认这些基线不是待定占位符。覆盖 `MILESTONE-001`、`CLIENT-001`、`NFR-001`、`NFR-002`。
 
@@ -42,6 +44,8 @@
 
 ## Engine Stage E0 / Slice 2: 受审计内容启动闭环
 
+**Status**: `completed`（2026-08-25；Issues #1-#5）
+
 **User stories**: 作为服务器运营人员，我可以从受审计内容包首次启动一个实例；重复启动不会重复导入，新对象读取活动批次，已有钉定对象在发布切换后仍读取原 revision。覆盖 `CONTENT-001`、`WORLD-001`、`MILESTONE-001`。
 
 ### What to build
@@ -50,13 +54,13 @@
 
 ### Acceptance criteria
 
-- [ ] 空实例首次启动只能从 schema 与哈希均通过的受审计 seed 创建一个完整活动批次。
-- [ ] 同一 `(instance_id, mudlib_key)` 重复启动保持幂等，不产生重复 revisions、依赖行、批次或活动指针漂移。
-- [ ] 新 spawn 和 batch-scoped 读取只解析当前 active batch 中的 exact published revisions。
-- [ ] 已钉定实例在活动批次切换后仍解析原 historical revision 及其两类 exact dependencies。
-- [ ] 缺少活动批次、哈希不一致、依赖缺失或 compiler contract 不匹配时启动明确失败。
-- [ ] PostgreSQL 约束测试、服务集成测试和启动级端到端测试覆盖成功、重试、篡改和批次切换路径。
-- [ ] Engine Stage E0 / Slice 1 与本阶段全部通过后，`ENGINE-001 / Engine Stage E0` 才能从 `blocked` 转为完成，并同步状态账本与需求追踪索引；`MILESTONE-001 / M0` 独立按 V6 当前 M0 清单收口。
+- [x] 空实例首次启动只能从 schema 与哈希均通过的受审计 seed 创建一个完整活动批次。
+- [x] 同一 `(instance_id, mudlib_key)` 重复启动保持幂等，不产生重复 revisions、依赖行、批次或活动指针漂移。
+- [x] 新 spawn 和 batch-scoped 读取只解析当前 active batch 中的 exact published revisions。
+- [x] 已钉定实例在活动批次切换后仍解析原 historical revision 及其两类 exact dependencies。
+- [x] 缺少活动批次、哈希不一致、依赖缺失或 compiler contract 不匹配时启动明确失败。
+- [x] PostgreSQL 约束测试、服务集成测试和启动级端到端测试覆盖成功、重试、篡改和批次切换路径。
+- [x] Engine Stage E0 / Slice 1 与本阶段全部通过后，产品 M0 已同步为 `complete`，`MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 已同步为 `verified`；两套状态保持独立。
 
 ---
 
@@ -71,7 +75,7 @@
 ### Acceptance criteria
 
 - [ ] 注册校验用户名和密码，原子创建 User/GameAccount，且不创建 AuthSession、token 或隐式登录状态。
-- [ ] 注册事务一次性签发明文 `RecoveryCode`，服务端只保存不可逆哈希；恢复或主动轮换时生成新 code，并撤销旧 AuthSession、RefreshTokenFamily、Presence 与未使用票据。
+- [ ] 注册事务一次性签发明文 `RecoveryCode`，服务端只保存不可逆哈希；恢复或主动轮换时生成新 code，并撤销旧 AuthSession、RefreshTokenFamily 与未使用票据、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence。
 - [ ] login 为账号创建符合唯一性约束的 AuthSession 与 RefreshTokenFamily，并返回短期 access token。
 - [ ] Refresh Token 只存在于受保护 Cookie，不进入 WebSocket payload、响应 JSON、本地持久存储或 Authorization header。
 - [ ] refresh 每次轮换 credential generation，旧凭据重放按冻结状态机终结相关 family/session。
@@ -96,7 +100,7 @@
 - [ ] 新 WebSocket 在认证前只有 ConnectionSession，`session.authenticate` 成功后才绑定现有 AuthSession。
 - [ ] `presence.enter` 只允许账号拥有的角色，并从 E0 活动批次解析起始 Room 的 exact revision。
 - [ ] 首次进入返回完整且自洽的 scene/character snapshot，H5 只在 snapshot 屏障完成后替换权威 store。
-- [ ] 网络断开原子关闭旧 Presence 并写入 grace PresenceSnapshot；`session.resume` 在新连接上轮换 ticket 与 generation。
+- [ ] 网络断开关闭旧运行时 Presence，并把对应 PresenceSnapshot 转为 grace；`session.resume` 在新连接上轮换 ticket 与 generation。
 - [ ] 页面刷新丢失内存 `resume_ticket` 时，同一 AuthSession 可调用 `presence.recover`；成功轮换 ticket/generation 并返回完整 snapshot，找不到自有租约时返回 `PRESENCE_RECOVERY_UNAVAILABLE`，不得跨会话接管。
 - [ ] 同一角色已有 active/grace 租约时，普通 enter 返回 `CHARACTER_OCCUPIED`，不会隐式接管。
 - [ ] REST、WebSocket、数据库并发、断线恢复及 PC/移动 H5 端到端测试全部通过。
@@ -109,7 +113,7 @@
 
 ### What to build
 
-在 Engine Stage E1 / Slice 2 的单 Presence 租约上增加显式 takeover 纵向流程。H5 对 `CHARACTER_OCCUPIED` 展示确认交互；获授权请求在一个事务中替换租约、generation、resume ticket 与 PresenceSnapshot，并写入事务 outbox。提交后通知旧连接，失败或并发竞争保持单一赢家和可恢复状态。
+在 Engine Stage E1 / Slice 2 的单 PresenceSnapshot 租约上增加显式 takeover 纵向流程。H5 对 `CHARACTER_OCCUPIED` 展示确认交互；获授权请求在一个事务中替换租约、generation、resume ticket 与 snapshot，并写入事务 outbox。提交后关闭旧运行时 Presence、通知旧连接；失败或并发竞争保持单一赢家和可恢复状态。
 
 ### Acceptance criteria
 

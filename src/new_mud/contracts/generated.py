@@ -238,6 +238,7 @@ class RegistryKinds(StrEnum):
     BLUEPRINT_SEED_PROVIDER = "blueprint_seed_provider"
     ACTION = "action"
     BEHAVIOR_PROFILE = "behavior_profile"
+    CHARACTER_CREATION_PROFILE = "character_creation_profile"
     EFFECT_TYPE = "effect_type"
     JOB_TYPE = "job_type"
     WORLD_PROCESS_TYPE = "world_process_type"

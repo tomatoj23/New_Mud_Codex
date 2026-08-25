@@ -26,7 +26,7 @@
 - 首发认证固定为用户名密码注册与独立登录、短期 JWT Access Token 与每次刷新后轮换的 Refresh Token。
 - Refresh Token 仅可作为 REST refresh 的轮换凭据，或作为 REST logout 的受保护 Cookie locator；不得进入 WebSocket payload 或 Authorization header。
 - 首发每个 `GameAccount` 最多拥有一个 `Character`，同时保留可扩展的 `CharacterOwnership`。
-- 同一 `GameAccount` 跨会话与设备最多有一个 `active` 或 `grace_disconnected` Presence 租约；普通 enter 拒绝占用，只有显式且获授权的 takeover 才能原子替换租约与 ticket，并在提交后通知旧端。
+- 同一 `GameAccount` 跨会话与设备最多有一个 `active` 或 `grace_disconnected` PresenceSnapshot 租约；运行时 Presence 只表示当前连接上的控角上下文。普通 enter 拒绝占用，只有显式且获授权的 takeover 才能原子替换租约与 ticket，并在提交后通知旧端。
 - 当前唯一转换目标为 XKX100；输入必须绑定受控 `source_snapshot.json`、独立的 `xkx100-village-alley-v1` 与 `xkx100-skill-combat-v1` manifest，以及同时引用二者的复合验收 bundle。
 - M0 必须批准 capacity profile、精确浏览器测试矩阵与恢复预算。
 - 必须保留后台内容制作、运营管理、帮助系统、聊天系统、经济系统与调度能力。

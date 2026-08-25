@@ -51,7 +51,7 @@ Presence 表达一个 AuthSession 当前控制 Character 的运行时上下文�
 
 房间位置从 Character 的权威状态解析。Presence 只持有订阅、焦点和运行时控制信息，不复制 canonical room id 或角色持久属性。
 
-首发每个 GameAccount 最多一个 Character。跨全部 AuthSession、ConnectionSession 与设备，同一 GameAccount 同时最多有一个处于 `active` 或 `grace_disconnected` 的 Presence 租约。
+首发每个 GameAccount 最多一个 Character。跨全部 AuthSession、ConnectionSession 与设备，同一 GameAccount 同时最多有一个处于 `active` 或 `grace_disconnected` 的 PresenceSnapshot 租约。
 
 ### 2.4 PresenceSnapshot
 
@@ -97,14 +97,14 @@ access token 过期时，客户端先走 REST refresh 取得新 access token，�
 
 ## 5. 多端、占用与显式接管
 
-同一 User 可以保持多个 OOC AuthSession，但 GameAccount 的控角占用覆盖 `active` 与 `grace_disconnected` Presence 租约。
+同一 User 可以保持多个 OOC AuthSession，但 GameAccount 的控角占用覆盖 `active` 与 `grace_disconnected` PresenceSnapshot 租约。
 
 普通 `presence.enter` 遇到占用时返回 `CHARACTER_OCCUPIED`，不得静默踢线，也不得隐式升级为 takeover。
 
-`presence.takeover` 必须携带显式确认并通过策略授权。成功时，同一事务必须：
+`presence.takeover` 必须携带显式确认并通过策略授权。成功流程必须按冻结合同原子收敛：
 
-1. 终止旧 Presence，并使其不能再恢复。
-2. 建立新 Presence 与对应恢复凭据。
+1. 事务内终止旧 PresenceSnapshot 租约；提交后旧运行时 Presence 失权并关闭，不能再恢复。
+2. 事务内建立新 PresenceSnapshot 租约与恢复凭据；提交后激活并绑定新运行时 Presence。
 3. 保存唯一请求终结结果与接管审计。
 4. 写入向旧连接发送 `presence.taken_over` 的事务 outbox。
 
@@ -200,4 +200,4 @@ token TTL、状态流转、恢复失败路径与审计字段由 `13_SESSION_AUTH
 
 ## V6 增量：身份与 PresenceRecovery
 
-在每个游戏实例内，一个 `User` 永久映射一个 `GameAccount`；未来多 Character 只通过 `CharacterOwnership` 扩展，不复制 GameAccount 身份。页面刷新丢失内存 `resume_ticket` 时，同一 AuthSession 可调用 `presence.recover`，由服务端检索并恢复它自己的 active / grace Presence，递增 generation、旋转 ticket 并返回完整 snapshot。该请求不得跨 AuthSession 夺取控制权；找不到当前 AuthSession 自有租约时统一返回 `PRESENCE_RECOVERY_UNAVAILABLE`，不得泄露其他会话是否占用。其他 AuthSession 如需控制角色，必须走显式 `presence.takeover`；`CHARACTER_OCCUPIED` 仅用于普通 `presence.enter`。
+在每个游戏实例内，一个 `User` 永久映射一个 `GameAccount`；未来多 Character 只通过 `CharacterOwnership` 扩展，不复制 GameAccount 身份。页面刷新丢失内存 `resume_ticket` 时，同一 AuthSession 可调用 `presence.recover`，由服务端检索并恢复它自己的 active / grace PresenceSnapshot 租约，创建新一代运行时 Presence、递增 generation、旋转 ticket 并返回完整 snapshot。该请求不得跨 AuthSession 夺取控制权；找不到当前 AuthSession 自有租约时统一返回 `PRESENCE_RECOVERY_UNAVAILABLE`，不得泄露其他会话是否占用。其他 AuthSession 如需控制角色，必须走显式 `presence.takeover`；`CHARACTER_OCCUPIED` 仅用于普通 `presence.enter`。

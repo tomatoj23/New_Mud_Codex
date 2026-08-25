@@ -23,7 +23,7 @@
 
 ## 工程术语
 
-这些词用于统一设计、合同、代码和测试中的工程表达。它们不得覆盖 `CONTEXT.md` 中的领域定义，也不得替代对应冻结合同。
+这些词用于统一设计、合同、代码和测试中的跨文档工程表达。只在一个冻结合同内使用、且没有跨文档歧义的 schema、表或状态类型继续由该合同定义，不要求全部收入本索引。索引中的名称不得覆盖 `CONTEXT.md` 中的领域定义，也不得替代对应冻结合同。
 
 ### 内容物化与运行时绑定
 
@@ -34,7 +34,8 @@
 | **ActorSkill** | Actor 已学习并固定到精确 Skill revision 的持久状态。 | skill key row, character-only skill |
 | **EquipmentBinding** | Actor、装备槽和 Item instance 之间的唯一穿戴关系。 | equipped flag, item slot field |
 | **CompiledBlueprint** | 从精确 published BlueprintRevision 编译并绑定精确依赖的不可变运行时产物。 | flattened prototype, runtime proto |
-| **BehaviorProfile** | 绑定到 Entity kind 或 Blueprint 的运行时行为配置。 | typeclass, behavior class path |
+| **BehaviorProfileDefinition** | 在 typed registry 中定义 Entity kind 或 Blueprint 可绑定的运行时行为配置。 | BehaviorProfile, typeclass, behavior class path |
+| **CharacterCreationProfileDefinition** | 在 typed registry 中实现一个精确版本 CharacterCreationProfile 的工程定义。 | character creation config, starter preset |
 | **QuestState** | 任务在 Character 或 GameAccount 范围内的持久进度表示。 | quest flag blob, mission progress row |
 | **FactionMembership** | Character 与门派、帮派或其他组织之间的持久关系表示。 | guild join row, sect relation |
 
@@ -42,10 +43,10 @@
 
 | Term | Engineering meaning | Aliases to avoid |
 | --- | --- | --- |
-| **ActorRef** | 命令、聊天和审计中使用的统一 Actor 引用。 | SpeakerRef, sender ref |
+| **ActorRef** | 命令、战斗、聊天和审计中指向 Character 或 NPC 的统一 Actor 引用；不得引用 GameAccount、SystemNotice 或平台操作者。 | SpeakerRef, sender ref, principal ref |
 | **ActionDefinition** | 一个可调用动作的标准注册定义。 | command class, action meta |
 | **ActionContext** | 一次动作执行所需的结构化上下文。 | caller bundle, runtime vars |
-| **ActionProvider** | 在特定上下文中提供可用动作的来源。 | CmdSet provider |
+| **ActionProviderDefinition** | 在 typed registry 中定义特定上下文可提供哪些动作的工程条目。 | ActionProvider, CmdSet provider |
 | **ResolvedActionSet** | 针对当前上下文解析后的可用动作集合。 | merged CmdSet, current cmdset |
 | **ChatSubscription** | Actor 与 ChatChannel 之间的参与关系。 | subscription handler entry |
 | **ChatMessage** | ChatChannel 中的持久消息记录。 | Msg, channel message record |
@@ -84,9 +85,9 @@
 | 模糊说法 | 应使用的精确名称 |
 | --- | --- |
 | account | 认证主体用 **User**；游戏域身份用 **GameAccount**；Evennia 来源事实才使用 `AccountDB`。 |
-| session | 物理连接用 **ConnectionSession**；认证生命周期用 **AuthSession**；控角租约用 **Presence**。 |
+| session | 物理连接用 **ConnectionSession**；认证生命周期用 **AuthSession**；当前连接上的控角上下文用 **Presence**；持久恢复租约用 **PresenceSnapshot**。 |
 | role | 后台授权用 **PlatformRole**；其他角色或职位必须带具体领域前缀。 |
-| profile | 运行时行为用 **BehaviorProfile**；转换配置用 **ConversionProfile**；容量门禁用 **CapacityProfile**。 |
+| profile | 角色创建领域概念用 **CharacterCreationProfile**，其 registry 实现用 **CharacterCreationProfileDefinition**；运行时行为 registry 用 **BehaviorProfileDefinition**；转换配置用 **ConversionProfile**；容量门禁用 **CapacityProfile**。 |
 | MUDLib | New_Mud 运行时内容包用 **MUDLib**；历史 LPC 输入必须写 **Source LPC MUDLib**。 |
 | prototype | New_Mud 内容身份用 **Blueprint**；只有 Evennia 来源事实保留 `Prototype`。 |
 | condition/status | 内容定义用 **ConditionDefinition**；具体挂载用 **EffectInstance**；类别语义用 **EffectTypeDefinition**。 |

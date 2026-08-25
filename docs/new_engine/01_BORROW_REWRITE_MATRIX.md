@@ -114,7 +114,7 @@
 
 重写：
 
-- 用 `ActionProvider + ResolvedActionSet` 替代 `CmdSet` 原样合并
+- 用 `ActionProviderDefinition + ResolvedActionSet` 替代 `CmdSet` 原样合并
 - 文本命令只是动作入口之一
 
 ### 3.4 Scripts / Tickers / Tasks

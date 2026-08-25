@@ -106,6 +106,7 @@ EXPECTED_REGISTRY_KINDS = {
     "action_provider",
     "behavior_profile",
     "blueprint_seed_provider",
+    "character_creation_profile",
     "effect_type",
     "handler",
     "hook_set",
@@ -204,9 +205,11 @@ def active_documents(repository_root: Path) -> list[Path]:
         repository_root / "requirements_v6.md",
         repository_root / "CONTEXT.md",
         repository_root / "UBIQUITOUS_LANGUAGE.md",
+        repository_root / "contracts" / "v1" / "README.md",
     ]
     documents.extend(sorted((repository_root / "docs").rglob("*.md")))
-    return documents
+    documents.extend(sorted((repository_root / "plans").rglob("*.md")))
+    return sorted(set(documents))
 
 
 def validate_documents(repository_root: Path, result: VerificationResult) -> None:
@@ -219,8 +222,34 @@ def validate_documents(repository_root: Path, result: VerificationResult) -> Non
             result.error(f"{relative}: not readable UTF-8: {error}")
             continue
         text = text.removeprefix("\ufeff")
-        h1_count = sum(line.startswith("# ") for line in text.splitlines())
+        heading_levels: list[int] = []
+        fence_marker: str | None = None
+        for line in text.splitlines():
+            fence = re.match(r"^\s*(`{3,}|~{3,})", line)
+            if fence:
+                marker = fence.group(1)
+                if fence_marker is None:
+                    fence_marker = marker
+                elif marker[0] == fence_marker[0] and len(marker) >= len(fence_marker):
+                    fence_marker = None
+                continue
+            if fence_marker is not None:
+                continue
+            heading = re.match(r"^(#{1,6})\s+", line)
+            if heading:
+                heading_levels.append(len(heading.group(1)))
+
+        h1_count = heading_levels.count(1)
         result.check(h1_count == 1, f"{relative}: expected exactly one H1, found {h1_count}")
+        heading_jumps = [
+            (previous, current)
+            for previous, current in zip(heading_levels, heading_levels[1:], strict=False)
+            if current > previous + 1
+        ]
+        result.check(
+            not heading_jumps,
+            f"{relative}: heading level jumps found: {heading_jumps}",
+        )
         for target in MARKDOWN_LINK_RE.findall(text):
             target = target.strip().split(maxsplit=1)[0].strip("<>")
             if not target or target.startswith(("#", "http://", "https://", "mailto:")):

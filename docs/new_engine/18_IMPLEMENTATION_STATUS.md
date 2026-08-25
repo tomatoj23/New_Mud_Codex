@@ -16,7 +16,8 @@
 
 | 基线 | 身份 | 当前结论 |
 | --- | --- | --- |
-| V6 权威基线 | Git `d14ce67` | V6 权威、V5 历史边界、CONTEXT/ADR、冻结合同、机器制品与审计记录在同一检查点同步 |
+| V6 前置基线 | Git `d14ce67` | V6 权威、V5 历史边界、CONTEXT/ADR、冻结合同、机器制品与审计记录在同一检查点同步 |
+| 现行文档一致性复核 | GitHub Issue #7 检查点（2026-08-26） | 已复核领域词汇、工程索引、V6、ADR、冻结合同、计划与现行项目文档；归档、V5 和上游文档不在修改范围 |
 | E0 / Slice 2 验收基线 | GitHub Issue #5 检查点（2026-08-25） | Issues #1–#4 的实现已在 V6 基线上完成真库、服务集成、启动 E2E、全量和静态门禁，`ENGINE-001` 与 `MILESTONE-001` 可验证关闭 |
 | M0 工程基线 | Git `7bd76a3` | Django/ASGI 骨架、PostgreSQL 初始迁移、机器合同、来源制品、CI 与自动校验已建立 |
 | M0 profile 基线 | Git `97659ce` | browser、capacity、recovery profile 已批准，M0 基础设施恢复报告已绑定 |
@@ -33,6 +34,8 @@
 
 - 两轮全量审查覆盖当时 46 份项目自有 Markdown 文档；这是 2026-07-19 的历史审计快照，不代表当前文档数量。当前审查另行覆盖 V6、CONTEXT、ADR、V6 差异清单和 Engine Stage E0 / Slice 2 工作记录；`evennia-main/` 中的上游源码与上游文档不属于项目文档审核范围。
 - 审核覆盖 Markdown 结构、本地引用、术语、需求、协议、状态机、Blueprint、来源制品、测试、运维语义和跨文档冲突；最终结构、引用与陈旧模式复扫均通过。
+- 2026-08-26 再次全量复核 56 份现行项目 Markdown，明确排除 `archive/`、`requirements_v5.md` 与上游文档；单 H1、标题层级和本地链接通过，`CONTEXT.md` 的 50 个领域词项与 `UBIQUITOUS_LANGUAGE.md` 的非定义入口一一对应，无缺项或额外领域定义。
+- 同轮语义复核统一 Presence/PresenceSnapshot、Actor/ActorRef、RetiredCharacter、CharacterCreationProfileDefinition、工程名称和三套里程碑状态命名空间，并修正后台审计发起者、SystemNotice 与现行分析层的残留边界；带日期的 E0 工作记录保留历史原文，不作为当前状态来源。
 - 将 `archive/requirements/requirements_v1.md` 到 `archive/requirements/requirements_v4.md` 移入归档，并保留归档入口与历史审计记录。
 - 确立按关注点划分的文档权威：V6 管产品结果，V5 保留历史，11-16 管冻结实施机制，17 管需求追踪，00-10 管概念设计与路线，00-18 与 20 管 Evennia 来源分析和适配性评估。
 - 明确 `evennia-main/` 仅为 Evennia 6.0.0 本地参考快照，不是运行时依赖；本轮未修改该目录。
@@ -92,6 +95,8 @@
 | pytest（2026-08-25，`RUN_POSTGRES_TESTS=1`） | PostgreSQL 合同/启动 E2E 16 passed；内容/seed/startup/runtime/health/真库集合 66 passed；全量 73 passed |
 | 静态与 Django（2026-08-25） | Ruff lint 通过；52 files formatted；mypy 52 source files 通过；Django 0 问题；无 migration drift；`pip check` 通过 |
 | M0 / Markdown（2026-08-25） | 56,981 项 M0 检查、0 个 profile blocker；76 项 Markdown 检查、0 errors |
+| M0 / Markdown（2026-08-26） | 57,055 项 M0 检查、0 个 profile blocker；56 份现行 Markdown 共 135 项单 H1、标题层级和本地链接检查，0 errors |
+| 默认全量与合同回归（2026-08-26） | 默认全量 57 passed、16 个 PostgreSQL 项因未设置 `RUN_POSTGRES_TESTS=1` 跳过；`tests/test_contracts.py` 3 passed；仅有已记录的 Daphne / Python 3.16 asyncio policy 弃用警告 |
 
 pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两条弃用警告。当前运行时为 Python 3.14.2，且检查当日没有可升级的 Daphne 版本，因此该警告记录为上游兼容性观察项，不构成当前失败。
 
@@ -108,21 +113,21 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 
 | 对象 | 状态 | 依据 |
 | --- | --- | --- |
-| 文档基线 | `verified` | 本 V6 前置检查点同步 `requirements_v6.md`、CONTEXT/ADR、冻结合同、机器制品、审计和导航；V5 保持历史来源 |
-| M0 机器合同基线 | `verified` | 2026-08-25 `verify_m0.py` 通过 56,981 项检查，profile blocker 为空；56,883、56,904、56,928、56,979 仅作为带日期的历史执行数保留 |
+| 文档基线 | `verified` | 2026-08-26 对 56 份现行项目 Markdown 完成领域/工程术语、状态、结构与链接复核；V5 与归档保持历史来源且未改写 |
+| M0 机器合同基线 | `verified` | 2026-08-26 `verify_m0.py` 通过 57,055 项检查，profile blocker 为空；此前执行数只作为带日期的历史记录保留 |
 | `CONTENT-001` | `implemented` | Issues #1–#4 已实现两类 exact dependency、冻结 seed bootstrap、active/pinned resolver、启动/readiness、并发/回滚与失败审计；完整后台发布服务仍待 M1 |
 | `WORLD-001` | `specified` | 冻结来源与 seed/startup 验证不等于固定小巷世界物化、移动、战斗和战利品 E2E；这些仍待 M1 |
 | `CONVERT-001` | `implemented` | 来源快照、双 manifest、bundle、生成器与篡改检查已存在；M4 黄金差分仍未实现 |
 | 非功能 M0 profile 基线 | `verified` | browser、capacity、recovery 三份 profile 已批准，恢复报告路径/ID/哈希与指标已纳入自动校验 |
-| `MILESTONE-001` / M0 | `verified` | M0 机器合同、profile 基线与 Issue #5 clean-baseline checklist 已全部通过 |
+| 产品里程碑 M0 | `complete` | V6 15.0-15.1 的机器合同、profile 批准与 Issue #5 clean-baseline checklist 已全部满足；对应追踪记录 `MILESTONE-001=verified` |
 | `ENGINE-001` / Engine Stage E0 | `verified` | Issues #1–#4 完成实现；Issue #5 在 V6 基线上完成 PostgreSQL、服务集成、启动 E2E、全量和静态验收 |
 | `RELEASE-001` / PublicV1Gate | `blocked` | V6 gate 已定义，尚无公开试运行、完整恢复、ReleaseManifest 或公开资料证据；不影响 M1/E0 的内部状态 |
 
-M0 机器合同当前通过且没有 profile blocker；`MILESTONE-001 / M0` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issues #1–#4 固定实现，Issue #5 固定分层证据、状态同步和提交检查点；E0 已关闭，后续实现可从 E1 的独立 ticket 开始。
+M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issues #1–#4 固定实现，Issue #5 固定分层证据、状态同步和提交检查点；E0 已关闭，后续实现可从 E1 的独立 ticket 开始。
 
-浏览器实际执行、容量报告与五个业务恢复范围仍是 M1/发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批而提前转为 `verified`。
+浏览器完整矩阵、容量/soak 报告与五个业务恢复范围仍是 `RELEASE-001` 的发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批或 M1 内部抽样而提前转为 `verified`。
 
-经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。该计划先用两个切片收口 E0，再用三个切片完成 E1 的注册登录、连接恢复和跨设备接管闭环。
+经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。其中两个 E0 切片均已完成并保留为可回查记录；下一步从三个 E1 切片的注册登录、连接恢复和跨设备接管闭环开始。
 
 ## 5. 证据映射
 

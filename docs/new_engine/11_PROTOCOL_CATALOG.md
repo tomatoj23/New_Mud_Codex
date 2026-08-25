@@ -176,7 +176,7 @@ PostgreSQL 表 `RequestTerminalRecord` 至少包含：
 | `session.ping` | 已连接 | 服务端时间与可选 nonce |
 | `session.authenticate` | 未认证连接 | AuthSession 摘要 |
 | `session.resume` | 已认证 | 交付状态、新 ticket 与完整 snapshot |
-| `presence.recover` | 已认证、同 AuthSession 自有 active/grace Presence | 新 generation、旋转 ticket 与完整 snapshot |
+| `presence.recover` | 已认证、同 AuthSession 自有 active/grace PresenceSnapshot 租约 | 新 generation、旋转 ticket 与完整 snapshot |
 | `presence.enter` | 已认证、无 Presence | 交付状态、Presence、新 ticket 与完整 snapshot |
 | `presence.leave` | 活跃 Presence | 已关闭 Presence id |
 | `presence.takeover` | 已认证、显式确认 | 交付状态、新 Presence、新 ticket 与完整 snapshot |
@@ -193,7 +193,7 @@ refresh token 不进入 WebSocket；它只可作为 REST refresh 的轮换凭据
 - `session.ping`：`{}` 或 `{"nonce": "<opaque string>"}`。
 - `session.authenticate`：`{"access_token": "<access token>"}`；不得携带 refresh token。
 - `presence.enter`：`{"character_id": "<opaque id>"}`。
-- `presence.recover`：`{}`；只允许当前 AuthSession 恢复自己仍 active 或 grace 的 Presence，不接受跨会话 locator。
+- `presence.recover`：`{}`；只允许当前 AuthSession 恢复自己仍 active 或 grace 的 PresenceSnapshot 租约并创建新一代运行时 Presence，不接受跨会话 locator。
 - `presence.leave`：`{}`。
 - `presence.takeover`：`{"character_id": "<opaque id>", "confirm": true}`。
 - `state.sync`：`{"include_actions": true}`；`include_actions` 可省略，默认仍返回完整 actions。

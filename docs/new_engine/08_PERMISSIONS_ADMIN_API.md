@@ -1,6 +1,6 @@
 # 08 权限、后台与 API 契约
 
-> 术语说明：本文默认使用 `User / GameAccount / PlatformRole / AuthSession / Presence / ActorRef`。`AccountDB` 仅在比较 Evennia API 设计时作为来源术语出现。
+> 术语说明：本文默认使用 `User / GameAccount / PlatformRole / AuthSession / Presence`。`AccountDB` 仅在比较 Evennia API 设计时作为来源术语出现；平台操作者和系统任务不得伪装成 `ActorRef`。
 
 > 实施约束：本文负责定义权限、后台与 API 边界；具体实施以对应冻结合同为准：
 > - WebSocket 信封、`action.invoke`、错误码与请求终结：`docs/new_engine/11_PROTOCOL_CATALOG.md`
@@ -99,7 +99,7 @@ M1 后台恢复只允许权限矩阵中具“账号封禁与受审计恢复”�
 
 修复必须调用与 `/api/v1/auth/recover` 相同的 code 校验、合并限流、密码策略和原子撤销服务；后台只能查看 code generation / hash 状态与脱敏审计，不能读取明文 code、跳过验证、直接签发所有权证明或依据角色资料和游戏 trivia 重分配账号。密码与 code 都丢失时只能冻结 / 撤销，不能恢复所有权。
 
-每次动作要求重新认证、稳定 reason、关联 support case、目标 User / GameAccount、操作者和复核结果。成功修复仍轮换 RecoveryCode、撤销全部旧 AuthSession、RefreshTokenFamily、Presence 与 ticket，并只经玩家当前受保护响应一次展示新 code；失败不得改变密码、code、账号 lifecycle 或会话状态。
+每次动作要求重新认证、稳定 reason、关联 support case、目标 User / GameAccount、操作者和复核结果。成功修复仍轮换 RecoveryCode，撤销全部旧 AuthSession、RefreshTokenFamily 与 ticket、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并只经玩家当前受保护响应一次展示新 code；失败不得改变密码、code、账号 lifecycle 或会话状态。
 
 ## 3. Django Admin 的定位
 
@@ -212,7 +212,7 @@ logout 分别解析 refresh Cookie 与正常有效 access Bearer 的 `auth_sessi
 
 服务端按 `auth_session_id` 稳定排序锁定两类 locator 能识别的全部候选。即使 Cookie 与 Bearer 指向不同 AuthSession，也撤销两者，避免同源多标签页留下可用会话。
 
-active 候选的 lifetime family 和 active credentials 置为 revoked，AuthSession 置为 logged_out，并在同一事务关闭 active/grace PresenceSnapshot、撤销 ticket。连接在提交后关闭或由下一请求拒绝。
+active 候选的 lifetime family 和 active credentials 置为 revoked，AuthSession 置为 logged_out，并在同一事务关闭 active/grace PresenceSnapshot、撤销 ticket。对应运行时 Presence 与连接在提交后关闭，或由下一请求拒绝。
 
 候选已处于 revoked/expired/logged_out 时保留原终态，只幂等收敛子记录。
 
@@ -240,24 +240,27 @@ refresh 对外只使用 `REFRESH_IDEMPOTENCY_KEY_INVALID`、`REFRESH_IDEMPOTENCY
 角色创建是 REST 业务操作，不在注册事务中隐式发生，也不通过 WebSocket `presence.enter` 伪造创建。首发固定使用：
 
 ```text
+GET  /api/v1/character-creation-profiles
 POST /api/v1/characters
 ```
+
+`GET` 只返回当前可选择的 profile identity、玩家可见名称以及 gender/pronoun 选项：`key / version / definition_hash / display_name / gender_options / pronoun_options`。它不得返回内部初始 stats、资源、技能、物品授予或来源材料。Profile 的 schema、SemVer、definition hash、兼容目录、内容批次固定和不可变创建记录以 `12_REGISTRY_BLUEPRINT_CONTRACT.md` 5.15 节为准。
 
 请求必须携带合法的 `Idempotency-Key`，并包含：
 
 ```json
 {
   "creation_profile_key": "default-v1",
-  "creation_profile_version": 1,
+  "creation_profile_version": "1.0.0",
   "display_name": "玩家名称",
   "gender": "unspecified",
   "pronouns": "unspecified"
 }
 ```
 
-服务端必须在同一事务中锁定 GameAccount、校验 CharacterOwnership 唯一性、解析精确版本的 `CharacterCreationProfile`，并按 V6 8.8 执行 `CharacterDisplayName` 的 NFKC、可见字符、保留词、控制字符和实例内唯一校验。性别和代词只影响展示，不得改变属性、成长、资格、门派或武学能力。
+服务端必须在同一事务中锁定 GameAccount、校验 CharacterOwnership 唯一性、解析 exact `CharacterCreationProfileDefinition` 及其 definition hash、固定活动内容批次和全部初始 Blueprint revision，并按 V6 8.8 执行 `CharacterDisplayName` 的 NFKC、可见字符、保留词、控制字符和实例内唯一校验。性别和代词只影响展示，不得改变属性、成长、资格、门派或武学能力。
 
-成功返回 `201`、Character stable id、display name、profile identity 和初始状态摘要；同一幂等键同一 payload 可安全重放。首发每个 GameAccount 最多一个 Character，因此不另建 `character.choose`。失败只使用稳定错误码：`CHARACTER_ALREADY_EXISTS`、`CHARACTER_PROFILE_INVALID`、`CHARACTER_DISPLAY_NAME_INVALID` 或 `CHARACTER_CREATION_UNAVAILABLE`，不得泄露名称是否已被占用。
+成功返回 `201`、Character stable id、display name、完整 profile identity（key/version/definition hash）和初始状态摘要；同一幂等键同一 payload 可安全重放。首发每个 GameAccount 最多一个 Character，因此不另建 `character.choose`。Profile version 不存在、不是当前可选版本、hash/BlueprintRef 无法闭合或初始状态不合法时统一使用 `CHARACTER_PROFILE_INVALID`；其他失败只使用 `CHARACTER_ALREADY_EXISTS`、`CHARACTER_DISPLAY_NAME_INVALID` 或 `CHARACTER_CREATION_UNAVAILABLE`，不得泄露名称是否已被占用。
 
 ### 4.4 RecoveryCode 与账号生命周期
 
@@ -270,9 +273,9 @@ POST /api/v1/account/close
 POST /api/v1/account/reopen
 ```
 
-`auth/recover` 接受账号名、RecoveryCode 和新密码；成功时撤销该 User 的全部 AuthSession、RefreshTokenFamily、Presence、ResumeTicket，生成新 code 并只在该响应中展示一次。`recovery-code/rotate` 需要当前 active AuthSession，轮换后同样撤销旧 code 和全部旧控角状态。恢复失败按账号、IP、设备合并限流，统一返回 `RECOVERY_CODE_INVALID`、`RECOVERY_RATE_LIMITED` 或 `ACCOUNT_RECOVERY_UNAVAILABLE`，不泄露账号存在性。
+`auth/recover` 接受账号名、RecoveryCode 和新密码；成功时撤销该 User 的全部 AuthSession、RefreshTokenFamily 与 ResumeTicket，终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，生成新 code 并只在该响应中展示一次。`recovery-code/rotate` 需要当前 active AuthSession，轮换后同样撤销旧 code 和全部旧控角状态。恢复失败按账号、IP、设备合并限流，统一返回 `RECOVERY_CODE_INVALID`、`RECOVERY_RATE_LIMITED` 或 `ACCOUNT_RECOVERY_UNAVAILABLE`，不泄露账号存在性。
 
-`account/close` 立即撤销会话和控角租约，将 GameAccount 置为 `cooling_off`；`account/reopen` 只接受冷静期内的有效 RecoveryCode，成功后回到 `active`，但不自动恢复旧 Presence。冷静期结束进入 `retired`，User 数据匿名化/禁用，Character 进入 `RetiredCharacter`。过期和不可恢复路径使用 `ACCOUNT_REOPEN_WINDOW_EXPIRED`、`ACCOUNT_NOT_REOPENABLE` 或 `ACCOUNT_ALREADY_RETIRED`。所有四个端点发送 `Cache-Control: no-store`，恢复和关闭操作均写审计事件。
+`account/close` 立即撤销会话与 ticket、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并将 GameAccount 置为 `cooling_off`；`account/reopen` 只接受冷静期内的有效 RecoveryCode，成功后回到 `active`，但不自动恢复旧 PresenceSnapshot 或运行时 Presence。冷静期结束进入 `retired`，User 数据匿名化/禁用，Character 进入 `RetiredCharacter`。过期和不可恢复路径使用 `ACCOUNT_REOPEN_WINDOW_EXPIRED`、`ACCOUNT_NOT_REOPENABLE` 或 `ACCOUNT_ALREADY_RETIRED`。所有四个端点发送 `Cache-Control: no-store`，恢复和关闭操作均写审计事件。
 
 ### 4.5 Public V1 社区治理 API
 
@@ -414,7 +417,8 @@ Evennia `web/api/views.py` 暴露的是：
 
 建议引擎统一提供：
 
-- `actor_ref`
+- `initiator_type`（`user / actor / system`）
+- `initiator_id`（系统发起时为空；`actor` 只允许 Character/NPC）
 - `action_type`
 - `target_ref`
 - `payload_snapshot`
@@ -432,7 +436,7 @@ Evennia `web/api/views.py` 暴露的是：
 
 ## 10. V6 增量与最终原则
 
-在每个游戏实例内，`User` 与 `GameAccount` 是永久一对一映射；`CharacterOwnership` 负责未来多角色扩展。注册成功仍不创建 AuthSession、RefreshTokenFamily、Character 或 Presence，但会在响应中一次性展示 RecoveryCode；服务端只保存其哈希。RecoveryCode 的恢复 / 轮换必须撤销全部旧 AuthSession、refresh family、Presence 和票据，采用账号/IP/设备合并限流与统一错误响应。
+在每个游戏实例内，`User` 与 `GameAccount` 是永久一对一映射；`CharacterOwnership` 负责未来多角色扩展。注册成功仍不创建 AuthSession、RefreshTokenFamily、Character、PresenceSnapshot 或运行时 Presence，但会在响应中一次性展示 RecoveryCode；服务端只保存其哈希。RecoveryCode 的恢复 / 轮换必须撤销全部旧 AuthSession、refresh family 和票据、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并采用账号/IP/设备合并限流与统一错误响应。
 
 M1 后台只提供 2.2 冻结的恢复流程冻结 / 撤销与持有效 code 的最小修复，不提供人工身份裁决、明文 code 查看、免验证改密或账号重分配。该后台路径与玩家恢复共用 `13` 的事务和并发边界，并必须进入 `16` 的权限、审计与失败原子性矩阵。
 

@@ -99,7 +99,7 @@ Evennia 对移动前校验、离开源位置、位置更新、进入目标位置
 
 ### 4.3 连接、账号与角色的问题边界
 
-Evennia 的具体 SessionHandler 不宜照搬，但它长期处理了“连接不等于账号、账号不等于角色、多连接控制、断线与重载”等真实问题。New_Mud 的 ConnectionSession/AuthSession/Presence 三分法可继续吸收这些经验，并以更明确的持久与运行时边界实现。
+Evennia 的具体 SessionHandler 不宜照搬，但它长期处理了“连接不等于账号、账号不等于角色、多连接控制、断线与重载”等真实问题。New_Mud 以 ConnectionSession / AuthSession / Presence 区分连接、认证和运行时控角，并用 PresenceSnapshot 单独表达持久恢复租约；这四个概念可继续吸收上述经验，同时保持明确的持久与运行时边界。
 
 ### 4.4 Prototype、帮助、频道和内容工作流
 

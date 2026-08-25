@@ -54,7 +54,7 @@
 
 - 产品目标、范围、里程碑和验收结果以本版本为准。
 - 协议字段、状态机、持久结构、事务与失败语义以 `docs/new_engine/11-16` 的对应冻结合同为准。
-- 术语边界由根目录 `CONTEXT.md` 与本版本第八章共同冻结；`UBIQUITOUS_LANGUAGE.md` 只索引非重复工程名称和常见歧义。
+- 项目领域概念的规范名称与紧凑定义以根目录 `CONTEXT.md` 为准；产品范围和产品语义以本版本为准，其中身份产品语义集中在第八章。`UBIQUITOUS_LANGUAGE.md` 只索引非重复工程名称和常见歧义。
 - 无法按关注点判定的冲突必须阻断合并，由需求与合同所有者在同一变更中共同裁决。
 
 ### 1.5 `V1` 的含义
@@ -388,7 +388,7 @@ V1 默认采用“安全重建”而不是“事件补齐”作为断线恢复�
 以下状态以单实例运行时内存为主：
 
 - ConnectionSession
-- 处于 `active` 的 Presence
+- 当前连接上已激活的运行时 Presence
 - 房间订阅关系
 - 活跃 CombatInstance
 - `runtime_only` EffectInstance
@@ -1204,9 +1204,9 @@ Item 的容器能力、容量或接受规则无法唯一解析时必须进入 `m
 
 ### 8.1 术语约束
 
-当前术语权威来源为根目录 `CONTEXT.md` 与本章；`CONTEXT.md` 冻结项目领域边界，本章冻结身份产品语义。两者粒度不同或产品语义发生冲突时，以本章及 V6 其他已冻结约束为准。`UBIQUITOUS_LANGUAGE.md` 是非权威工程术语索引，只索引未进入领域词汇表的工程名称、来源名称和常见歧义，不建立第三份定义或权威。
+根目录 `CONTEXT.md` 是项目领域概念名称与紧凑定义的词汇权威；本章冻结身份产品语义，V6 其他章节冻结各自产品范围和结果。词汇定义与产品语义粒度不同；发生实质产品冲突时以本章及 V6 其他已冻结约束为准，并同步修正 `CONTEXT.md`。`UBIQUITOUS_LANGUAGE.md` 是非权威工程术语索引，只索引未进入领域词汇表的工程名称、来源名称和常见歧义，不建立第三份定义或权威。
 
-以下身份术语与 `CONTEXT.md` 中的领域定义共同构成本版本的当前权威术语集；后续若需重建新的术语表，必须以两者与本版本其他已冻结约束为基线：
+以下列表只导航本章使用的身份领域概念；其规范名称与紧凑定义仍只在 `CONTEXT.md` 维护，本章负责冻结相关产品语义，不建立第二份词汇定义：
 
 当前冻结的是这些术语所表达的边界与职责，不要求继续沿用旧术语表中的命名风格；后续若改用更合适的中文或其他名称，必须保持本章定义的语义不变。
 
@@ -1257,11 +1257,11 @@ Item 的容器能力、容量或接受规则无法唯一解析时必须进入 `m
 
 注册必须使用 Django 密码校验、Origin 校验、限流和稳定错误码。重复账号名、不可接受输入和策略拒绝不得泄露内部用户记录。
 
-注册事务必须签发一次性可见的 `RecoveryCode`，服务端只保存不可逆哈希。密码找回、账号恢复或主动轮换都会生成新 code，并撤销该 User 的全部 AuthSession、RefreshTokenFamily、Presence 和未使用票据。若密码和 RecoveryCode 同时丢失且不存在外部身份，管理员不得把账号重新分配给声称的玩家；人工支持只能冻结 / 撤销或修复一个仍持有有效 code 的流程，不能依据游戏 trivia 推断所有权。
+注册事务必须签发一次性可见的 `RecoveryCode`，服务端只保存不可逆哈希。密码找回、账号恢复或主动轮换都会生成新 code，并撤销该 User 的全部 AuthSession 与 RefreshTokenFamily、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并撤销未使用票据。若密码和 RecoveryCode 同时丢失且不存在外部身份，管理员不得把账号重新分配给声称的玩家；人工支持只能冻结 / 撤销或修复一个仍持有有效 code 的流程，不能依据游戏 trivia 推断所有权。
 
 恢复接口对账号、IP 和设备采用合并限流与统一错误响应；恢复失败不得锁死正常密码登录。M1 必须提供受审计的后台冻结 / 撤销与最小修复流程，Public V1 才承诺玩家可用 RecoveryCode 自助恢复。
 
-首发与 Public V1 均不提供玩家自助改名、删除或重建 Character。GM 改名 / 重置必须审计，测试环境允许显式 reset。Character 关闭后成为 `RetiredCharacter`，其名称永不自动复用；账号关闭只撤销控制权并对相关 User 数据执行匿名化 / 禁用，不硬删除稳定 ID 和历史关系。
+首发与 Public V1 均不提供玩家自助改名、删除或重建 Character。GM 改名 / 重置必须审计，测试环境允许显式 reset。账号关闭时只立即撤销控制权并进入可恢复的 `cooling_off`；只有冷静期届满、GameAccount 进入 `retired` 后，Character 才成为 `RetiredCharacter`，其名称永不自动复用。退休时对相关 User 数据执行匿名化 / 禁用，但不硬删除稳定 ID 和历史关系。
 
 首发认证固定为账号密码注册与登录。
 
@@ -1271,7 +1271,7 @@ Item 的容器能力、容量或接受规则无法唯一解析时必须进入 `m
 
 每个 AuthSession 在登录事务中创建且终身只关联一个 RefreshTokenFamily。轮换只追加 credential generation，不替换 family；family 身份行不得先删除再为同一 AuthSession 重建，终态 family 不得恢复为 active。
 
-H5 logout 以 refresh Cookie 和内存中仍可用的 access token 作为独立定位凭据，撤销两者能够识别的全部 AuthSession、Presence 与 ticket。两者都无法识别会话时仍统一返回 `204` 并清 Cookie，但该结果只表示客户端清理完成，不得伪称已撤销无法定位的服务端会话。
+H5 logout 以 refresh Cookie 和内存中仍可用的 access token 作为独立定位凭据，撤销两者能够识别的全部 AuthSession 和 ticket、终止对应 active/grace PresenceSnapshot 租约，并关闭运行时 Presence。两者都无法识别会话时仍统一返回 `204` 并清 Cookie，但该结果只表示客户端清理完成，不得伪称已撤销无法定位的服务端会话。
 
 AuthIdentity、手机号和微信身份绑定均为首发后能力。
 
@@ -1292,9 +1292,9 @@ logout 还可以使用内存中的 access token Bearer 作为独立 locator；�
 - 首发每个 GameAccount 最多拥有一个 Character。
 - CharacterOwnership 必须建模为可扩展关系，不把永久一对一写死在领域结构中。
 - 首发上限由应用服务和数据库约束共同保证，未来放宽时必须提供显式迁移。
-- 同一 GameAccount 跨所有 AuthSession、ConnectionSession 与设备，同时最多有一个处于 `active` 或 `grace_disconnected` 的 Presence 租约。
+- 同一 GameAccount 跨所有 AuthSession、ConnectionSession 与设备，同时最多有一个处于 `active` 或 `grace_disconnected` 的 PresenceSnapshot 租约；运行时 Presence 只在实际绑定连接并控角时存在。
 - 普通第二控角请求默认以 `CHARACTER_OCCUPIED` 拒绝，`presence.enter` 不得隐式升级为接管。
-- 只有显式 `presence.takeover` 携带确认且通过策略授权，才可在同一事务终止旧 Presence 租约、撤销旧 ticket、建立新租约与 ticket，并保存终结结果和通知 outbox。
+- 只有显式 `presence.takeover` 携带确认且通过策略授权，才可在同一事务终止旧 PresenceSnapshot 租约、撤销旧 ticket、建立新租约与 ticket，并保存终结结果和通知 outbox；旧运行时 Presence 在提交后失权并关闭。
 - 事务内任一步失败必须整体回滚，不得留下两个可恢复租约、半关闭旧租约或无终结结果的新请求。
 - 事务提交后才通知旧连接；通知失败不得回滚已提交接管，旧端须在后续请求校验或状态同步时失去控制权。
 
@@ -2110,14 +2110,14 @@ Redis 只有在需要 Channels channel layer、缓存或限流时才引入，不
 
 例外只能使非必做项继续推进，不能把必做失败改写为通过。阻断原因消除后必须重跑受影响验收。
 
-M0 的当前治理结论是“candidate-complete”：在干净且显式记录的 Git 基线上完成最终清单核对；若满足 V6 当前 M0 要求且证据完整，则将需求 M0 标记为 `complete`。这不改变 Engine Stage E0 的独立状态；在真实 seed loading、Registry 依赖、并发、审计和 readiness 集成完成前，E0 保持 `blocked`。
+本文只定义里程碑完成规则，不维护会随实施变化的当前状态。需求里程碑状态以 `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` 的追踪记录和 `18_IMPLEMENTATION_STATUS.md` 的可回查证据为准；产品 M0 与 Engine Stage E0 必须继续独立判断，任何一方的完成都不能替代另一方证据。
 
 ### 15.1 需求里程碑 M0：基线、契约与工程骨架
 
 - 建立 Django + DRF + Channels + PostgreSQL 骨架
 - 建立分层架构、测试骨架、健康检查与基础可观测性
 - 冻结协议信封、错误码、Registry、MUDLib 与 Blueprint 最小契约
-- 冻结 AuthSession、Presence、单角色和跨设备单 Presence 约束
+- 冻结 AuthSession、Presence/PresenceSnapshot 边界、单角色和跨设备单 PresenceSnapshot 租约约束
 - 冻结 Blueprint 草稿、校验、发布批次、冷发布与批次回滚契约
 - 生成并版本控制 `source_snapshot.json`、独立的世界与武学 fixture manifest，以及同时引用二者的复合验收 bundle
 - 批准首发 capacity profile、精确浏览器测试矩阵与恢复预算
@@ -2128,7 +2128,7 @@ M0 只有在上述制品、合同和决策记录全部存在且通过自动校�
 ### 15.2 需求里程碑 M1：首发可玩闭环
 
 - 实现用户名密码注册、独立登录、JWT Access Token 与轮换 Refresh Token
-- 实现唯一角色创建、进入世界、断线安全重建与跨设备单 Presence
+- 实现唯一角色创建、进入世界、断线安全重建与跨设备单 PresenceSnapshot 租约
 - 实现 PC 与移动端浏览器 H5 主流程
 - 实现移动、查看、公共聊天、私聊、背包、装备与物品使用
 - 实现首发兼容包络内的 XKX100 战斗机制及 `jifa` / `prepare` 关键语义；武学 manifest 未冻结时 M1 不得完成
@@ -2180,8 +2180,8 @@ M1-A 不是独立需求里程碑。只有 M1-B 通过，需求里程碑 M1 才�
 
 - 交付实际可运行的微信小程序客户端，不以 H5 壳或接口预留代替
 - 接入微信 AuthIdentity、授权登录、身份绑定与账号恢复
-- 复用 JWT 续期、单角色与跨设备单 Presence 约束
-- 处理前后台切换、网络中断、Token 失效与 Presence 恢复
+- 复用 JWT 续期、单角色与跨设备单 PresenceSnapshot 租约约束
+- 处理前后台切换、网络中断、Token 失效与 PresenceRecovery
 - 建立微信开发者工具、真机调试、自动构建与发布工具链
 - 完成隐私、安全和平台审核
 
@@ -2208,12 +2208,12 @@ M1-A 不是独立需求里程碑。只有 M1-B 通过，需求里程碑 M1 才�
 - 首发浏览器、视口、中文输入和无障碍最低范围以第 9.2.1 节为准
 - 首发认证固定为用户名密码注册与登录、JWT Access Token 与轮换 Refresh Token
 - 每个游戏实例内一个 User 永久映射一个 GameAccount；CharacterOwnership 为未来多角色扩展边界
-- 注册签发一次性可见、服务端只存哈希的 RecoveryCode；恢复轮换 code 并撤销旧会话、Presence 与票据
+- 注册签发一次性可见、服务端只存哈希的 RecoveryCode；恢复轮换 code，并撤销旧会话与票据、终止旧 PresenceSnapshot 租约、关闭旧运行时 Presence
 - Character 创建使用版本化 CharacterCreationProfile；CharacterDisplayName 按 NFKC 在实例内唯一，性别 / 代词只影响展示
 - 首发每个 GameAccount 最多一个 Character，未来扩展保留 CharacterOwnership
-- 同一 GameAccount 跨会话与设备最多一个处于 `active` 或 `grace_disconnected` 的 Presence 租约
-- 同一 AuthSession 可用 `presence.recover` 恢复自身 active / grace Presence；跨 AuthSession 仍必须显式 takeover
-- 普通第二控角请求默认拒绝；显式 `presence.takeover` 必须确认、通过策略授权并原子替换旧 Presence
+- 同一 GameAccount 跨会话与设备最多一个处于 `active` 或 `grace_disconnected` 的 PresenceSnapshot 租约
+- 同一 AuthSession 可用 `presence.recover` 恢复自身 active / grace PresenceSnapshot 租约并创建新一代运行时 Presence；跨 AuthSession 仍必须显式 takeover
+- 普通第二控角请求默认拒绝；显式 `presence.takeover` 必须确认、通过策略授权并原子替换旧 PresenceSnapshot 租约与 ticket，提交后再关闭旧运行时 Presence
 - 后端正式环境统一采用 PostgreSQL
 - 只做单实例
 - 不做多实例水平扩展

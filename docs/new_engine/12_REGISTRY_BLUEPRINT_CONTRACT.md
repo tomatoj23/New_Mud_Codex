@@ -11,8 +11,8 @@
 - `manifest.py` 最小字段
 - `mudlib.py` 注册入口
 - typed registry 通用规则
-- `Handler / Rule / PermissionPolicy / HookSet / ActionProvider / RenderPolicy` 等 typed registry 最小 schema
-- `Action / BehaviorProfile / EffectType / JobType / WorldProcessType / StartupPlan` 最小 schema
+- `HandlerDefinition / RuleDefinition / PermissionPolicyDefinition / HookSetDefinition / ActionProviderDefinition / RenderPolicyDefinition` 等 typed registry 最小 schema
+- `ActionDefinition / BehaviorProfileDefinition / CharacterCreationProfileDefinition / EffectTypeDefinition / JobTypeDefinition / WorldProcessTypeDefinition / StartupPlanEntry` 最小 schema
 - `Blueprint` schema、merge 规则、编译产物与校验错误
 - `BlueprintRevision / BlueprintHead / ContentReleaseBatch` 的编辑、发布、回滚与生效语义
 
@@ -91,11 +91,11 @@ class MudLib:
     def register_render_policies(self, registry): ...
     def register_actions(self, registry): ...
     def register_behavior_profiles(self, registry): ...
+    def register_character_creation_profiles(self, registry): ...
     def register_effect_types(self, registry): ...
     def register_job_types(self, registry): ...
     def register_world_process_types(self, registry): ...
     def register_startup_plan(self, registry): ...
-    def get_character_creation_config(self): ...
 ```
 
 冻结规则：
@@ -105,6 +105,7 @@ class MudLib:
 - 注册失败必须阻断启动，不允许降级成 warning
 - `register_startup_plan()` 只能引用已注册类型键
 - `register_blueprint_seed_providers()` 只注册 seed 提供者，不注册运行时 Blueprint 真源
+- `register_character_creation_profiles()` 只注册不可变 profile definition；角色创建时还必须固定活动内容批次和所有 BlueprintRef 的 exact revision
 
 ### 3.1 Blueprint seed 与 PostgreSQL 真源
 
@@ -137,6 +138,7 @@ pinned Entity/Item 与 durable Effect 按自身 exact historical revision 读取
 - `BlueprintSeedProviderDefinition`
 - `ActionDefinition`
 - `BehaviorProfileDefinition`
+- `CharacterCreationProfileDefinition`
 - `EffectTypeDefinition`
 - `JobTypeDefinition`
 - `WorldProcessTypeDefinition`
@@ -501,6 +503,30 @@ concurrency key 必须在入队前由已校验 payload 展开。缺失模板变�
 每个 occurrence 固定按 `schedule -> misfire -> schedule jitter -> overlap -> execute -> retry` 处理。retry 不重新计算 schedule，也不生成新的 occurrence。
 
 每次决策必须持久化原始 `scheduled_for`、实际 `run_after`、attempt、concurrency key 与采用的 policy 版本，保证重启后不会改变既有决定。
+
+### 5.15 `CharacterCreationProfileDefinition`
+
+`CharacterCreationProfileDefinition` 是领域概念 `CharacterCreationProfile` 的 typed-registry 实现。它使用第 4 节通用的 `key / version / definition_hash / summary / source_module / tags`，并额外冻结：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `display_name` | string | 是 | Profile 的玩家可见名称 |
+| `gender_options` | string[] | 是 | 只影响展示的稳定机器值；必须包含 `unspecified` |
+| `pronoun_options` | string[] | 是 | 只影响展示的稳定机器值；必须包含 `unspecified` |
+| `initial_state_schema_version` | string | 是 | 首版固定为 `character-initial-state/1` |
+| `initial_state` | object | 是 | 完整、确定性的 Character 初始状态 |
+| `start_room_ref` | BlueprintRef | 是 | `expected_kind=room` 的起始 Room 引用 |
+| `source_ref` | object | 是 | 初始状态的来源材料、位置与 SourceSnapshot 身份 |
+
+`gender_options / pronoun_options` 必须非空、无重复并使用稳定机器值；选择结果只进入展示资料，不能改变 stats、resources、技能、物品、资格、门派或规则路径。
+
+`character-initial-state/1` 的 `initial_state` 必须且只能包含 `stats / resources / skill_grants / item_grants`。`stats` 和 `resources` 是完整 object；两个 grants 都是显式数组，空集合写 `[]`。`skill_grants` 使用 7.6 节 `skill_loadout` 的 exact ref、level、jifa 与 prepare 结构；`item_grants` 使用 7.6 节 `item_loadout` 的 exact ref、quantity 与 equip_slot 结构。所有数值和集合必须由 definition 完整给出，禁止读取未版本化默认值或生成不可复现随机值。
+
+Profile 的 `version` 使用 2.3 节 SemVer；同一 `(key, version)` 不得对应不同 definition hash。每个 key 只有一个版本可供新 Character 选择；仍被 `CharacterCreationRecord` 引用的旧版本必须按 4.2.1 节保留在只读兼容目录，不能删除后按裸 key 改用新版本。
+
+角色创建请求使用 `creation_profile_key + creation_profile_version` 固定 exact registry definition。服务在同一事务中固定当前 `(release_head_id, active_batch_id)`，从该批次解析 `start_room_ref` 及全部 grants 的 exact BlueprintRevision，再创建 Character、CharacterOwnership、初始状态与不可变 `CharacterCreationRecord`。任一 ref、schema、来源、唯一性或授予项失败都整体回滚。
+
+`CharacterCreationRecord` 至少包含 `character_id / game_account_id / profile_key / profile_version / profile_definition_hash / content_release_batch_id / start_room_revision_id / normalized_display_name / gender / pronouns / created_at`，并持久化全部 skill/item grant 的 exact revision 结果或通过不可变创建明细引用它们。该记录是创建来源证据，不是第二份可编辑 Character 状态。
 
 ## 6. Handler 契约
 
@@ -1181,6 +1207,7 @@ durable Effect 始终读取自己的 `condition_definition_revision_id`。被引
 - typed registry 激活版本与只读 recovery/validation catalog
 - registry definition hash、引用图闭包校验器与构建制品哈希
 - schedule、misfire、retry 与 overlap policy schema
+- `CharacterCreationProfileDefinition` schema、兼容目录、BlueprintRef 固定与不可变创建记录
 - `Blueprint` schema
 - `CompiledBlueprint` schema
 - compiler contract version、三类 revision hash 与反向依赖闭包编译器

@@ -14,7 +14,7 @@
 
 - 每个 Engine Stage 都交付可运行、可测试、可审计的纵向增量。
 - H5 客户端随服务端能力逐步增长，不留到后端全部完成后一次接入。
-- 首发每个 GameAccount 最多一个 Character，同时最多一个 `active` 或 `grace_disconnected` Presence 租约。
+- 首发每个 GameAccount 最多一个 Character，同时最多一个 `active` 或 `grace_disconnected` PresenceSnapshot 租约。
 - 单实例、单写者、PostgreSQL 持久真源和冷发布边界始终成立。
 - ConnectionSession、Presence、CombatInstance 与 runtime_only Effect 只在运行时内存。
 - AuthSession、PresenceSnapshot、durable Effect 与结算结果按合同持久化。
@@ -66,7 +66,7 @@
 
 E0 已建立文档与 Git 基线、Django/ASGI/PostgreSQL 工程骨架、初始内容模型与迁移、机器合同、来源快照、双 manifest、复合 bundle、CI 和可执行结构校验。Python 3.14.2 私有运行时、完整依赖锁、PostgreSQL 18.4 迁移往返和静态检查均已验证。三个非功能 profile 已批准；浏览器矩阵冻结官方精确目标组合，恢复预算绑定了 schema、迁移历史和逐表行数均一致的 M0 隔离恢复报告。Engine Stage E0 / Slice 2 的实现已通过 Issues #1–#4 完成 Registry exact dependency、冻结 seed artifact、受审计 bootstrap、active/pinned resolver、服务器启动生命周期、只读 readiness、并发收敛、事务回滚和失败审计。
 
-Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合同与启动 E2E、内容/seed/runtime/health 集成、启用真库的全量 pytest、Ruff、mypy、Django、迁移漂移、依赖、M0 与 Markdown 门禁均通过。因此 `ENGINE-001 / Engine Stage E0` 与 `MILESTONE-001 / M0` 标记为 `verified`，E0 可以关闭并把后续 frontier 交给 E1。完整命令、环境、结果和失败边界见 `18_IMPLEMENTATION_STATUS.md` 与 `PHASE2_CONTENT_STARTUP_WORKLOG.md`。
+Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合同与启动 E2E、内容/seed/runtime/health 集成、启用真库的全量 pytest、Ruff、mypy、Django、迁移漂移、依赖、M0 与 Markdown 门禁均通过。因此产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 为 `verified`；`ENGINE-001 / Engine Stage E0` 也为 `verified` 并已关闭，后续 frontier 交给 E1。完整命令、环境、结果和失败边界见 `18_IMPLEMENTATION_STATUS.md` 与 `PHASE2_CONTENT_STARTUP_WORKLOG.md`。
 
 该结论不改变后续产品边界：`CONTENT-001` 仍为 `implemented`，完整后台发布服务待 M1；`WORLD-001` 仍为 `specified`，固定小巷世界物化与玩法 E2E 待 M1；浏览器实测、容量/soak、五业务范围恢复和公开试运行仍未完成，`RELEASE-001 / PublicV1Gate` 继续 `blocked`。
 
@@ -81,7 +81,7 @@ Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合
 - 固定用户名密码注册与独立登录
 - 固定账号密码、JWT Access Token 与轮换 Refresh Token
 - 落地 ConnectionSession、AuthSession、Presence 与 PresenceSnapshot
-- 落地首发单角色和跨设备单 Presence 约束
+- 落地首发单角色和跨设备单 PresenceSnapshot 租约约束
 - 建立 H5 登录、连接、恢复和错误处理骨架
 - 建立 enter/resume 所需的最小 Character、Room、权威位置与 snapshot 投影
 
@@ -101,7 +101,7 @@ Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合
 - 每个 GameAccount 最多创建一个 Character
 - Refresh Token 只用于 REST refresh 轮换或 REST logout Cookie locator；不得进入 WebSocket 或 Authorization header
 - 新 WebSocket 先建 ConnectionSession，再用 access token 绑定 AuthSession
-- 同账号 active 或 grace Presence 租约已占用时，普通 enter 返回 `CHARACTER_OCCUPIED`
+- 同账号 active 或 grace PresenceSnapshot 租约已占用时，普通 enter 返回 `CHARACTER_OCCUPIED`
 - 显式 takeover 原子替换租约与 ticket、保存 outbox，提交后旧连接收到 `presence.taken_over`
 - H5 可完成登录、进入起始 Room、取得完整最小 snapshot、断线恢复和明确失败展示
 
@@ -318,13 +318,13 @@ E1-E4 通过后可形成 M1-A 内部可玩验证。E5、E6 与 E9 的 M1 范围�
 目标：
 
 - 交付实际微信小程序客户端与微信 AuthIdentity
-- 复用既有协议、恢复和单 Presence 约束
+- 复用既有协议、恢复和单 PresenceSnapshot 租约约束
 
 交付：
 
 - uni-app 微信小程序构建目标与真机调试
 - 微信授权登录、身份绑定与账号恢复
-- 前后台切换、网络中断、token 失效与 Presence 恢复
+- 前后台切换、网络中断、token 失效与 PresenceRecovery
 - 自动构建、隐私、安全与平台审核材料
 
 验收：

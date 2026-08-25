@@ -198,7 +198,7 @@ MUDLib 层负责：
 - 新手流程与帮助文档
 - `HandlerDefinition / RuleDefinition / PermissionPolicyDefinition / HookSetDefinition / ActionProviderDefinition / RenderPolicyDefinition` 的声明式注册
 - `ActionDefinition / BehaviorProfileDefinition / EffectTypeDefinition / JobTypeDefinition / WorldProcessTypeDefinition` 的声明式注册
-- 启动计划与角色创建配置
+- 启动计划与版本化 `CharacterCreationProfileDefinition`
 
 ## 8. 关键架构原则
 

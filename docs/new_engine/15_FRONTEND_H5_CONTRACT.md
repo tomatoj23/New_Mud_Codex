@@ -124,7 +124,7 @@ H5 只调用 `08_PERMISSIONS_ADMIN_API.md` 4.2 的四个开户/认证端点；re
 
 - 注册
 - 登录
-- 角色创建与选择
+- 角色创建与当前角色状态
 - 世界主界面
 - 场景查看与移动
 - 文本命令输入
@@ -191,7 +191,7 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 - register/login/refresh/logout 精确路径、四端点跨源拒绝与 refresh Cookie 强制属性测试
 - 注册成功后无 token、Cookie 或 AuthSession，并只在该响应一次展示 RecoveryCode；重复账号名与密码策略失败只返回稳定错误码
 - 角色创建覆盖 profile 版本、NFKC 名称策略、名称占用的统一错误、幂等重试、RetiredCharacter 不可自助重建及账号最多一个 Character
-- RecoveryCode 恢复/轮换撤销全部旧 AuthSession、RefreshTokenFamily、Presence 和 ticket；账号关闭进入 30 天 cooling-off，恢复后不自动回场景
+- RecoveryCode 恢复/轮换撤销全部旧 AuthSession、RefreshTokenFamily 和 ticket，终止 active/grace PresenceSnapshot 租约并关闭对应运行时 Presence；账号关闭进入 30 天 cooling-off，恢复后不自动回场景
 - PlayerBlock、ChannelMute、消息举报、一次申诉、GM 处罚时限和系统/安全/GM 通知不可屏蔽的端到端测试
 - logout 覆盖损坏 Cookie + 有效 access、Cookie/Bearer 指向不同会话和零 locator 三种路径；客户端始终完成本地清理
 - refresh 提交后响应丢失再重载时复用持久 key，多标签页只发送一个逻辑请求
@@ -203,7 +203,7 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 
 ## 8. V6 增量、Public V1 客户端边界与首发验收
 
-Public V1 H5 必须提供 RecoveryCode 首次展示后的安全说明、账号关闭 / 恢复入口、PlayerBlock / ChannelMute、消息举报和统一支持入口；举报提交只携带不可变消息 ID，服务器负责取证上下文。角色创建页调用 `POST /api/v1/characters`，显式提交 `creation_profile_key/version`、`display_name`、展示性别和代词，并展示稳定策略错误；同一 GameAccount 已有 Character 时不得显示可重建入口。恢复页调用 `/api/v1/auth/recover`，关闭页调用 `/api/v1/account/close`，恢复成功后必须重新 login 和 enter，不得自动恢复旧 Presence。UI 与内容为简体中文，Unicode 输入与显示完整支持；没有支付、订阅、付费 Item 或真实货币界面。
+Public V1 H5 必须提供 RecoveryCode 首次展示后的安全说明、账号关闭 / 恢复入口、PlayerBlock / ChannelMute、消息举报和统一支持入口；举报提交只携带不可变消息 ID，服务器负责取证上下文。角色创建页先调用 `GET /api/v1/character-creation-profiles` 获取当前 profile identity 与展示选项，再调用 `POST /api/v1/characters`，显式提交 `creation_profile_key / creation_profile_version`、`display_name`、展示性别和代词，并展示稳定策略错误；不得缓存或自行构造内部初始状态，同一 GameAccount 已有 Character 时不得显示可重建入口。恢复页调用 `/api/v1/auth/recover`，关闭页调用 `/api/v1/account/close`，恢复成功后必须重新 login 和 enter，不得自动恢复旧 Presence。UI 与内容为简体中文，Unicode 输入与显示完整支持；没有支付、订阅、付费 Item 或真实货币界面。
 
 H5 的全局导航必须提供公开 status 入口，展示服务端提供的当前健康摘要、计划维护窗口、drain 状态、活动 incident 与最后更新时间，不能由客户端自行推断服务健康。`system.maintenance` 与 `SystemNotice` 必须在 PC / 移动端一致显示；进入 drain 后客户端停止发起新的 enter 和 IC action、保留已提交请求的终结处理，并按服务器指令完成离场 / 重连。紧急 incident 更新和恢复通知必须可在未进入 Presence 时读取，且不得被 PlayerBlock 或 ChannelMute 屏蔽。
 

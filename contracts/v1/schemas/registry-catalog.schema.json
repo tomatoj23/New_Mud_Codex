@@ -14,8 +14,8 @@
     "semver_pattern": {"type": "string", "minLength": 1},
     "entries": {
       "type": "array",
-      "minItems": 13,
-      "maxItems": 13,
+      "minItems": 14,
+      "maxItems": 14,
       "items": {
         "type": "object",
         "additionalProperties": false,

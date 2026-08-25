@@ -127,9 +127,9 @@ seed input / admin edit
 ### 3.3 拆分后的子域模型
 
 - `ChatChannel`
-  - world / guild / team / system / arena
+  - world / guild / team / arena
 - `ChatSubscription`
-  - 成员、mute、role、last_read
+  - 成员、mute、channel_role、last_read
 - `ChatMessage`
   - 正常频道消息
 - `DirectMessage`
@@ -147,15 +147,13 @@ seed input / admin edit
 
 不要让账号、对象、脚本、外部字符串都直接成为消息主体。
 
-建议统一成：
+`ActorRef` 只引用 `CONTEXT.md` 定义的 Actor：
 
 - `ActorRef`
-  - `game_account`
   - `character`
-  - `system`
   - `npc`
 
-`SpeakerRef` 不再作为并行术语保留。
+`SpeakerRef` 不再作为并行术语保留。`GameAccount` 是玩家域身份，不因可接收 OOC 数据而成为 Actor；`SystemNotice` 由服务器署名并通过独立系统事件投递，不伪装成 ActorRef，也不作为 `system` 类型的 ChatChannel 或 ChatMessage。
 
 ### 3.5 首发与后续边界
 
@@ -177,7 +175,7 @@ seed input / admin edit
 
 ### 4.2 三类帮助来源
 
-以下三个名词的领域定义以 `requirements_v6.md` 第八章与根目录 `CONTEXT.md` 为准；`UBIQUITOUS_LANGUAGE.md` 仅索引工程名称和合同归属，不单独决定帮助子域分类，具体设计约束仍由本目录相关文档负责：
+以下三个名词是 `UBIQUITOUS_LANGUAGE.md` 统一的工程来源分类，不属于 V6 第八章或 `CONTEXT.md` 的领域词项；具体设计约束仍由本目录相关文档负责：
 
 - `CommandHelp`
   - 从动作元数据生成

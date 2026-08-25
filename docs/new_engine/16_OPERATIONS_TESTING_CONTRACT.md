@@ -39,7 +39,7 @@ PostgreSQL 契约测试和端到端测试必须覆盖：
 - 登录生成随机 opaque `device_id`，测试确认它不等于也不派生自 IP、User-Agent 或浏览器指纹；认证失败只暴露稳定 code。
 - `session.authenticate` 同 ConnectionSession 幂等补绑、payload 冲突，以及跨 ConnectionSession 重新验证和绑定。
 - enter/resume/recover/takeover 在 pending 准备、提交、激活和 finalization 各边界的故障注入；不得出现可收命令的 pending Presence 或可重放的虚假成功。
-- 页面重载丢失内存 ticket 后，`presence.recover` 只允许同一 AuthSession 恢复自己的 active/grace 租约，递增 generation、撤销旧 ticket、签发新 ticket并返回完整 snapshot；无自有租约与跨 AuthSession 请求统一失败，不得泄露占用详情、退化为 enter 或自动 takeover。
+- 页面重载丢失内存 ticket 后，`presence.recover` 只允许同一 AuthSession 恢复自己的 active/grace PresenceSnapshot 租约，递增 generation、撤销旧 ticket、签发新 ticket 并返回完整 snapshot；无自有租约与跨 AuthSession 请求统一失败，不得泄露占用详情、退化为 enter 或自动 takeover。
 - 在提交后激活前及激活后 finalization 前杀死 owner；启动扫描/超时 sweeper 必须关闭新 snapshot、撤销新 ticket、稳定失败终结、取消成功 outbox 并释放唯一占用。
 - outbox worker 在 `activation_pending / active / compensated` 三态竞跑；成功类只在 active 投递一次，补偿时取消，takeover 的 committed revocation 可提交后投递且不声称新端成功。
 - takeover 回滚保持旧端可用；提交后 outbox 投递失败不回滚，旧端通过下一请求校验或重连收敛。
@@ -297,7 +297,7 @@ Item 生命周期测试使用冻结时钟覆盖：NPC death/drop 原子创建 30
 - 完整浏览器矩阵、容量与两小时 soak、覆盖账号 / 角色 / 世界拓扑 / 内容批次 / 审计链五个范围的发布级恢复演练。
 - S0 / S1 清零；有 workaround、负责人和到期日的受限 S2 例外；S3 可公开记录。
 - 社区规则、恢复 / 关闭说明、保留摘要、可用性声明和内容责任确认已发布。
-- RecoveryCode 恢复/轮换、账号 `active -> cooling_off -> retired` 生命周期、旧会话与 Presence 撤销以及恢复后重新 enter 的 E2E 证据。
+- RecoveryCode 恢复/轮换、账号 `active -> cooling_off -> retired` 生命周期、旧会话/ticket 撤销、active/grace PresenceSnapshot 租约终止、运行时 Presence 关闭以及恢复后重新 enter 的 E2E 证据。
 - PlayerBlock、ChannelMute、不可变消息取证、一次申诉、处罚 `effective_at / expires_at`、自批禁止和 30/180/365 天保留清理的 moderation E2E 与审计证据。
 - active `ContentReleaseBatch` 与 ReleaseManifest 的机器清单证明可连通的约 30-60 个 Room、10 个以上具功能或敌对行为的 NPC、20 个以上 Item 定义和至少一条武学路径；E2E 证明至少一条可重复 PvE 循环，封闭试运行记录首次游玩约 2-4 小时。计数、行为、时长和 envelope 状态任一缺证都不得通过 gate。
 - Public V1 协议 / E2E 必须证明 Character 间只有双方确认的非致命 `Sparring` 可以开始，致命或 involuntary 动作使用既有稳定错误码拒绝；玩家败北产生 `SafeDefeat`，不创建 Character death、不丢失玩家 Item，也不回退不可逆成长。

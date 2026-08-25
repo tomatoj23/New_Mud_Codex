@@ -2,7 +2,7 @@
 
 > 状态：分析层文档。本文用于记录 Evennia 6.0 源码事实、优缺点与初步判断，不是 New_Mud 当前权威实施规范。若与 `docs/new_engine/` 冲突，以 `docs/new_engine/` 为准。详见 `docs/19_documentation_governance.md`。
 
-> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前领域术语，以 `requirements_v6.md` 第八章与根目录 `CONTEXT.md` 为权威；`UBIQUITOUS_LANGUAGE.md` 仅作非权威工程术语索引，`requirements_v5.md` 仅作历史对照。
+> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前领域概念，以根目录 `CONTEXT.md` 为词汇权威；产品范围和产品语义以 `requirements_v6.md` 为权威，其中身份产品语义见第八章；`UBIQUITOUS_LANGUAGE.md` 仅作非权威工程术语索引。
 
 ## 1. 分析范围
 

@@ -15,9 +15,9 @@
 | V6 结果 | 受影响合同 | 同步内容 |
 | --- | --- | --- |
 | 每实例一个 User 永久映射一个 GameAccount | 03、08、13 | 身份不拆分；CharacterOwnership 只承接未来多角色 |
-| 一次性可见、服务端只存哈希的 RecoveryCode | 08、13、15、16 | `/auth/recover`、`/auth/recovery-code/rotate`、`/account/close`、`/account/reopen`；恢复轮换 code，并撤销旧 AuthSession、refresh family、Presence 与 tickets；统一错误和合并限流 |
-| `presence.recover` | 11、13、15、16 | 同 AuthSession 恢复自身 active/grace Presence，递增 generation、旋转 ticket；跨会话仍需 takeover |
-| CharacterCreationProfile / CharacterDisplayName / RetiredCharacter | 04、08、15 | `POST /api/v1/characters`、NFKC 名称规则、展示性别、幂等创建、GM 审计和不可自助重建 |
+| 一次性可见、服务端只存哈希的 RecoveryCode | 08、13、15、16 | `/auth/recover`、`/auth/recovery-code/rotate`、`/account/close`、`/account/reopen`；恢复轮换 code，并撤销旧 AuthSession/refresh family/tickets、终止 PresenceSnapshot 租约、关闭运行时 Presence；统一错误和合并限流 |
+| `presence.recover` | 11、13、15、16 | 同 AuthSession 恢复自身 active/grace PresenceSnapshot 租约并创建新一代运行时 Presence，递增 generation、旋转 ticket；跨会话仍需 takeover |
+| CharacterCreationProfile / CharacterDisplayName / RetiredCharacter | 04、08、12、15 | typed-registry profile definition、精确版本/hash、内容批次与起始 revision 固定、`GET /api/v1/character-creation-profiles`、`POST /api/v1/characters`、NFKC 名称规则、展示性别、幂等创建、GM 审计和不可自助重建 |
 
 ## 世界、战斗与物品
 

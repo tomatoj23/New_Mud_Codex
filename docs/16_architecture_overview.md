@@ -72,7 +72,7 @@ Evennia 6.0 应定位为“现代维护中的传统架构”：领域抽象和�
 
 - 引擎层与 MUDLib 层明确分离
 - 运行时采用单逻辑运行时下的 ASGI 分层
-- 在线模型使用 `ConnectionSession / AuthSession / Presence`
+- 在线与恢复模型区分 `ConnectionSession / AuthSession / Presence / PresenceSnapshot`
 - 世界模型以 `Entity` 为统一根，但避免 Attribute 大一统
 - 内容模板统一收敛为 `Blueprint`
 - 权限、调度、聊天、后台都采用显式子域模型

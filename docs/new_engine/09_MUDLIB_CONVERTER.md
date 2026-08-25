@@ -77,11 +77,11 @@ class MudLib:
     def register_render_policies(self, registry): ...
     def register_actions(self, registry): ...
     def register_behavior_profiles(self, registry): ...
+    def register_character_creation_profiles(self, registry): ...
     def register_effect_types(self, registry): ...
     def register_job_types(self, registry): ...
     def register_world_process_types(self, registry): ...
     def register_startup_plan(self, registry): ...
-    def get_character_creation_config(self): ...
 ```
 
 重点：
@@ -89,7 +89,7 @@ class MudLib:
 - 入口负责注册
 - 不是拿到 engine container 之后任意扩展
 - `register_blueprint_seed_providers()` 只注册 seed loader，不注册运行时 Blueprint 真源
-- `BehaviorProfile`、调度类型、效果类型与 `WorldProcess` 类型都必须走受控 registry
+- `BehaviorProfileDefinition`、`CharacterCreationProfileDefinition`、调度类型、效果类型与 `WorldProcess` 类型都必须走受控 registry
 - `register_startup_plan()` 只能引用前述已注册类型，不能塞裸 Python 回调
 
 建议按下面的职责拆分理解：
@@ -106,12 +106,12 @@ class MudLib:
   - `register_actions`
 - 运行时类型注册面
   - `register_behavior_profiles`
+  - `register_character_creation_profiles`
   - `register_effect_types`
   - `register_job_types`
   - `register_world_process_types`
 - 启动期声明面
   - `register_startup_plan`
-  - `get_character_creation_config`
 
 ## 6. 引擎对 MUDLib 暴露的服务
 
@@ -414,7 +414,7 @@ MUDLib 是 XKX100 内容 seed、受控规则与适配代码的标准接口，转
 
 ## V6 增量：不可变来源与 Village 包络
 
-当前源基线为 `xkx100-20201118-sha256-1b101b7a99c60803`，属于不可变 `SourceSnapshot`。未来源字节、纳入范围或分类变化必须创建新的 snapshot、manifest 和 compatibility envelope；转换器不得原地覆盖历史制品，也不得从局部扫描推断全局 XKX100 兼容。
+当前源基线为 `xkx100-20201118-sha256-1b101b7a99c60803`，属于不可变 `SourceSnapshot`。任何来源字节、纳入范围或分类变化都必须创建新的 snapshot、manifest 和 compatibility envelope；转换器不得原地覆盖历史制品，也不得从局部扫描推断全局 XKX100 兼容。
 
 `d/village` 的 Public V1 转换以完整拓扑为 `VillageTopologyEnvelope` 起点，以行为证据创建 `VillageInteractionEnvelope`。未验证的 source interaction 必须生成带来源位置、原因和影响级别的 `UnavailableInteraction`；不得静默跳过、猜测或近似实现。GoldenSkillChain 的日常 Character 状态与确定性测试 Actor 分离。
 

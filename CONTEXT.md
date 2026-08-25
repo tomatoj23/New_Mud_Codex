@@ -23,7 +23,7 @@ An administrative authorization role held by a User. It does not express Charact
 _Avoid_: game permission, Character role, GameAccount permission
 
 **Character**:
-A persistent playable game persona controlled through CharacterOwnership. The first release allows at most one Character per GameAccount while retaining the ownership relation for future expansion.
+A persistent playable game persona controlled through CharacterOwnership.
 _Avoid_: User, Actor, Presence
 
 **CharacterOwnership**:
@@ -37,7 +37,7 @@ A world object with a stable identity and lifecycle, including Character, NPC, R
 _Avoid_: database row, Actor
 
 **Actor**:
-An Entity that can participate as the subject or target of a world action. In the first release this includes Character and NPC; Room, Exit, Item and platform operators are not Actors merely because they are addressable objects.
+A Character or NPC that can participate as the subject or target of a world action. Other addressable Entities and platform operators are not Actors.
 _Avoid_: User, Entity, GM
 
 **NPC**:
@@ -87,15 +87,15 @@ The authenticated session lifecycle created by login for one User. It is distinc
 _Avoid_: WebSocket connection, access token
 
 **Presence**:
-A temporary control lease binding an AuthSession to a Character. It is not the Character's identity and can move through active, grace_disconnected, taken_over and closed states.
+A runtime control context in which an AuthSession controls a Character. It is neither the Character's identity nor the durable recovery lease.
 _Avoid_: AuthSession, resume ticket, online flag
 
 **PresenceSnapshot**:
-A short-lived recovery checkpoint associated with a Presence lease. It is neither a Character identity nor a Presence itself.
+A short-lived recovery lease and checkpoint associated with Character control. It is neither a Character identity nor a runtime Presence.
 _Avoid_: persisted Presence, Character save, session archive
 
 **GameAccountLifecycle**:
-The account-control lifecycle `active -> cooling_off -> retired`. A cooling-off account can be reopened only with a valid RecoveryCode; a retired account cannot be restored, while stable identifiers and required history remain auditable.
+The lifecycle distinguishing a GameAccount in normal use, temporarily closed pending possible recovery, or permanently retired.
 _Avoid_: AuthSession state, temporary ban, deleted account
 
 **CharacterCreationProfile**:
@@ -103,7 +103,7 @@ A versioned definition of the choices and starting state available when a Charac
 _Avoid_: character template, birth config, starter preset
 
 **CharacterDisplayName**:
-The public, instance-unique name by which a Character is identified to players, distinct from an account name and the Character's stable identity.
+The public name by which a Character is identified to players, distinct from an account name and the Character's stable identity.
 _Avoid_: username, account name, character ID
 
 **RecoveryCode**:
@@ -111,11 +111,11 @@ A player-held proof used to recover access when a password is lost; it is not a 
 _Avoid_: recovery token, backup password, refresh token
 
 **RetiredCharacter**:
-A Character that can no longer be controlled after its GameAccount is closed, while its stable identity and historical relationships remain meaningful.
+A Character whose GameAccount has permanently retired and which can no longer be controlled, while its stable identity and historical relationships remain meaningful.
 _Avoid_: deleted character, banned character, dead character
 
 **PresenceRecovery**:
-The same-AuthSession recovery of its own active or grace Presence after the in-memory resume credential is lost; it is never cross-session takeover.
+An AuthSession's recovery of its own interrupted Character control context, distinct from resuming with a credential or taking control from another session.
 _Avoid_: session resume, takeover, re-enter
 
 ### Gameplay and evidence
@@ -203,7 +203,7 @@ The source-bound scope within which a specific XKX100 compatibility claim is sup
 _Avoid_: full compatibility, tested sample, general parity
 
 **ReleaseManifest**:
-The immutable record that identifies the code, requirements, contracts, migrations, active content batch, source snapshot, compatibility envelopes, and test evidence that are released together.
+The immutable identity and evidence record for one coordinated release of code, data, content, and operational artifacts.
 _Avoid_: deployment note, build metadata, version string
 
 **CapacityProfile**:

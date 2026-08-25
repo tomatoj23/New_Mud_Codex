@@ -1,6 +1,6 @@
 # 04 领域模型与世界模型
 
-> 术语说明：本页的账号域、世界域、内容域名词，以 `requirements_v6.md` 与根目录 `CONTEXT.md` 为权威；`UBIQUITOUS_LANGUAGE.md` 仅作非权威工程术语索引，`requirements_v5.md` 仅为历史基线。
+> 术语说明：本页的账号域、世界域、内容域领域概念名称以根目录 `CONTEXT.md` 为词汇权威，产品语义以 `requirements_v6.md` 为权威；`UBIQUITOUS_LANGUAGE.md` 仅作非权威工程术语索引。
 
 > 实施约束：战斗、武学、物品、Condition 与 Effect 的首发模型边界，以 `docs/new_engine/14_COMBAT_SKILL_ITEM_CONTRACT.md` 为准。
 

@@ -174,7 +174,7 @@ Issue #5 在 V6 权威基线 `d14ce67` 上执行。环境为 Windows 10 `10.0.19
 
 - pytest 仅报告 Daphne 使用的 asyncio policy API 将在 Python 3.16 移除；当前运行时为 Python 3.14.2，属于已记录的上游兼容性观察项，不构成失败。
 - 默认测试的 16 个 skip 不是未执行证据：同一工作树随后以 `RUN_POSTGRES_TESTS=1` 取得 73 passed；任何只引用 57 passed 的记录都必须同时保留该边界。
-- `ENGINE-001` 与 `MILESTONE-001` 的 E0/M0 必做证据已齐备，正式状态同步为 `verified`。
+- `ENGINE-001 / Engine Stage E0` 的必做证据已齐备并同步为 `verified`；产品 M0 已 `complete`，对应追踪记录 `MILESTONE-001` 同步为 `verified`。
 - `CONTENT-001` 保持 `implemented`：E0 启动闭环已验证，但 M1 完整后台编辑、发布与回滚服务尚未实现。
 - `WORLD-001` 保持 `specified`：冻结来源、seed 与启动验证不等于固定小巷世界物化、移动、战斗和战利品 E2E。
 - `RELEASE-001` 保持 `blocked`：浏览器实测、容量/soak、五业务范围恢复、公开试运行、ReleaseManifest 与公开资料均未完成；本检查点不宣称 Public V1。

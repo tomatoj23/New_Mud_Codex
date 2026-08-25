@@ -62,7 +62,7 @@
 | --- | --- |
 | 产品目标、范围、里程碑、发布方式和验收结果 | `requirements_v6.md` |
 | 协议字段、状态机、持久结构、事务、失败语义和测试机制 | 对应的 `docs/new_engine/11-16` |
-| 术语边界 | `CONTEXT.md` 与 V6 第八章；`UBIQUITOUS_LANGUAGE.md` 只索引非重复工程名称和常见歧义 |
+| 领域概念名称与定义 | `CONTEXT.md`；产品语义回到完整 V6，其中身份产品语义见第八章；`UBIQUITOUS_LANGUAGE.md` 只索引非重复工程名称和常见歧义 |
 | 需求到合同和证据的映射 | `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` |
 | 架构理由和模块方向 | `docs/new_engine/00-10` |
 | Evennia 来源事实与现代性评估 | `docs/00-18`、`docs/20` 与本地 `evennia-main` 快照 |
@@ -85,7 +85,7 @@
 
 ## 3.1 术语权威来源
 
-- 当前术语权威来源为根目录 `CONTEXT.md` 与 `requirements_v6.md` 第八章；`CONTEXT.md` 只定义项目领域概念，`UBIQUITOUS_LANGUAGE.md` 只索引未进入领域词汇表的工程名称、来源名称、合同归属和常见歧义。
+- 根目录 `CONTEXT.md` 是项目领域概念名称与紧凑定义的词汇权威；完整 `requirements_v6.md` 负责产品范围与产品语义，其中第八章集中负责身份产品语义。`UBIQUITOUS_LANGUAGE.md` 只索引未进入领域词汇表的工程名称、来源名称、合同归属和常见歧义。
 - 同一个领域术语不得在 `UBIQUITOUS_LANGUAGE.md` 中保留第二份定义；协议字段、状态转换、事务步骤、持久化约束和失败语义不得复制到任一词汇表，而应回链对应冻结合同。
 - `docs/new_engine/*` 与分析层文档若涉及 New_Mud 当前正式术语，应同时对齐 `CONTEXT.md` 与 V6；若为了描述 Evennia 现状而出现旧词，应在上下文中明确那是来源术语，而不是 New_Mud 设计术语。
 
@@ -163,7 +163,7 @@
 | 文档 | 主要职责 |
 | --- | --- |
 | `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md` | 记录 V6 产品结果对冻结合同、路线图和追踪索引的同步落点；不取代任一权威文档 |
-| `docs/new_engine/PHASE2_CONTENT_STARTUP_WORKLOG.md` | 记录 Engine Stage E0 / Slice 2 的 WIP、证据、未完成项和续作顺序；不证明阶段完成 |
+| `docs/new_engine/PHASE2_CONTENT_STARTUP_WORKLOG.md` | 按日期保存 Engine Stage E0 / Slice 2 的 WIP、续作边界与最终验收证据；它是历史执行记录，当前状态仍回到 17/18 |
 | `docs/new_engine/NEXT_SESSION_HANDOFF.md` | 提供新会话的最小阅读清单、工作树边界和当前交接元数据；冲突时回到本治理文件及对应权威 |
 | `plans/m0-e1-tracer-bullets.md` | 记录已确认的 E0/E1 纵向计划和验收条件；不创造产品结果或冻结协议 |
 | `contracts/v1/` | 提供冻结合同的 schema、catalog、profile 与报告制品；语义和批准边界由对应冻结合同与 V6 负责 |
@@ -172,7 +172,7 @@
 
 已核验状态：
 
-- 当前权威规则已改为按关注点判定：产品结果归 V6，实施机制归冻结合同，术语和追踪分别由 `CONTEXT.md` 与伴随文档负责。
+- 当前权威规则已改为按关注点判定：产品结果归 V6，实施机制归冻结合同，领域词汇归 `CONTEXT.md`，需求到合同和证据的追踪归 `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md`，工程名称索引归非权威的 `UBIQUITOUS_LANGUAGE.md`。
 - `docs/00_analysis_completion_record.md` 已明确分析层定位，并已把编码前导航扩展到 `docs/new_engine/11-16` 六份冻结实施合同和 `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md`。
 - 命令、调度、服务器架构、Web 层及 `docs/16-18` 的高冲突内容已完成第二批分层治理；旧问题不再作为仍待修复的当前缺陷列示。
 - 2026-08-22 已完成基于 Evennia 现代性判断的现行文档对齐复审；修订清单与验证证据见 `archive/audits/2026-08-22-evennia-reference-alignment/README.md`。
@@ -197,6 +197,6 @@
 
 V6 冻结了以下产品结果并要求受影响合同同步：M1 与 PublicV1Gate 分层；一个 User 对应一个 GameAccount；RecoveryCode 与 CharacterCreationProfile；VillageTopologyEnvelope / VillageInteractionEnvelope 与显式 UnavailableInteraction；Sparring / SafeDefeat；LootClaim / ItemRetirement；Public V1 的社区治理、运营状态、ReleaseManifest、维护与恢复门禁。难逆的边界决策见 `docs/adr/0001-public-v1-gate.md`、`docs/adr/0002-user-game-account-cardinality.md`、`docs/adr/0003-v6-authority-and-milestone-namespaces.md` 与 `docs/adr/0004-recovery-code-and-presence-recovery-boundaries.md`，其余差异汇总见 `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md`。
 
-M0 产品需求基线与 Engine Stage E0 readiness 必须分别追踪：M0 可以在 clean-baseline checklist 完成后标记 `complete`，而 E0 在真实 seed loading、Registry exact dependencies、并发、审计和 readiness 集成完成前继续 `blocked`。
+M0 产品状态、`MILESTONE-001` 追踪状态与 `ENGINE-001 / Engine Stage E0` readiness 必须分别追踪。本治理文件不保存易陈旧的当前值；当前状态只由 `17_REQUIREMENTS_TRACEABILITY.md` 与 `18_IMPLEMENTATION_STATUS.md` 维护，并不得重新合并。
 
 
