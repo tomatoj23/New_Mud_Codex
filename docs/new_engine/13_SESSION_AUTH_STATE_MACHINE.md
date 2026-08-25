@@ -15,11 +15,14 @@
 9. 新 WebSocket 已创建新的 `ConnectionSession`；`session.resume` 只把恢复出的 Presence 绑定到该连接，不能再创建第二个连接对象。
 10. 进程崩溃后不复活内存对象，不恢复半完成攻击；从 snapshot 与数据库安全创建新的运行时 Presence。
 11. `session.authenticate` 只按 `ConnectionSession` 本地幂等；跨连接必须重新校验 token 并重新执行绑定。
-12. `presence.enter / session.resume / presence.takeover` 的历史终结不得把新连接伪装成已绑定，也不得隐式触发 takeover。
-13. 三种 Presence 建立路径都先创建 inert `pending_enter`；提交前不得接受命令、订阅或接收广播、注册调度或派发领域事件。
+12. `presence.enter / session.resume / presence.recover / presence.takeover` 的历史终结不得把新连接伪装成已绑定，也不得隐式触发 takeover。
+13. 所有会创建或重新绑定 Presence 的路径都先创建 inert `pending_enter`；提交前不得接受命令、订阅或接收广播、注册调度或派发领域事件。
 14. REST refresh 的网络重试与攻击 replay 必须由持久幂等终结记录区分，不能把同一逻辑请求的安全重试误判为 token replay。
 15. 依赖 active Presence 的终结必须绑定精确 generation；`state.sync` 还绑定来源 ConnectionSession 与 seq 屏障，不能跨上下文重放 snapshot。
-16. REST register 只原子创建 User 与 GameAccount，不进入本状态机，不得隐式创建 AuthSession、refresh family、Character 或 Presence。
+16. REST register 只原子创建 User、GameAccount 与 RecoveryCode 哈希，不进入本状态机，不得隐式创建 AuthSession、refresh family、Character 或 Presence；RecoveryCode 明文只在注册响应出现一次。
+17. 在每个游戏实例内，一个 User 永久映射一个 GameAccount；CharacterOwnership 是未来多 Character 的唯一扩展边界。
+18. `presence.recover` 只恢复同一 AuthSession 自己的 active/grace Presence；它不接受跨会话接管。找不到自有可恢复租约时统一返回 `PRESENCE_RECOVERY_UNAVAILABLE`，不得把恢复流程当作普通 enter 或隐式 takeover。
+19. GameAccount 生命周期为 `active -> cooling_off -> retired`；关闭立即撤销该 User 的全部 AuthSession、Presence、ticket 和 refresh family。只有有效 RecoveryCode 能在冷静期内恢复到 `active`，恢复不会自动复活旧 Presence。
 
 ## 2. 对象与存储边界
 
@@ -176,7 +179,7 @@ family、credential 与 terminal history 至少保留到 family 绝对到期加 
 |------|------|
 | `id` | snapshot / 租约 id |
 | `presence_id` | 当前逻辑 Presence id |
-| `generation` | 每次 enter、resume 或 takeover 递增 |
+| `generation` | 每次 enter、resume、recover 或 takeover 递增 |
 | `auth_session_id` | 当前控制会话 |
 | `game_account_id` | 跨设备唯一约束键 |
 | `character_id` | 当前角色 |
@@ -211,7 +214,7 @@ family、credential 与 terminal history 至少保留到 family 绝对到期加 
 
 ### 4.6 `SessionEventOutbox`
 
-enter/resume/takeover 事务内必须为需要通知的旧连接或状态订阅者写 outbox。记录至少包含
+enter/resume/recover/takeover 事务内必须为需要通知的旧连接或状态订阅者写 outbox。记录至少包含
 `id`、`request_terminal_record_id`、`event_type`、`delivery_class`、`target_connection_session_id`、脱敏 `payload_json`、`dedupe_key`、`state`、`attempt_count`、`created_at` 与 `delivered_at`；
 `state` 至少支持 `pending / delivering / delivered / canceled`。
 
@@ -298,7 +301,7 @@ REST login / refresh
 
 ### 5.2 Presence 准备、提交与激活
 
-`presence.enter`、`session.resume` 与 `presence.takeover` 共用以下协议：
+`presence.enter`、`session.resume`、`presence.recover` 与 `presence.takeover` 共用以下协议；recover 额外要求租约属于当前 AuthSession：
 
 1. 按操作规定的锁序校验 AuthSession、GameAccount、Character、snapshot、ticket 和占用版本。
 2. 创建 inert `pending_enter`，完成所有可能失败的权限、canonical location、snapshot 投影、路由计划、调度计划、ticket 元数据、终结 payload 与 outbox 序列化准备；此时不安装任何计划。
@@ -339,7 +342,7 @@ sweeper 按 `AuthSession -> GameAccount -> PresenceSnapshot -> ResumeTicketCrede
 
 ### 6.1 签发
 
-明文 `resume_ticket` 只在 `presence.enter`、成功 `session.resume` 和 `presence.takeover` 的终结结果中签发。它绑定 snapshot、AuthSession、GameAccount、Character 与 generation，不能跨账号或角色使用。
+明文 `resume_ticket` 只在 `presence.enter`、成功 `session.resume`、成功 `presence.recover` 和 `presence.takeover` 的终结结果中签发。它绑定 snapshot、AuthSession、GameAccount、Character 与 generation，不能跨账号或角色使用。
 
 ### 6.2 异常断线
 
@@ -372,9 +375,13 @@ REST refresh when needed
 
 - `session.authenticate` 返回 `TOKEN_EXPIRED`。
 - 不读取或消费 resume ticket。
+
+### 6.4 PresenceRecovery
+
+页面刷新或客户端内存清理可能丢失 `resume_ticket`。同一 AuthSession 在完成 `session.authenticate` 后可提交无 ticket 的 `presence.recover`。服务端按 `AuthSession -> GameAccount -> Character -> PresenceSnapshot` 锁序查找该会话自己的 `active` 或 `grace_disconnected` 租约；成功时递增 generation、撤销旧 ticket、创建新 ticket 并复用 5.2 的 pending/commit/activate 事务。恢复不跨 AuthSession 迁移控制权，也不把另一会话的占用转化为成功。无自有可恢复租约时返回 `PRESENCE_RECOVERY_UNAVAILABLE`，统一对外响应。
 - 客户端先走 REST refresh，再认证和恢复。
 
-### 6.4 恢复事务与并发
+### 6.5 恢复事务与并发
 
 事务固定锁序：
 
@@ -481,6 +488,25 @@ AuthSession 到达 `absolute_expires_at` 时，清理任务必须将其置为 `e
 
 全局封禁或管理员撤销按稳定顺序处理 User 的全部 AuthSession、refresh family、连接、active/grace 租约和 resume ticket，并审计操作者、原因、关联请求和前后状态。
 
+### 10.1 RecoveryCode 与 GameAccount 生命周期
+
+REST 路径及请求 / 响应外形以 `08_PERMISSIONS_ADMIN_API.md` 4.4 为准；本节冻结它们的状态机和事务语义：
+
+- `POST /api/v1/auth/recover` 只在 RecoveryCode 验证成功且 GameAccount 仍为 `active` 时更新密码。旧 code 在同一事务消费，生成的新 code 取代它，并撤销该 User 的全部 AuthSession、RefreshTokenFamily、active/grace Presence 与未使用 ticket；成功后必须重新 login 和 enter。
+- `POST /api/v1/auth/recovery-code/rotate` 要求调用者属于仍为 `active` 的 AuthSession 与 GameAccount。成功事务撤销旧 code、生成新 code，并撤销包括调用会话在内的全部旧 AuthSession、refresh family、Presence 与 ticket；响应只一次展示新 code，客户端随后处于登出状态。
+- `POST /api/v1/account/close` 锁定并把 `active` GameAccount 改为 `cooling_off`，记录 `cooling_off_started_at / reopen_deadline_at`，立即执行同样的全会话与控角撤销。关闭不消费当前有效 RecoveryCode，因为它是冷静期内 reopen 的唯一玩家证明。
+- `POST /api/v1/account/reopen` 只接受 `cooling_off` 且未超过 30 天 `reopen_deadline_at` 的 GameAccount。有效 code 在同一事务消费，账号回到 `active`，生成并一次展示替代 code；不得恢复旧 AuthSession、Presence、Character 控制上下文或任何已撤销 ticket。
+
+服务端只保存 RecoveryCode 的不可逆 hash、generation、`active / used / revoked` 状态、版本和必要审计时间；明文只在注册或成功替换 code 的响应中出现一次。recover、rotate 和 reopen 的 code 消费与新 hash 创建必须和密码 / lifecycle 变化及全部撤销在一个 PostgreSQL 事务提交，任一步失败都整体回滚。重复使用旧 code、两个请求并发消费同一 generation，或 reopen 与退休任务竞跑时只能有一个赢家；失败者不得签发 code、改变密码、复活会话或覆盖赢家状态。
+
+账号生命周期事务固定按 `GameAccount -> RecoveryCode hash -> AuthSession（按 id） -> RefreshTokenFamily / credential -> PresenceSnapshot（按 id） -> ResumeTicketCredential（按 id） -> CharacterOwnership / Character` 持锁，并用 row version 与唯一约束重验。login、refresh、Presence 建立及清理路径在提交前必须重读 GameAccount lifecycle/version；看到非 `active` 或版本已变化就回滚，因此恢复、关闭与退休提交后不会留下新建或漏撤销的会话。数据库选择的序列化 / deadlock loser 只能按稳定失败收敛，不能局部提交。
+
+退休任务在 deadline 后按同一锁序把仍为 `cooling_off` 的 GameAccount 改为 `retired`，撤销 RecoveryCode，匿名化 / 禁用 User，并把 Character 置为 `RetiredCharacter`；稳定 id 与要求保留的历史关系不删除。`retired` 是终态，`account/reopen` 不得恢复它。reopen 先提交则退休任务重验后无操作；退休先提交则 reopen 不得把终态改回 `active`。
+
+所有 RecoveryCode 验证在读取敏感账号状态前执行账号、IP 与设备合并限流，并返回相同结构、缓存策略与无账号存在性泄露的稳定错误。账号不存在、code 错误、code 已消费或敏感状态不可确认时不得暴露区别；只有持有有效 code 后才能返回窗口过期或不可 reopen 的状态错误。失败尝试不得锁死或改变正常密码登录，日志、指标和审计不得记录明文 code、密码、token 或 ticket。
+
+M1 后台冻结 / 撤销与最小修复也必须使用本节同一锁序、RecoveryCode 验证和撤销事务。操作者可以冻结恢复尝试、撤销账号会话，或在玩家仍提交有效 code 时修复卡住的 recover 事务；不得读取或代填明文 code、绕过 code 校验、从游戏资料推断所有权、把账号转给其他 User，或在密码与 code 均丢失时生成替代凭据。后台修复成功与玩家 recover 相同：轮换 code、撤销全部旧会话与控角状态，且不自动创建 AuthSession / Presence；失败原子保持原状态。
+
 ## 11. 审计与脱敏
 
 必须审计登录、refresh 与 replay、Presence enter/leave/grace、resume、takeover、登出、封禁、崩溃租约收敛和过期清理。
@@ -511,7 +537,8 @@ AuthSession 到达 `absolute_expires_at` 时，清理任务必须将其置为 `e
 - 断线不创建未知 ticket；120 秒内用已有 ticket 恢复。
 - access token 过期时 ticket 不被消费，REST refresh 后仍可恢复。
 - 相同 resume request 重放不重复消费 ticket，并返回同一逻辑新 ticket。
-- enter/resume/takeover 成功在其他 ConnectionSession 重放时不绑定新连接、不应用旧 snapshot，只返回 `resume_required`；新 request id 的 resume 成功后才进入 active。
+- 页面重载丢失 ticket 后，同一 AuthSession 的 `presence.recover` 递增 generation、撤销旧 ticket、签发新 ticket并返回完整 snapshot；另一 AuthSession、无自有 active/grace 租约或与 takeover 竞跑时统一失败且不泄露占用详情。
+- enter/resume/recover/takeover 成功在其他 ConnectionSession 重放时不绑定新连接、不应用旧 snapshot，只返回 `resume_required`；新 request id 的 resume 成功后才进入 active。
 - action/ui/sync 等 Presence-required 终结在新 generation 重放时不返回旧结果；`state.sync` 跨连接或 barrier 推进后要求新 request id。
 - 两个不同 request id 并发使用同一 ticket，只有一个成功。
 - grace 超时后 resume 失败并释放 partial unique 占用。
@@ -523,6 +550,9 @@ AuthSession 到达 `absolute_expires_at` 时，清理任务必须将其置为 `e
 - refresh 同 key 同 payload 安全重放，同 key 不同 payload 返回冲突，不同 key 重用 used token 才撤销 family、AuthSession、Presence 租约和 ticket。
 - 并发路径不能为同一 AuthSession 创建第二个 family；family 终态不可复活，身份 tombstone 不可通过清理删除后重建。
 - used refresh Cookie 可完成显式 logout；损坏 Cookie 加有效 access Bearer 仍撤销会话；Cookie/Bearer 指向不同会话时撤销候选集合。
+- RecoveryCode recover/rotate 只允许一个并发 code 消费赢家，原子轮换 code 并撤销全部旧 AuthSession、RefreshTokenFamily、Presence 和 ticket；统一错误与账号/IP/设备合并限流不泄露账号存在性，也不锁死密码登录。
+- M1 后台恢复测试覆盖角色权限、重新认证、reason/support case、冻结 / 撤销和持有效 code 的最小修复；无 code、越权、并发消费或故障注入都不能改密、重分配账号或产生新凭据。
+- account close/reopen/retirement 覆盖 `active -> cooling_off -> active` 与 `active -> cooling_off -> retired` 两条边界、30 天截止竞跑、RetiredCharacter 和 reopen 后零 AuthSession / Presence。
 - 两个 locator 都无效时仍统一 `204 / no-store` 并清 Cookie，且审计不得伪称已撤销无法定位的服务端会话。
 - successor 已被后续轮换后，同 key 重试返回 `REFRESH_REQUEST_SUPERSEDED` 且不撤销 family。
 - 终结清理在 24 小时重试边界、active ticket、family 绝对到期和 secret cleanup grace 各边界正确保留；`activation_pending` 只能先补偿，不能直接删除。
@@ -545,9 +575,9 @@ AuthSession 到达 `absolute_expires_at` 时，清理任务必须将其置为 `e
 `Engine Stage E1` 必须完成：
 
 - register 与 login 的显式边界，以及注册后零认证会话不变量。
-- enter、leave、resume 与 takeover。
+- enter、leave、resume、recover 与 takeover。
 - refresh family 幂等旋转、superseded 结果和攻击 replay 撤销。
 - active snapshot 检查点、崩溃收敛与 grace 清理。
 - 稳定错误码及与 `11_PROTOCOL_CATALOG.md`、`15_FRONTEND_H5_CONTRACT.md`、`16_OPERATIONS_TESTING_CONTRACT.md` 的端到端契约测试。
 
-`Engine Stage` 是新引擎设计/实施阶段，不等同于 `requirements_v5.md` 的产品里程碑 `M0-M6`。
+`Engine Stage` 是新引擎设计/实施阶段，不等同于 `requirements_v6.md` 的产品里程碑 `M0-M6`。

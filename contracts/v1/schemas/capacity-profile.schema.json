@@ -34,7 +34,12 @@
       "type": "array",
       "minItems": 2,
       "uniqueItems": true,
-      "items": {"enum": ["requirements_v5.md", "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md"]}
+      "items": {"enum": ["requirements_v6.md", "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md"]}
+    },
+    "historical_source_documents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"const": "requirements_v5.md"}
     },
     "approval": {"$ref": "#/$defs/approval"},
     "environment": {

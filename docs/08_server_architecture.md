@@ -2,7 +2,7 @@
 
 > 状态：分析层文档。本文用于记录 Evennia 6.0 源码事实、优缺点与初步判断，不是 New_Mud 当前权威实施规范。若与 `docs/new_engine/` 冲突，以 `docs/new_engine/` 为准。详见 `docs/19_documentation_governance.md`。
 
-> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 为准；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准。
+> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v6.md` 第八章、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md` 为准；`requirements_v5.md` 仅作历史对照。
 
 ## 1. 分析范围
 
@@ -67,6 +67,8 @@ Evennia 的核心运行形状是：
 
 ## 3. 基于源码的评价
 
+Evennia 6.0 仍是维护中的成熟框架；以下“历史负担”表示它相对 New_Mud 的产品协议和部署边界存在适配成本，不表示该设计在传统多协议 MUD 中失效。
+
 ### 3.1 值得保留的点
 
 - 协议层和游戏层职责分离很清楚。
@@ -79,7 +81,7 @@ Evennia 的核心运行形状是：
 - 双进程架构高度依赖 Twisted / AMP，而项目技术路线已经固定为 `Django + Channels + asyncio`。
 - 本项目主入口是 WebSocket，不是 Telnet / SSH 优先。
 - 双进程会放大会话同步、运维、调试、序列化和一致性成本。
-- 对移动端优先的客户端来说，协议隔离的收益低于结构化 API 和事件流。
+- 对 PC/移动 H5 双端客户端来说，协议隔离的收益低于结构化 API 和事件流。
 
 ## 4. 对 New_Mud 的设计去向
 
@@ -100,5 +102,5 @@ Evennia 的核心运行形状是：
 
 ## 5. 结论
 
-Evennia 的双进程架构很适合传统多协议 MUD，但不适合本项目既定技术路线。分析层对应的结论是：借鉴其“边界清晰”和“生命周期清楚”这两点，放弃 Portal / Server 的物理拆分，转向单逻辑运行时下的 ASGI 分层。
+Evennia 的双进程架构很适合传统多协议 MUD，但不适合本项目既定技术路线。分析层对应的结论是：借鉴其“边界清晰”和“生命周期清楚”这两点，放弃 Portal / Server 的物理拆分，转向单逻辑运行时下的 ASGI 分层。现代性与适配性的总判断见 `docs/20_evennia_modernity_assessment.md`。
 

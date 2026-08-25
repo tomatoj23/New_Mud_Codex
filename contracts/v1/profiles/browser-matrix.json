@@ -6,8 +6,9 @@
   "requirement_ids": ["CLIENT-001", "MILESTONE-001"],
   "source_documents": [
     "docs/new_engine/15_FRONTEND_H5_CONTRACT.md",
-    "requirements_v5.md"
+    "requirements_v6.md"
   ],
+  "historical_source_documents": ["requirements_v5.md"],
   "approval": {
     "status": "approved",
     "basis": "The project owner approved the first-release target matrix. Target versions are frozen from official vendor data; tested_versions remains execution evidence and is intentionally empty until H5 browser E2E runs.",

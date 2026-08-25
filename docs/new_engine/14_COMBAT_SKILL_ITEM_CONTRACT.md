@@ -1,6 +1,6 @@
 # 14 战斗、武学与物品首发契约
 
-> 状态：首发实施契约。本文承接 `requirements_v5.md` 第十章与第十一章，冻结首发纵切中的战斗、`jifa / prepare`、背包、装备与物品使用边界。任何公式与行为基线都必须引用受控的 XKX100 兼容包络和黄金测试，不能凭近似实现补齐。
+> 状态：M1 内部实施契约。本文承接 `requirements_v6.md` 第十章与第十一章，冻结内部纵切中的战斗、`jifa / prepare`、背包、装备与物品使用边界。任何公式与行为基线都必须引用受控的 XKX100 兼容包络和黄金测试，不能凭近似实现补齐。
 
 ## 1. 首发目标
 
@@ -259,6 +259,8 @@ loadout schema、数量与槽位约束以 `12_REGISTRY_BLUEPRINT_CONTRACT.md` 7.
 
 首发支持拾取、丢弃、放入、给予、装备、卸下、食用、饮用和基础使用。是否消耗及数量由 pinned Item 的 exact action/rule 结果决定，持久化必须遵守上述 active/retired 落点。
 
+Public V1 的 NPC death/drop 在结算事务中创建 30 秒 `LootClaim`；claim 存续时只有声明的领取者可拾取，到期后才公开。拾取锁定 claim 与 Item，竞争者只能有一个事务提交。未被拾取的 NPC loot 在约 15 分钟（策略值 900 秒）后进入 `ItemRetirement`。玩家普通丢弃 Item 使用 60 分钟（3600 秒）退休期限，并在到期前向拥有者发出告警；背包中、已装备或 pinned policy 标记受保护的 Item 不进入自动退休。任何退休都保留 Item identity、source 与审计关系，不硬删除，也不触发死亡 Entity 或 SpawnMaterialization 复活。
+
 样板 `cloth.c` 实例初始由 NPC 穿戴，必须在战斗死亡掉落结算后才能拾取。耐久度、绑定、品质和稀有度不属于首发字段。
 
 背包数量变化和装备切换必须使用数据库事务与行锁。结构性校验失败时返回稳定错误码，不允许先广播成功再回滚。
@@ -294,7 +296,13 @@ loadout schema、数量与槽位约束以 `12_REGISTRY_BLUEPRINT_CONTRACT.md` 7.
 
 M1-A 和 M1 的必做战斗链出现 `manual_review / blocked / unverified` 时，检查点和里程碑都不得完成。
 
-## 9. 首发验收
+## 9. V6 增量、Public V1 战斗边界与首发验收
+
+M1 的确定性 Actor 与 Public Character 必须分离。Public Character 通过 gameplay 学习技能并成长；GoldenSkillChain 只运行冻结初始态的测试 Actor。首条候选 golden chain 为 `bahuang-gong` 的 `exert powerup` 与 `baihua-cuoquan` 的 `perform cuo`，精确参数和期望差异必须来自冻结来源检查；`benlei-shou` 双准备另列后续用例。
+
+Public V1 只开放互相确认、非致命 `Sparring`；Character-targeted 致命或 involuntary `kill/hit` 返回拒绝。玩家败北按 `SafeDefeat` 处理，保留 Player Item 和不可逆进度；NPC death/drop 仍是权威持久结果。NPC loot 领取、公开化和 `ItemRetirement` 遵循 `LootClaim` 与 V6 需求约束。
+
+PublicV1Gate 的战斗 / 内容证据必须固定到同一个 active `ContentReleaseBatch` 与 ReleaseManifest，并证明至少一条玩家可学习的武学路径、10 个以上具功能或敌对行为的 NPC、20 个以上 Item 定义，以及一条可重复执行的“探索 → 战斗 → 战利品 / 资源 → 成长”PvE 循环。约 30-60 个可连通 Room 由 `06` / `12` 的内容清单负责，首次游玩约 2-4 小时由 `16` 的封闭试运行负责；本合同不得以 Blueprint 数量替代行为证据。
 
 - 普通攻击、`busy` 和战斗结束语义通过黄金测试。
 - 至少一门武学完成学习、`jifa`、`prepare` 和 `perform / exert` 链路。
@@ -303,4 +311,7 @@ M1-A 和 M1 的必做战斗链出现 `manual_review / blocked / unverified` 时�
 - 断线后可通过 snapshot 安全恢复当前战斗摘要。
 - 进程重启不会恢复半完成攻击，也不会丢失已提交结算。
 - 背包与装备并发操作不会产生负数、重复物品或双重装备。
+- LootClaim 在 30 秒内限制领取者、到期后公开，原子竞争只有一个拾取赢家；未拾取 NPC loot 约 900 秒退休，玩家普通丢弃 3600 秒前告警并退休，背包 / 装备 / 受保护 Item 永不被该清理器自动退休。
+- Character 间 `combat.fight` 只有双方确认后才进入非致命 Sparring；involuntary / lethal 动作、consent 竞态和 SafeDefeat 按 `11` 的稳定结果 / 错误语义通过协议与事务测试。
+- Public V1 的武学路径、功能 / 敌对 NPC、Item 与重复 PvE 循环均绑定 exact revisions、compatibility envelope 和 ReleaseManifest 证据。
 - 所有不支持的 XKX100 行为都有带来源位置的未适配记录。

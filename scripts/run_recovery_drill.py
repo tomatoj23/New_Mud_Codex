@@ -468,8 +468,9 @@ def run_drill(args: argparse.Namespace) -> dict[str, Any]:
                 "requirement_ids": ["MILESTONE-001", "NFR-002"],
                 "source_documents": [
                     "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md",
-                    "requirements_v5.md",
+                    "requirements_v6.md",
                 ],
+                "historical_source_documents": ["requirements_v5.md"],
                 "evidence_level": "m0_infrastructure",
                 "release_gate_eligible": False,
                 "backup": {

@@ -6,7 +6,7 @@
 
 ## 1. 问题边界
 
-根据 `requirements_v5.md`，MUDLib 接口问题至少包含以下约束：
+根据 `requirements_v6.md`，MUDLib 接口问题至少包含以下约束：
 
 - 一个服务器实例只加载一个 MUDLib
 - 启动时绑定，不支持运行时热切换

@@ -1,8 +1,8 @@
 # Ubiquitous Language
 
-> 状态：现行术语表，依据 `requirements_v5.md`、`docs/new_engine/*` 与已审定分析文档重建。
+> 状态：现行工程术语表，依据 `requirements_v6.md`、根目录 `CONTEXT.md`、`docs/new_engine/*` 与已审定分析文档重建；`requirements_v5.md` 仅为历史基线。
 >
-> 若本文件与 `requirements_v5.md` 第八章发生冲突，以 `requirements_v5.md` 为准；本文件负责补足跨文档统一用词与边界说明。
+> 若本文件与 `requirements_v6.md` 或 `CONTEXT.md` 发生冲突，以 V6 与领域词汇表为准；本文件负责补足跨文档统一用词与边界说明。
 
 ## 身份与在线状态
 
@@ -17,6 +17,11 @@
 | **AuthSession** | 一个已认证的账号会话；只有 active 会话可轮换其 token family，并持有 OOC 能力。 | login session, account session |
 | **Presence** | 一个 AuthSession 当前控制某个 Character 的在场上下文。 | puppet state, active character session |
 | **PresenceSnapshot** | 活跃期间保存最小检查点，并在断线或崩溃后表达有界恢复租约的短期持久记录。 | persisted presence, session archive |
+| **PresenceRecovery** | 同一 AuthSession 丢失内存 ticket 后恢复自身 active/grace Presence 的操作边界。 | cross-session resume, implicit takeover |
+| **RecoveryCode** | 注册时一次性展示、服务端只保存哈希、用于恢复账号控制权的玩家持有证明。 | backup password, refresh token |
+| **CharacterCreationProfile** | 版本化的 Character 创建输入与固定初始状态定义。 | starter preset, random character template |
+| **CharacterDisplayName** | 在单实例内按 NFKC 唯一、供玩家识别 Character 的展示名称。 | username, account name |
+| **RetiredCharacter** | 账号关闭后不能再控制、但稳定身份与历史关系仍有意义的 Character。 | deleted character, permadeath |
 
 ## 世界与内容
 
@@ -77,6 +82,15 @@
 | **StartupPlan** | 由 MUDLib 声明的启动期 world process / recurring job 计划。 | boot script list, startup jobs |
 | **SourceSnapshot** | 由 `source_snapshot_id` 标识、包含逐文件与聚合哈希的不可变 Source LPC MUDLib 输入基线。 | snapshot_id, local source path |
 | **CompatibilityEnvelope** | 绑定 source snapshot、双 manifest、bundle、golden case 与逐项验证状态的不可变 XKX100 对齐范围。 | full compatibility, tested sample |
+| **VillageTopologyEnvelope** | 固定 `d/village` 起始 Room、Exit、边界与静态身份的来源范围。 | full village compatibility, import |
+| **VillageInteractionEnvelope** | 逐项列出有来源证据且行为已验证的 Village 交互能力范围。 | supported commands, partial implementation |
+| **UnavailableInteraction** | 已知但不在当前交互包络内、必须显式返回不可用的行为结果。 | unknown command, silent stub |
+| **PublicV1Gate** | 决定官方实例是否可接受公众玩家的独立发布门禁。 | M1-B, public beta |
+| **ReleaseManifest** | 将代码、需求、合同、迁移、内容批次、来源、包络与测试证据绑定为一个发布身份的记录。 | deployment note, build label |
+| **Sparring** | 互相确认、非致命的 Character 对战。 | lethal PvP, player kill |
+| **SafeDefeat** | 不损失玩家 Item 或不可逆进度、返回安全可玩的玩家失败结果。 | permadeath, resurrection |
+| **LootClaim** | 掉落物在公开前由单个玩家原子竞争取得的短期领取权。 | permanent ownership, instanced loot |
+| **ItemRetirement** | Item 结束 active 生命周期但保留身份和审计历史的状态。 | hard deletion, despawn |
 | **CapacityProfile** | 版本化的首发参考环境、数据集、负载、延迟、稳定运行与恢复预算。 | performance target, load script |
 
 ## 关系与当前约束
@@ -91,6 +105,7 @@
 - 首发后允许放宽角色数量，但必须保留 **CharacterOwnership**，并通过显式迁移调整上限。
 - **AuthSession** 只由 REST 登录创建并持久化；refresh 仅为仍处于 `active` 的既有 AuthSession 轮换 credential，不创建、恢复或复活会话。新 WebSocket 只创建 **ConnectionSession**，再用 access token 通过 `session.authenticate` 绑定既有 **AuthSession**。
 - 一个 **AuthSession** 同时最多持有一个处于 `active` 或 `grace_disconnected` 的 **Presence** 租约。
+- `presence.recover` 只能恢复同一 **AuthSession** 自己的 active/grace 租约；跨会话仍需显式 takeover。
 - 一个 **GameAccount** 跨全部 AuthSession、ConnectionSession 与设备，同时最多有一个处于 `active` 或 `grace_disconnected` 的 **Presence** 租约。
 - 普通第二控制请求默认拒绝；不得把 enter 或 resume 隐式升级为 takeover。
 - 显式 `presence.takeover` 必须确认并通过策略授权，再以同一事务终止旧 **Presence** 租约、撤销旧 ticket、建立新租约与 ticket，并保存终结结果和通知 outbox。
@@ -114,7 +129,7 @@
 - 每个可复现转换或黄金验收输入都绑定一个不可变 **SourceSnapshot**，不得用本机路径或裸 `snapshot_id` 代替 `source_snapshot_id`。
 - 只有 **CompatibilityEnvelope** 内状态为 `verified` 的能力可声明与 XKX100 对齐；包络外行为必须标为未验证或未纳入。
 - 内容许可、权利证明与公开发布法律判断不属于工程里程碑；工程只冻结可复现的 **SourceSnapshot**、逐文件哈希、manifest、bundle 与制品依赖。
-- M1 发布候选必须达到已批准 **CapacityProfile**；部署配置不能自行降低 V5 的最低目标。
+- M1 发布候选必须达到已批准 **CapacityProfile**；部署配置不能自行降低 V6 的最低目标。Public V1 还必须通过独立 **PublicV1Gate**。
 - **BehaviorProfile** 描述运行时行为绑定；**ConversionProfile** 描述转换器解析规则；两者不是同一类 profile。
 
 ## 示例对话

@@ -146,7 +146,7 @@ PostgreSQL 表 `RequestTerminalRecord` 至少包含：
 
 ### 4.1 连接绑定型终结的交付投影
 
-`presence.enter`、`session.resume` 与 `presence.takeover` 的逻辑终结必须保存来源 `ConnectionSession`、Presence id、generation 和 ticket credential 引用。交付时动态生成 `delivery.status`，不得直接把历史 payload 当成当前连接状态：
+`presence.enter`、`session.resume`、`presence.recover` 与 `presence.takeover` 的逻辑终结必须保存来源 `ConnectionSession`、Presence id、generation 和 ticket credential 引用。交付时动态生成 `delivery.status`，不得直接把历史 payload 当成当前连接状态：
 
 - 当前连接仍绑定记录中的同一 Presence generation 时，返回 `delivery.status=bound`、`resume_required=false`，可交付新 ticket 与完整 snapshot。
 - 当前连接不是来源连接，或来源连接已不再绑定该 Presence generation 时，不执行绑定、不广播事件、不隐式接管。若记录引用的 ticket 仍可安全使用，只返回 `delivery.status=resume_required`、`resume_required=true`、ticket 与 Presence 标识，省略历史 snapshot；客户端必须以新 `request_id` 调用 `session.resume`。
@@ -176,6 +176,7 @@ PostgreSQL 表 `RequestTerminalRecord` 至少包含：
 | `session.ping` | 已连接 | 服务端时间与可选 nonce |
 | `session.authenticate` | 未认证连接 | AuthSession 摘要 |
 | `session.resume` | 已认证 | 交付状态、新 ticket 与完整 snapshot |
+| `presence.recover` | 已认证、同 AuthSession 自有 active/grace Presence | 新 generation、旋转 ticket 与完整 snapshot |
 | `presence.enter` | 已认证、无 Presence | 交付状态、Presence、新 ticket 与完整 snapshot |
 | `presence.leave` | 活跃 Presence | 已关闭 Presence id |
 | `presence.takeover` | 已认证、显式确认 | 交付状态、新 Presence、新 ticket 与完整 snapshot |
@@ -192,6 +193,7 @@ refresh token 不进入 WebSocket；它只可作为 REST refresh 的轮换凭据
 - `session.ping`：`{}` 或 `{"nonce": "<opaque string>"}`。
 - `session.authenticate`：`{"access_token": "<access token>"}`；不得携带 refresh token。
 - `presence.enter`：`{"character_id": "<opaque id>"}`。
+- `presence.recover`：`{}`；只允许当前 AuthSession 恢复自己仍 active 或 grace 的 Presence，不接受跨会话 locator。
 - `presence.leave`：`{}`。
 - `presence.takeover`：`{"character_id": "<opaque id>", "confirm": true}`。
 - `state.sync`：`{"include_actions": true}`；`include_actions` 可省略，默认仍返回完整 actions。
@@ -213,6 +215,8 @@ refresh token 不进入 WebSocket；它只可作为 REST refresh 的轮换凭据
 首次成功消费旧 ticket、旋转新 ticket，并在激活完成后以 `delivery.status=bound` 直接返回新 ticket 和完整 snapshot；不能只触发事件。终结重放按 4.1 投影交付状态。`presence.takeover` 要求 `character_id` 与 `confirm=true`，普通 `presence.enter` 不得自动升级成接管。
 
 `state.sync` 只接受 active Presence，并必须一次返回 `scene / character / combat / actions`；无活跃战斗时 `combat=null`。
+
+`presence.recover` 不依赖内存 `resume_ticket`，但必须锁定当前 AuthSession、GameAccount、Character 与其 active/grace `PresenceSnapshot`。成功时递增 generation、使旧 ticket 失效、签发新 ticket，并以 `delivery.status=bound` 返回完整 snapshot；找不到自有可恢复租约时返回统一的 `PRESENCE_RECOVERY_UNAVAILABLE`，不得泄露其他 AuthSession 的占用细节。
 只有满足 4.2 连接/generation/barrier 条件的成功重放才返回完整可恢复结果；其他重放返回 `REQUEST_CONTEXT_CHANGED`，不得返回旧 snapshot。
 
 `state.sync` 的 `result` 最小结构：
@@ -251,6 +255,12 @@ active Presence 发起任何 `action.invoke` 时，无论文本还是结构化�
 不同 action key 的候选依次按 `match_priority`（小优先）、`provider.priority`（小优先）、最长规范化别名排序。完成全部排序后仍有多个不同 action key 并列，才返回 `ACTION_AMBIGUOUS`；随后解析参数并执行权限、状态和限流校验。
 
 `ui.actions.resolve` 返回的 `ResolvedActionSet` 至少包含 `action_version` 和动作数组。每项包含 `key`、`label`、`args_schema`、`enabled` 与 `disabled_reason`。动作 key 是全局唯一的 `ActionDefinition.key`；客户端不能用旧 action set 绕过服务端校验。
+
+Public V1 的 Character-targeted combat 只允许双方明确确认的非致命 `Sparring`。`combat.fight` 的第一次有效同意只提交等待对方确认的状态，不造成伤害或启动敌对战斗；同一邀请的对方确认提交后才开始 sparring。对应 `action.invoke.result` 必须以稳定机器字段区分 `combat_mode=sparring` 和 `consent_state=pending / confirmed`，客户端不得从叙事文本猜测同意状态。
+
+任何会对 Character 形成 involuntary 或致命结果的动作，包括已确认 Sparring 之外的 `combat.kill / combat.hit / combat.touxi / combat.ansuan`，统一以 `ACTION_FORBIDDEN` 失败。邀请已撤回、过期、目标或发起者已进入冲突战斗状态、重复确认不能应用到当前状态等 consent / state 竞态统一以 `COMBAT_STATE_CONFLICT` 失败；文本命令和结构化 Action 必须得到相同 code。NPC 目标仍按 `14_COMBAT_SKILL_ITEM_CONTRACT.md` 的权威战斗规则处理。
+
+Character 在 sparring 中败北时，战斗终结结果必须以稳定机器字段返回 `combat_outcome=safe_defeat`。`SafeDefeat` 结束对应战斗并投影新的完整状态，但不得产生 Character death、玩家 Item 丢失或不可逆成长回退；它不能套用于 NPC death/drop。
 
 ## 7. 事件目录
 
@@ -363,7 +373,7 @@ Item 新增、移除、位置或数量变化，以及任一 `EquipmentBinding` �
 
 它覆盖参战方、目标、资源、短期效果和动作版本。进程重启后不得恢复半完成攻击；按 `14_COMBAT_SKILL_ITEM_CONTRACT.md` 安全结束运行时战斗。
 
-`presence.enter`、`presence.takeover` 和 `session.resume` 首次绑定成功的结果至少包含 `delivery.status=bound`、`resume_required=false`、`presence_id`、新 `resume_ticket`
+`presence.enter`、`presence.takeover`、`session.resume` 和 `presence.recover` 首次绑定成功的结果至少包含 `delivery.status=bound`、`resume_required=false`、`presence_id`、新 `resume_ticket`
 以及含 `scene / character / combat / actions` 的 snapshot object。跨连接或绑定不匹配的重放按 4.1 省略 snapshot。
 `state.sync` 不旋转 ticket，因此省略 ticket，其他完整性规则相同。
 
@@ -375,12 +385,21 @@ Item 新增、移除、位置或数量变化，以及任一 `EquipmentBinding` �
 `AUTH_REQUIRED`、`ALREADY_AUTHENTICATED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SESSION_REVOKED`、`SESSION_RESUME_FAILED`、
 `RESUME_TICKET_INVALID`、`RESUME_TICKET_EXPIRED`、`PRESENCE_REQUIRED`、`PRESENCE_NOT_ACTIVE`、`PRESENCE_ACTIVATION_FAILED`、
 `CHARACTER_NOT_FOUND`、`CHARACTER_FORBIDDEN`、`CHARACTER_OCCUPIED`、`TAKEOVER_CONFIRMATION_REQUIRED`。
+`PRESENCE_RECOVERY_UNAVAILABLE`、`RECOVERY_CODE_INVALID`、`RECOVERY_RATE_LIMITED`、`ACCOUNT_RECOVERY_UNAVAILABLE`、
+`ACCOUNT_REOPEN_WINDOW_EXPIRED`、`ACCOUNT_NOT_REOPENABLE`、`ACCOUNT_ALREADY_RETIRED`。
+
+角色创建：
+`CHARACTER_ALREADY_EXISTS`、`CHARACTER_CREATION_UNAVAILABLE`、`CHARACTER_DISPLAY_NAME_INVALID`、`CHARACTER_PROFILE_INVALID`。
 
 动作与领域：
 `ACTION_NOT_FOUND`、`ACTION_AMBIGUOUS`、`ACTION_ARGUMENT_INVALID`、`ACTION_FORBIDDEN`、`ACTION_SOURCE_FORBIDDEN`、
 `ROOM_EXIT_BLOCKED`、`CHAT_FORBIDDEN`、`CHAT_RATE_LIMITED`、`COMBAT_STATE_CONFLICT`、
 `INVENTORY_VERSION_CONFLICT`、`ITEM_NOT_AVAILABLE`、`ENTITY_LOCATION_INVALID`、`ITEM_CONTAINER_NOT_ALLOWED`、
 `ITEM_CONTAINER_FULL`、`ITEM_CONTAINER_CYCLE`。
+
+社区治理：
+`COMMUNITY_ACTION_FORBIDDEN`、`PLAYER_BLOCK_INVALID`、`CHANNEL_MUTE_INVALID`、`MODERATION_REPORT_INVALID`、
+`MODERATION_CASE_NOT_FOUND`、`MODERATION_APPEAL_ALREADY_SUBMITTED`、`MODERATION_APPEAL_FORBIDDEN`。
 
 新增错误码必须先进入协议 schema 与生成类型；不能临时用异常类名、自由文本或 HTTP 状态码。
 
@@ -392,6 +411,7 @@ Item 新增、移除、位置或数量变化，以及任一 `EquipmentBinding` �
 - 契约测试覆盖 request id 正反例、连续 `seq`、终结唯一性、事件无 `request_id`、请求重放、ID 冲突、ticket 安全重放、禁止客户端 `system`、断序同步和完整 snapshot。
 - `character.snapshot` 契约测试必须覆盖六个完整集合、空数组、pinned revision、binding 引用、同一一致性视图与三个层级的版本语义。
 - `action.invoke` 契约测试必须覆盖 active Presence 缺失/非法版本，以及 `requires_inventory_version` 为 true/false 时对匹配和陈旧版本的不同处理。
+- `action.invoke` 契约测试必须覆盖 Sparring 双方确认前不启动战斗、确认后只进入非致命模式、Character-targeted involuntary / lethal 动作返回 `ACTION_FORBIDDEN`、consent / state 竞态返回 `COMBAT_STATE_CONFLICT`，以及 SafeDefeat 的机器结果和零 Character death / Item loss / 不可逆成长回退。
 - 状态机测试覆盖 `session.authenticate` 同连接本地重放与跨连接重新绑定、`state.sync` 拒绝非 active Presence，以及绑定型终结跨连接只返回 `resume_required`。
 - Presence-required 请求在 generation 改变后重放必须返回 `REQUEST_CONTEXT_CHANGED`；不得返回旧动作结果、action set 或 snapshot。
 - `state.sync` 在来源连接改变或 barrier seq 已推进后重放必须省略旧 snapshot，并要求新 request id；同连接未推进 barrier 的受控重放仍建立新 seq 屏障。

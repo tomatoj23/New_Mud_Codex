@@ -2,7 +2,7 @@
 
 > 状态：分析层文档。本文用于记录 Evennia 6.0 源码事实、优缺点与初步判断，不是 New_Mud 当前权威实施规范。若与 `docs/new_engine/` 冲突，以 `docs/new_engine/` 为准。详见 `docs/19_documentation_governance.md`。
 
-> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 为准；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准。
+> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v6.md` 第八章、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md` 为准；`requirements_v5.md` 仅作历史对照。
 
 ## 1. 分析范围
 
@@ -89,7 +89,7 @@ Evennia 把命令系统拆成两层：
 - `CmdSet` 合并过强，复杂度和调试成本都高。
 - 命令来源过多时，可解释性会迅速下降。
 - `yield` + Twisted 风格渐进命令不适合项目既定的 `asyncio` 主线。
-- 对 WebSocket / 移动端来说，很多输入本来就是结构化事件，不必先压回文本命令再解析。
+- 文本优先模型对传统 Telnet 仍然成熟有效；但对 WebSocket / PC 与移动 H5 双端，很多输入本来就是结构化事件，不必先压回文本命令再解析。
 
 ## 4. 对 New_Mud 的设计去向
 
@@ -112,10 +112,10 @@ Evennia 把命令系统拆成两层：
 
 - `docs/new_engine/01_BORROW_REWRITE_MATRIX.md`
 - `docs/new_engine/05_COMMAND_INTERACTION.md`
-- `requirements_v5.md`（第八章术语定义）与 `UBIQUITOUS_LANGUAGE.md`
+- `requirements_v6.md`（第八章术语定义）、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md`
 
 ## 5. 结论
 
-Evennia 命令系统最值得借鉴的是“命令上下文化”和“完整输入处理流水线”。分析层对应的结论是：不照搬过强的 `CmdSet` 魔法和纯文本优先假设，而把输入、授权、执行和结果统一结构化。
+Evennia 命令系统最值得借鉴的是“命令上下文化”和“完整输入处理流水线”。这不是对文本命令的普遍否定，而是对本项目协议边界的选择：不照搬过强的 `CmdSet` 魔法，把文本解析作为适配器，并将输入、授权、执行和结果统一结构化。
 
 

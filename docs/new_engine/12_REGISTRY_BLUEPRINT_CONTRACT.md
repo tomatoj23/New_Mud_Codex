@@ -1193,3 +1193,17 @@ durable Effect 始终读取自己的 `condition_definition_revision_id`。被引
 - seed bootstrap、draft import、diff 与显式发布服务
 - durable Effect 精确 revision 恢复、`EffectOperationRecord` 与幂等测试
 - registry / blueprint 校验错误码
+
+## V6 增量：拓扑 / 交互包络与生命周期策略
+
+Public V1 的内容发布批次必须能声明并校验 `VillageTopologyEnvelope` 与 `VillageInteractionEnvelope`。Topology envelope 只绑定 Room / Exit / boundary / static identity；interaction envelope 为 capability-by-capability verified 清单。源码已知但未纳入或未验证的行为必须编译成显式 `UnavailableInteraction`，不能以缺失 Action、空 handler 或 UI 隐藏代替。
+
+`spawn_policy` 的 Public V1 规则固定为：静态 Entity `initial_once` 只物化一次；允许刷新的 hostile NPC 使用有界持久 delay 创建新 Entity；死亡 Entity 不 resurrect。Item cleanup 只产生 `ItemRetirement`，保留稳定 ID 和审计关系。
+
+Public V1 的编译策略值固定包含 `loot_claim_ttl_s=30`、`npc_loot_retirement_ttl_s=900` 与 `player_drop_retirement_ttl_s=3600`。NPC death/drop 创建 30 秒 `LootClaim`，到期才公开；NPC loot 约 15 分钟后退休。玩家普通丢弃 Item 在 60 分钟到期前必须有可投递告警；背包中、已装备或 compiled policy 标记受保护的 Item 不得自动退休。修改这些值必须产生新 policy / Blueprint revision 和批次证据，运行时不得用隐式默认覆盖 pinned revision。
+
+每个成功 `ContentReleaseBatch` 必须产出不可变的 `ReleaseManifest` content fragment，至少包含 `release_head_id / batch_id / release_version / release_hash`、不可变 `SourceSnapshot` identity，以及本批次声明的 Village / combat compatibility envelope ids 与 hashes。部署只能把当时的 active batch fragment 纳入完整 ReleaseManifest；content fragment 不得声称覆盖代码 commit、需求 / 合同版本、migration head 或测试报告，完整清单权威以 `16_OPERATIONS_TESTING_CONTRACT.md` 为准。
+
+部署回滚必须由 `16` 协调 code、migrations 与 content batch。内容域内的回滚继续严格执行 10.4：旧 batch 只作为候选来源，最终始终发布一个新 batch；只有 exact compiler / dependency / registry 上下文完全一致时才复用旧 published revision，否则创建 `rollback_recompile` revision。历史 batch、revision、SourceSnapshot、envelope 和已经签署的 ReleaseManifest 均不可原地改写。
+
+Public V1 候选批次还必须输出机器可读的内容规模清单，至少可核对：约 30-60 个可连通 Room、10 个以上具功能或敌对行为的 NPC、20 个以上 Item 定义、一条可学习武学路径及一条可重复 PvE 循环所依赖的 exact revisions。编译器必须阻止缺失引用、越出 topology envelope 或把 `UnavailableInteraction` 计作可玩能力；首次游玩约 2-4 小时和循环可重复性属于 `16` 的 E2E / 试运行证据，不得由静态数量自动判定。

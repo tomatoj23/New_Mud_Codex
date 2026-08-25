@@ -2,7 +2,9 @@
 
 New_Mud is a Django/ASGI rewrite of the XKX100 MUD runtime. The current codebase
 implements the M0 engineering skeleton and executable contract baseline defined
-by `requirements_v5.md`.
+by `requirements_v6.md` (`requirements_v5.md` is retained as the historical
+baseline). Public operation additionally requires the independent
+`PublicV1Gate` / `RELEASE-001`.
 
 ## Local setup
 
@@ -48,3 +50,13 @@ never records the machine-local absolute path in a contract artifact.
 
 The readiness endpoint requires a working PostgreSQL connection. The liveness
 endpoint and WebSocket probe only prove that the ASGI process is responsive.
+
+## Documentation
+
+- [Product requirements V6](requirements_v6.md)
+- [Historical requirements V5](requirements_v5.md)
+- [Documentation governance](docs/19_documentation_governance.md)
+- [Domain glossary](CONTEXT.md)
+- [Architecture decisions](docs/adr/)
+- [Current implementation status](docs/new_engine/18_IMPLEMENTATION_STATUS.md)
+- [Evennia 6.0 modernity and fit assessment](docs/20_evennia_modernity_assessment.md)

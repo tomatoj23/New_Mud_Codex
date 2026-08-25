@@ -283,7 +283,7 @@ Emitter 不得直接创建 `StaticEntityBinding`、`SpawnMaterialization`、Enti
 
 ```yaml
 mudlib_key: xkx100
-root: D:/My_Projects/xkx100-20201118
+source_locator: D:/My_Projects/xkx100-20201118  # 仅用于本机定位候选输入，不是来源身份
 room_roots: ["/d/"]
 skill_roots: ["/kungfu/", "/daemon/skill/"]
 npc_bases: ["/inherit/npc", "/std/npc"]
@@ -291,6 +291,8 @@ include_roots: ["/include/"]
 path_aliases:
   "/std/room": "room_base"
 ```
+
+`source_locator` 只是操作员提供的本机路径；转换开始前必须加载并校验不可变 `source_snapshot.json` 的 `source_snapshot_id`、逐文件哈希和聚合哈希。路径不得写入 manifest、`ReleaseManifest` 或其他验收身份，也不能替代来源快照。
 
 若后续出现额外数据源，只补充最小来源识别配置，不在当前首发文档里提前冻结一整套多数据源参数表。
 
@@ -409,4 +411,10 @@ converted/
 MUDLib 是 XKX100 内容 seed、受控规则与适配代码的标准接口，转换器是 draft 导入产物的生产工具。新选择消费 PostgreSQL active batch，pinned 实例消费 exact historical revision；两者都使用声明式 registry。
 
 任何运行时路径都不能把包内文件重新提升为事实真源。
+
+## V6 增量：不可变来源与 Village 包络
+
+当前源基线为 `xkx100-20201118-sha256-1b101b7a99c60803`，属于不可变 `SourceSnapshot`。未来源字节、纳入范围或分类变化必须创建新的 snapshot、manifest 和 compatibility envelope；转换器不得原地覆盖历史制品，也不得从局部扫描推断全局 XKX100 兼容。
+
+`d/village` 的 Public V1 转换以完整拓扑为 `VillageTopologyEnvelope` 起点，以行为证据创建 `VillageInteractionEnvelope`。未验证的 source interaction 必须生成带来源位置、原因和影响级别的 `UnavailableInteraction`；不得静默跳过、猜测或近似实现。GoldenSkillChain 的日常 Character 状态与确定性测试 Actor 分离。
 

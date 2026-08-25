@@ -1,22 +1,22 @@
 # New_Mud 新引擎构建文档集（设计层入口）
 
-> 状态：设计层入口文档。凡涉及 New_Mud 当前架构、模块边界、接口约束、实施路线与开发顺序，以 `docs/new_engine/` 为准。`docs/00-18` 仅作为 Evennia 源码分析依据、问题归档与回查材料。详见 `docs/19_documentation_governance.md`。
+> 状态：设计层入口文档。凡涉及 New_Mud 当前架构、模块边界、接口约束、实施路线与开发顺序，以 `docs/new_engine/` 为准。`docs/00-18` 与 `docs/20_evennia_modernity_assessment.md` 仅作为 Evennia 源码分析依据、问题归档与回查材料。详见 `docs/19_documentation_governance.md`。
 
-> 术语约束：本目录当前统一以 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 为准；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准；若术语仅用于说明 Evennia 来源，会在上下文中明确标注。
+> 术语约束：本目录当前统一以 `requirements_v6.md` 与根目录 `CONTEXT.md` 为准；`requirements_v5.md` 已冻结为历史基线。若术语仅用于说明 Evennia 来源，会在上下文中明确标注。
 
 ## 1. 文档目标
 
-这套文档不是对 Evennia 6.0 的功能介绍，而是基于本仓库的 `requirements_v5.md` 与本地 `evennia-main` 源码审计结果，产出一套可直接指导 New_Mud 自研引擎开发的设计规范。
+这套文档不是对 Evennia 6.0 的功能介绍，而是基于本仓库的 `requirements_v6.md`、V5 历史基线与本地 `evennia-main` 源码审计结果，产出一套可直接指导 New_Mud 自研引擎开发的设计规范。
 
 核心目标只有三个：
 
-1. 明确哪些 Evennia 设计值得直接借鉴，甚至可以按接口与流程“照抄”。
+1. 明确哪些 Evennia 设计可以复用语义、处理顺序和不变量，而不复制源码或运行时形状。
 2. 明确哪些 Evennia 实现不适合本项目，必须彻底重写。
 3. 把“新引擎应该如何落地”写成按模块、按开放式 Engine Stage 可执行的建设文档。
 
 ## 2. 需求基线
 
-本文档集默认以下约束已经成立，来源均为 `requirements_v5.md`：
+本文档集默认以下约束已经成立，来源均为 `requirements_v6.md`（V5 仅作历史差异参考）：
 
 - 引擎必须自研，不依赖 Evennia 运行。
 - 技术路线以 `Django + DRF + Channels + Daphne + PostgreSQL` 为核心必选栈，并以 ASGI/`asyncio` 承接实时层。
@@ -31,10 +31,12 @@
 - M0 必须批准 capacity profile、精确浏览器测试矩阵与恢复预算。
 - 必须保留后台内容制作、运营管理、帮助系统、聊天系统、经济系统与调度能力。
 - 产品需求使用 `M0-M6`；实施路线使用开放式 `Engine Stage Ex`，两者不得按编号等同。
+- M1-A / M1-B 是内部封闭步骤；`PublicV1Gate`（`RELEASE-001`）独立决定是否允许公开运营。
+- Public V1 仅验证一个 owner-operated 官方实例，使用 `VillageTopologyEnvelope` 与 `VillageInteractionEnvelope`。
 
 ## 2.1 阅读顺序
 
-- 先看 `requirements_v5.md` 第八章，再看 `UBIQUITOUS_LANGUAGE.md`，明确当前术语边界与跨文档统一用词。
+- 先看 `requirements_v6.md` 与根目录 `CONTEXT.md`，再看 `UBIQUITOUS_LANGUAGE.md`，明确当前术语边界与跨文档统一用词。
 - 再看本目录中的架构、运行时、领域模型与路线图。
 - 真正准备编码前，按顺序精读 `11_PROTOCOL_CATALOG.md` 到 `16_OPERATIONS_TESTING_CONTRACT.md` 六份实施合同。
 - 协议与会话先读 11、13；Registry 与发布读 12；玩法、H5、运维验收依次读 14、15、16。
@@ -106,7 +108,7 @@ Evennia 6.0 最不适合直接沿用的部分是：
 ## 5. 文档导航
 
 1. `01_BORROW_REWRITE_MATRIX.md`
-   - Evennia 各模块“可直接借鉴 / 保留思想重写 / 放弃”的决策矩阵。
+   - Evennia 各模块“复用语义 / 保留思想重写 / 放弃”的决策矩阵。
 2. `02_ARCHITECTURE.md`
    - 新引擎总体分层、进程模型、模块边界与目录建议。
 3. `03_RUNTIME_SESSIONS.md`
@@ -138,9 +140,21 @@ Evennia 6.0 最不适合直接沿用的部分是：
 16. `16_OPERATIONS_TESTING_CONTRACT.md`
    - 可观测性、备份恢复、发布门禁、黄金测试与上线验收。
 17. `17_REQUIREMENTS_TRACEABILITY.md`
-   - 稳定需求 ID，以及 V5、实施合同、里程碑和验收证据的映射。
+   - 稳定需求 ID，以及 V6（必要时回链 V5 历史）、实施合同、里程碑和验收证据的映射。
 18. `18_IMPLEMENTATION_STATUS.md`
    - 当前实现、环境基线、验证证据、已知警告和阻塞项。
+19. `19_V6_CONTRACT_DIFFERENCES.md`
+   - V6 相对 V5 的合同同步差异和对应落点；不取代 11-16 的冻结语义。
+
+### 5.1 过程与交接文档
+
+- `NEXT_SESSION_HANDOFF.md`
+  - 新会话的最小阅读顺序、工作树边界和当前续作入口。
+- `PHASE2_CONTENT_STARTUP_WORKLOG.md`
+  - `Engine Stage E0 / Slice 2` 的实施过程快照；不作为需求或完成证明。
+
+20. `../20_evennia_modernity_assessment.md`
+   - Evennia 6.0 的现代性、历史包袱与项目适配边界；它是分析入口，不覆盖本目录的设计权威。
 
 ## 6. 与现有分析文档的关系
 
@@ -156,13 +170,13 @@ Evennia 6.0 最不适合直接沿用的部分是：
 
 后续真正开始写代码时，优先遵守以下约束：
 
-- 借鉴 Evennia 抽象，不引入 Evennia 运行依赖。
+- 借鉴 Evennia 的语义、处理顺序和经过验证的不变量，不引入 Evennia 运行依赖或运行时对象形状。
 - 优先显式 ORM 模型与服务边界，避免再造 `obj.db.xxx` 式魔法层。
 - 优先结构化事件与 WebSocket 消息，不把文本命令当唯一主入口。
 - 优先单逻辑运行时的 `ASGI/Channels` 方案，不回退到 Portal/Server 双进程。
 - 当前基线按单实例单写者实现；若未来为了部署形态拆分进程，再补显式协调机制。
 - 优先把 MUDLib 与转换器的落点想清楚，再写引擎核心表结构。
 - 涉及协议、registry、Blueprint 发布、会话、玩法、H5 或运维验收的实现，以 11-16 六份实施合同优先于概念说明文档。
-- 产品范围与验收结果以 V5 为准；实施字段和机制以对应冻结合同为准，具体冲突处理遵守 `docs/19_documentation_governance.md`。
+- 产品范围与验收结果以 V6 为准；实施字段和机制以对应冻结合同为准，具体冲突处理遵守 `docs/19_documentation_governance.md`。
 
 

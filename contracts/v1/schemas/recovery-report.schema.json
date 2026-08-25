@@ -37,10 +37,15 @@
       "uniqueItems": true,
       "items": {
         "enum": [
-          "requirements_v5.md",
+          "requirements_v6.md",
           "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md"
         ]
       }
+    },
+    "historical_source_documents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"const": "requirements_v5.md"}
     },
     "evidence_level": {"enum": ["m0_infrastructure", "release_candidate"]},
     "release_gate_eligible": {"type": "boolean"},

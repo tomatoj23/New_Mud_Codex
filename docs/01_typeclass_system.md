@@ -2,7 +2,7 @@
 
 > 状态：分析层文档。本文用于记录 Evennia 6.0 源码事实、优缺点与初步判断，不是 New_Mud 当前权威实施规范。若与 `docs/new_engine/` 冲突，以 `docs/new_engine/` 为准。详见 `docs/19_documentation_governance.md`。
 
-> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 为准；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准。
+> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v6.md` 第八章、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md` 为准；`requirements_v5.md` 仅作历史对照。
 
 ## 1. 分析范围
 
@@ -89,7 +89,7 @@ Evennia 因而更强调“对象可无限扩展”，而不是“字段显式建
 - `obj.db.xxx` 这类魔法接口会弱化类型边界。
 - Attribute 过度泛化后，核心业务字段难以约束，也不利于查询优化。
 - Tag / Alias / Permission 共用同一模型，语义边界偏模糊。
-- 对 pickle 和动态对象包装的依赖，不适合稳定 API、转换器和多端前端。
+- 动态改写 `__class__`、proxy model 与 pickle 对象包装，并非“版本落后”的单一证据，但不适合稳定 API、转换器和多端前端。
 
 ## 4. 对 New_Mud 的设计去向
 
@@ -116,6 +116,6 @@ Evennia 因而更强调“对象可无限扩展”，而不是“字段显式建
 
 ## 5. 结论
 
-Typeclass 系统是 Evennia 最值得借鉴的内核思想之一，但不值得按原样照搬。分析层能成立的结论是：保留“统一实体抽象 + 可扩展属性层”的思路，同时把实现改成“显式模型 + 显式服务 + 可查询扩展层”。
+Typeclass 系统是 Evennia 最值得借鉴的内核思想之一，但只应借鉴“稳定骨架与行为分离”的语义，不复制动态换类机制。分析层能成立的结论是：保留“统一实体抽象 + 可扩展属性层”的思路，同时把实现改成“显式模型 + 显式服务 + 可查询扩展层”。详见 `docs/20_evennia_modernity_assessment.md`。
 
 

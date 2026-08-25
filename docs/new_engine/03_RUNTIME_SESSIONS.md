@@ -87,7 +87,7 @@ access token 过期时，客户端先走 REST refresh 取得新 access token，�
 
 ## 4. Resume Ticket
 
-`presence.enter`、`presence.takeover` 与 `session.resume` 的成功终结结果必须直接交付新的 `resume_ticket` 和完整 snapshot。
+`presence.enter`、`presence.takeover` 与 `session.resume` 只有在当前连接首次以 `delivery.status=bound` 成功绑定时，才直接交付新的 `resume_ticket` 和完整 snapshot。跨连接终结重放可能返回 `resume_required` 并省略历史 snapshot；`superseded` 不交付 ticket 或 snapshot。具体投影以 `11_PROTOCOL_CATALOG.md` 第 4.1 节为准。
 
 明文 ticket 只交给客户端。ResumeTicketCredential 行只保存不可逆 hash 与必要元数据，终结记录只保存 credential 引用；日志、审计、追踪和异常上报不得记录明文。
 
@@ -197,3 +197,7 @@ token TTL、状态流转、恢复失败路径与审计字段由 `13_SESSION_AUTH
 ## 11. 最终原则
 
 连接不是账号，账号不是角色。AuthSession 是持久认证事实，ConnectionSession 与 Presence 是运行时对象，PresenceSnapshot 只提供有期限的恢复依据。
+
+## V6 增量：身份与 PresenceRecovery
+
+在每个游戏实例内，一个 `User` 永久映射一个 `GameAccount`；未来多 Character 只通过 `CharacterOwnership` 扩展，不复制 GameAccount 身份。页面刷新丢失内存 `resume_ticket` 时，同一 AuthSession 可调用 `presence.recover`，由服务端检索并恢复它自己的 active / grace Presence，递增 generation、旋转 ticket 并返回完整 snapshot。该请求不得跨 AuthSession 夺取控制权；找不到当前 AuthSession 自有租约时统一返回 `PRESENCE_RECOVERY_UNAVAILABLE`，不得泄露其他会话是否占用。其他 AuthSession 如需控制角色，必须走显式 `presence.takeover`；`CHARACTER_OCCUPIED` 仅用于普通 `presence.enter`。

@@ -9,6 +9,7 @@ This directory is the machine-readable companion to the frozen contracts in
 - `artifacts/` records the immutable XKX100 source and fixture identities.
 - `profiles/` records approved test targets; it does not claim test execution.
 - `reports/` records immutable, schema-validated evidence referenced by a profile.
+- Current `source_documents` point to V6 and the owning frozen contract. When historical comparison is needed, `historical_source_documents` points to V5 without making it a current validity source.
 
 The documents remain the semantic authority. `scripts/verify_m0.py` checks both
 directions: machine values must appear in the owning document, and every frozen

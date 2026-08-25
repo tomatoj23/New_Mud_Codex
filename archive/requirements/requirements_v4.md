@@ -1,6 +1,6 @@
 # New_Mud 项目需求文档 V4
 
-> 状态：历史需求版本，已废弃。仅用于追溯决策演进，不得作为当前实现、设计或验收依据。当前权威基线为 `requirements_v5.md`。
+> 状态：历史需求版本，已废弃。仅用于追溯决策演进，不得作为当前实现、设计或验收依据。当时的权威基线为 `requirements_v5.md`；当前权威基线为 `requirements_v6.md`。
 
 ## 一、文档定位
 
@@ -17,8 +17,8 @@
 - `requirements_v1.md` 保留为历史草案。
 - `requirements_v2.md` 保留为上一轮收敛版本。
 - 本版本曾是当时的主需求基线，现已被 `requirements_v5.md` 取代。
-- `docs/new_engine/` 曾承接本版本，当前必须以 `requirements_v5.md` 重新校验。
-- 本版本中的 `UBIQUITOUS_LANGUAGE.md` 引用属于当时阶段性约束，现已过时；当前术语权威以 `requirements_v5.md` 第八章为准。
+- `docs/new_engine/` 曾承接本版本；当时必须以 `requirements_v5.md` 重新校验，当前应以 `requirements_v6.md` 重新校验。
+- 本版本中的 `UBIQUITOUS_LANGUAGE.md` 引用属于当时阶段性约束，现已过时；当前术语权威以 `requirements_v6.md` 第八章和 `CONTEXT.md` 为准。
 
 ### 1.3 `evennia-main/` 的角色
 
@@ -1712,4 +1712,4 @@ Redis 只有在需要 Channels channel layer、缓存或限流时才引入，不
 - 与认证、战斗、发布边界、转换器验收标准相关的细化设计文档
 - 若需新的术语表，应基于 `requirements_v5.md` 重新建立；本版本中的相关说明仅保留作历史记录
 
-这些更新属于 V4 当时的下游工作。V4 的历史基线身份保留，但现行权威已切换为 `requirements_v5.md`。
+这些更新属于 V4 当时的下游工作。V4 的历史基线身份保留；当时现行权威已切换为 `requirements_v5.md`，当前现行权威为 `requirements_v6.md`。

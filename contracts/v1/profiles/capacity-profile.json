@@ -6,8 +6,9 @@
   "requirement_ids": ["MILESTONE-001", "NFR-001"],
   "source_documents": [
     "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md",
-    "requirements_v5.md"
+    "requirements_v6.md"
   ],
+  "historical_source_documents": ["requirements_v5.md"],
   "approval": {
     "status": "approved",
     "basis": "The project owner approved these version-controlled M0 minimums as the first-release capacity test target. Approval does not claim that the M1 capacity and soak reports exist.",

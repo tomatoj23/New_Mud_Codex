@@ -6,7 +6,7 @@
 
 ## 1. 问题边界
 
-根据 `requirements_v5.md`，转换器当前只实现 XKX100 的 `ConversionProfile`，将该源 LPC / FluffOS MUDLib 归一化为 New_Mud 可消费的数据、适配入口与审计产物。
+根据 `requirements_v6.md`，转换器当前只实现 XKX100 的 `ConversionProfile`，将该源 LPC / FluffOS MUDLib 归一化为 New_Mud 可消费的数据、适配入口与审计产物。
 
 其他源 LPC MUDLib 的 `ConversionProfile` 属于未来扩展，必须先通过范围审批，不得作为首发实现的隐含兼容目标。
 

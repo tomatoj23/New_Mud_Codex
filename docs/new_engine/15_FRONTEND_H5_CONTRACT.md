@@ -1,5 +1,9 @@
 # 15 H5 客户端首发契约
 
+> V6 边界：本文冻结 M1 内部 H5 实施契约；Public V1 的完整浏览器 / 视口证据由 `PublicV1Gate` 独立验收，不能由内部候选测试替代。
+
+Public V1 的 UI 与内容为简体中文；Unicode 输入和显示必须完整支持，但本版本不建设 i18n 内容流水线。支付、订阅、付费 Item 与真实货币经济不进入客户端契约。
+
 > 状态：首发实施契约。本文冻结 uni-app、Vue 3、Pinia 客户端的工程边界、响应式体验、协议接入和验收要求。首发目标是 PC 浏览器与移动端浏览器；微信小程序只保留适配边界，不进入首发构建。
 
 ## 1. 工程边界
@@ -68,11 +72,11 @@ active Presence 的每个文本或结构化 `action.invoke` 都必须把当前 `
 客户端不得把完整 `request.succeeded`、`request.failed`、snapshot 或 `resume_ticket` 持久化到 localStorage、sessionStorage、IndexedDB、Service Worker cache 或日志。
 为重复响应去重，当前 JavaScript 运行时内存可保留 `request_id`、终结类型与不含秘密的脱敏摘要。WebSocket `request_id` 与完整终结均不得进入持久存储；唯一例外是 3.2 冻结的最小 pending-refresh 控制记录。
 
-`resume_ticket` 只保存在受控内存，登出、会话撤销、显式离场或页面安全清理时立即清除。页面重载导致 ticket 丢失是允许的安全取舍；客户端必须回到正常认证和占用/接管流程，不能从持久缓存恢复秘密。
+`resume_ticket` 只保存在受控内存，登出、会话撤销、显式离场或页面安全清理时立即清除。页面重载导致 ticket 丢失是允许的安全取舍；客户端在 access token 仍属于同一 AuthSession 时应优先调用 `presence.recover`，成功后原子替换 stores 并接受新 ticket；恢复不可用时回到正常认证和占用/接管流程，不能从持久缓存恢复秘密，也不得自动 takeover。
 
 ### 3.1 绑定型终结与跨连接重放
 
-`presence.enter`、`session.resume` 或 `presence.takeover` 返回 `delivery.status=bound` 且 `resume_required=false` 时，客户端才能把 snapshot 原子写入 Presence/scene/character/combat stores，并把新 ticket 放入受控内存。
+`presence.enter`、`session.resume`、`presence.recover` 或 `presence.takeover` 返回 `delivery.status=bound` 且 `resume_required=false` 时，客户端才能把 snapshot 原子写入 Presence/scene/character/combat stores，并把新 ticket 放入受控内存。
 
 收到 `delivery.status=resume_required` 时，客户端必须忽略并不得缓存历史 snapshot，只把服务端本次安全交付的 ticket 暂存在内存，然后以新的 `request_id` 调用 `session.resume`。只有该 resume 返回 `bound` 后才把当前连接标为 active；期间不得调用 `state.sync` 或发送 IC 动作。
 
@@ -179,12 +183,16 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 - Pinia store 单元测试
 - 注册、登录、进世界、移动、战斗、聊天、物品使用端到端测试
 - 断线、token 过期、resume ticket 失效和接管测试
+- 页面重载丢失 ticket 后，同一 AuthSession 的 `presence.recover` 原子替换 stores、接受新 generation / ticket；无自有租约或跨 AuthSession 恢复统一失败，客户端不得自动 takeover
 - authenticate 同连接重试与跨连接重新绑定测试
 - 绑定型终结跨连接 `resume_required`、旧 snapshot 丢弃和显式 takeover 测试
 - Presence generation 改变后的旧 action/ui/sync 终结返回 `REQUEST_CONTEXT_CHANGED`，客户端不应用旧结果
 - `state.sync` 跨连接或 barrier 已推进时用新 request id 重建屏障，不把历史 snapshot 设为基线
 - register/login/refresh/logout 精确路径、四端点跨源拒绝与 refresh Cookie 强制属性测试
-- 注册成功后无 token、Cookie 或 AuthSession，重复账号名与密码策略失败只返回稳定错误码
+- 注册成功后无 token、Cookie 或 AuthSession，并只在该响应一次展示 RecoveryCode；重复账号名与密码策略失败只返回稳定错误码
+- 角色创建覆盖 profile 版本、NFKC 名称策略、名称占用的统一错误、幂等重试、RetiredCharacter 不可自助重建及账号最多一个 Character
+- RecoveryCode 恢复/轮换撤销全部旧 AuthSession、RefreshTokenFamily、Presence 和 ticket；账号关闭进入 30 天 cooling-off，恢复后不自动回场景
+- PlayerBlock、ChannelMute、消息举报、一次申诉、GM 处罚时限和系统/安全/GM 通知不可屏蔽的端到端测试
 - logout 覆盖损坏 Cookie + 有效 access、Cookie/Bearer 指向不同会话和零 locator 三种路径；客户端始终完成本地清理
 - refresh 提交后响应丢失再重载时复用持久 key，多标签页只发送一个逻辑请求
 - pending refresh 的 key 冲突、superseded、过期记录均安全登出，不以新 key 重交不确定 Cookie
@@ -193,7 +201,11 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 - PC 与窄屏移动端视觉回归
 - 精确支持矩阵、200% 缩放、输入法、触控目标、键盘焦点、对比度和长文本溢出测试
 
-## 8. 首发验收
+## 8. V6 增量、Public V1 客户端边界与首发验收
+
+Public V1 H5 必须提供 RecoveryCode 首次展示后的安全说明、账号关闭 / 恢复入口、PlayerBlock / ChannelMute、消息举报和统一支持入口；举报提交只携带不可变消息 ID，服务器负责取证上下文。角色创建页调用 `POST /api/v1/characters`，显式提交 `creation_profile_key/version`、`display_name`、展示性别和代词，并展示稳定策略错误；同一 GameAccount 已有 Character 时不得显示可重建入口。恢复页调用 `/api/v1/auth/recover`，关闭页调用 `/api/v1/account/close`，恢复成功后必须重新 login 和 enter，不得自动恢复旧 Presence。UI 与内容为简体中文，Unicode 输入与显示完整支持；没有支付、订阅、付费 Item 或真实货币界面。
+
+H5 的全局导航必须提供公开 status 入口，展示服务端提供的当前健康摘要、计划维护窗口、drain 状态、活动 incident 与最后更新时间，不能由客户端自行推断服务健康。`system.maintenance` 与 `SystemNotice` 必须在 PC / 移动端一致显示；进入 drain 后客户端停止发起新的 enter 和 IC action、保留已提交请求的终结处理，并按服务器指令完成离场 / 重连。紧急 incident 更新和恢复通知必须可在未进入 Presence 时读取，且不得被 PlayerBlock 或 ChannelMute 屏蔽。
 
 - 新用户可在 H5 注册并使用独立 login 登录；注册成功不能被当成认证成功。
 - PC 和移动端 H5 均完成同一条首发纵切。
@@ -203,6 +215,7 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 - 完整终结与 `resume_ticket` 不进入任何持久客户端存储。
 - WebSocket `request_id` 不跨页面生命周期持久化；页面重载后不得凭旧 id 重新物化 ticket。
 - H5 refresh secret 只在强制安全 Cookie 中；IndexedDB 只允许无秘密的单条 pending-refresh 控制记录。
+- 公开 status、计划维护、drain、SystemNotice、活动 incident 与恢复通知在 PC / 移动端 E2E 中可达；维护期间不提交新的 enter / IC action，客户端不把本地连通性伪装成服务健康。
 - 最长中文名称、聊天消息和错误文案不遮挡核心操作。
 - 支持矩阵中的精确浏览器版本、视口、缩放、中文输入法和触控验收全部通过。
 - 客户端构建、类型检查、单元测试和端到端测试进入 CI。

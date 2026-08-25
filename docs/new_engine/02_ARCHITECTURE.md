@@ -1,6 +1,6 @@
 # 02 新引擎总体架构
 
-> 术语说明：本文默认使用 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 中的当前术语定义；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准；仅在提及 Evennia 来源时保留 `Prototype`、`AccountDB` 一类源术语。
+> 术语说明：本文默认使用 `requirements_v6.md` 与根目录 `CONTEXT.md` 中的当前术语定义；`requirements_v5.md` 仅为历史基线；仅在提及 Evennia 来源时保留 `Prototype`、`AccountDB` 一类源术语。
 
 > 实施约束：本文负责说明总体分层与运行时边界；下列实施细节以对应的六份冻结合同为准：
 > - 协议：`docs/new_engine/11_PROTOCOL_CATALOG.md`
@@ -17,6 +17,8 @@
 - 用 `Django + DRF + Channels + Daphne + PostgreSQL` 构建单逻辑运行时，并以 ASGI/`asyncio` 承接结构化、移动端友好的 MUD 引擎。
 - 保留 Evennia 在实体、命令、原型、帮助、调度上的成熟抽象。
 - 从一开始就为 MUDLib 加载与 LPC 转换器留标准落点。
+
+选择 ASGI 是基于 New_Mud 的产品协议、部署边界和一致性需求，不是因为 Evennia 6.0 无人维护或其技术栈不可用。
 
 ## 2. 进程模型
 
@@ -209,6 +211,6 @@ MUDLib 层负责：
 
 ## 9. 最终架构口号
 
-抽象借鉴 Evennia，运行时抛弃 Evennia，内容接口超越 Evennia。
+抽象借鉴 Evennia，运行时不采用 Evennia 的形状，内容接口面向 New_Mud 的契约演进。
 
 

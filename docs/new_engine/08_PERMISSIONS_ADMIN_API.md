@@ -95,6 +95,12 @@ Quest、Dialogue、Shop、LootTable、世界事件、定时活动、组织和经
 
 手机号、邮箱或微信驱动的玩家自助找回属于 M2/M6，不得阻断 M1 的后台恢复最小流程。
 
+M1 后台恢复只允许权限矩阵中具“账号封禁与受审计恢复”写权限的 PlatformRole：`super_admin / ops_admin / gm`。`super_admin` 负责紧急处置，`ops_admin` 负责常规冻结、撤销和恢复修复，`gm` 只在分配给自己的 support case 与授权范围内执行相同动作；`qa` 只读，`content_editor` 无权访问。允许的写动作只有冻结或撤销可疑恢复流程、撤销账号的全部会话与凭据，以及修复一个玩家仍持有有效 RecoveryCode 的失败流程。
+
+修复必须调用与 `/api/v1/auth/recover` 相同的 code 校验、合并限流、密码策略和原子撤销服务；后台只能查看 code generation / hash 状态与脱敏审计，不能读取明文 code、跳过验证、直接签发所有权证明或依据角色资料和游戏 trivia 重分配账号。密码与 code 都丢失时只能冻结 / 撤销，不能恢复所有权。
+
+每次动作要求重新认证、稳定 reason、关联 support case、目标 User / GameAccount、操作者和复核结果。成功修复仍轮换 RecoveryCode、撤销全部旧 AuthSession、RefreshTokenFamily、Presence 与 ticket，并只经玩家当前受保护响应一次展示新 code；失败不得改变密码、code、账号 lifecycle 或会话状态。
+
 ## 3. Django Admin 的定位
 
 Evennia 用 Django Admin 扩展做了大量后台能力，这个方向值得保留。
@@ -109,7 +115,7 @@ New_Mud 建议：
 
 ### 4.1 版本策略
 
-结合 `requirements_v5.md` 对稳定接口与前后台认证边界分离的约束，对外 REST API 从第一版起必须带显式版本号。
+结合 `requirements_v6.md` 对稳定接口与前后台认证边界分离的约束，对外 REST API 从第一版起必须带显式版本号。
 
 正式冻结为：
 
@@ -148,7 +154,7 @@ Authorization header 只允许 logout 携带当前 access token；register、log
 
 | 方法与路径 | 请求 | 成功结果 |
 | --- | --- | --- |
-| `POST /api/v1/auth/register` | JSON `username / password` | `201` User 与 GameAccount id；不签发 token、不设置 Cookie |
+| `POST /api/v1/auth/register` | JSON `username / password` | `201` User、GameAccount id 与一次性明文 RecoveryCode；不签发 token、不设置 Cookie |
 | `POST /api/v1/auth/login` | JSON `username / password` | `200` access token JSON，并设置 refresh Cookie |
 | `POST /api/v1/auth/refresh` | JSON `{}`、refresh Cookie、`Idempotency-Key` | `200` 新 access token JSON，并原子轮换 refresh Cookie |
 | `POST /api/v1/auth/logout` | JSON `{}`、refresh Cookie（若存在）、内存中若存在则携带当前 access Bearer | `204`，撤销可识别认证会话并清除 Cookie |
@@ -162,11 +168,11 @@ Authorization header 只允许 logout 携带当前 access token；register、log
 }
 ```
 
-注册成功响应只包含 `user_id / game_account_id`。
+注册成功响应包含 `user_id / game_account_id / recovery_code`；明文 RecoveryCode 只在这次响应展示，之后不得再次读取或返回。
 
 注册必须把账号名规范为 3-32 位 ASCII 小写字母、数字和下划线，并按规范值执行大小写不敏感唯一校验。
 
-注册事务只创建 `User` 与一对一首发 `GameAccount`。任一步失败整体回滚；不得创建 AuthSession、refresh family、credential、Cookie、Character 或 Presence。
+注册事务只创建 `User`、一对一首发 `GameAccount` 与 RecoveryCode 哈希。任一步失败整体回滚；不得创建 AuthSession、refresh family、credential、Cookie、Character 或 Presence。
 
 密码必须通过 Django 当前部署的密码校验器。重复账号名统一返回 `REGISTRATION_UNAVAILABLE`，格式或密码策略失败返回 `REGISTRATION_INVALID`。
 
@@ -228,6 +234,65 @@ refresh 对外只使用 `REFRESH_IDEMPOTENCY_KEY_INVALID`、`REFRESH_IDEMPOTENCY
 客户端不得按自由文本或仅按 HTTP status 分支；响应不得包含堆栈、凭据、账号存在性、内部对象详情或任意秘密。
 
 微信小程序的授权登录与 token 传输适配属于需求里程碑 M6。首发不得为其增加 refresh body/bearer 回退；后续必须通过显式版本化合同引入平台 adapter。
+
+### 4.3 首发角色创建
+
+角色创建是 REST 业务操作，不在注册事务中隐式发生，也不通过 WebSocket `presence.enter` 伪造创建。首发固定使用：
+
+```text
+POST /api/v1/characters
+```
+
+请求必须携带合法的 `Idempotency-Key`，并包含：
+
+```json
+{
+  "creation_profile_key": "default-v1",
+  "creation_profile_version": 1,
+  "display_name": "玩家名称",
+  "gender": "unspecified",
+  "pronouns": "unspecified"
+}
+```
+
+服务端必须在同一事务中锁定 GameAccount、校验 CharacterOwnership 唯一性、解析精确版本的 `CharacterCreationProfile`，并按 V6 8.8 执行 `CharacterDisplayName` 的 NFKC、可见字符、保留词、控制字符和实例内唯一校验。性别和代词只影响展示，不得改变属性、成长、资格、门派或武学能力。
+
+成功返回 `201`、Character stable id、display name、profile identity 和初始状态摘要；同一幂等键同一 payload 可安全重放。首发每个 GameAccount 最多一个 Character，因此不另建 `character.choose`。失败只使用稳定错误码：`CHARACTER_ALREADY_EXISTS`、`CHARACTER_PROFILE_INVALID`、`CHARACTER_DISPLAY_NAME_INVALID` 或 `CHARACTER_CREATION_UNAVAILABLE`，不得泄露名称是否已被占用。
+
+### 4.4 RecoveryCode 与账号生命周期
+
+首发和 Public V1 固定使用以下端点：
+
+```text
+POST /api/v1/auth/recover
+POST /api/v1/auth/recovery-code/rotate
+POST /api/v1/account/close
+POST /api/v1/account/reopen
+```
+
+`auth/recover` 接受账号名、RecoveryCode 和新密码；成功时撤销该 User 的全部 AuthSession、RefreshTokenFamily、Presence、ResumeTicket，生成新 code 并只在该响应中展示一次。`recovery-code/rotate` 需要当前 active AuthSession，轮换后同样撤销旧 code 和全部旧控角状态。恢复失败按账号、IP、设备合并限流，统一返回 `RECOVERY_CODE_INVALID`、`RECOVERY_RATE_LIMITED` 或 `ACCOUNT_RECOVERY_UNAVAILABLE`，不泄露账号存在性。
+
+`account/close` 立即撤销会话和控角租约，将 GameAccount 置为 `cooling_off`；`account/reopen` 只接受冷静期内的有效 RecoveryCode，成功后回到 `active`，但不自动恢复旧 Presence。冷静期结束进入 `retired`，User 数据匿名化/禁用，Character 进入 `RetiredCharacter`。过期和不可恢复路径使用 `ACCOUNT_REOPEN_WINDOW_EXPIRED`、`ACCOUNT_NOT_REOPENABLE` 或 `ACCOUNT_ALREADY_RETIRED`。所有四个端点发送 `Cache-Control: no-store`，恢复和关闭操作均写审计事件。
+
+### 4.5 Public V1 社区治理 API
+
+玩家侧自助操作使用 `/api/v1/community/...`；运营侧案件处置使用 `/admin/api/v1/moderation/...`。WebSocket 只推送结果和通知，不作为 moderation 事实写入入口。
+
+```text
+POST   /api/v1/community/blocks
+DELETE /api/v1/community/blocks/{actor_id}
+POST   /api/v1/community/channel-mutes
+DELETE /api/v1/community/channel-mutes/{channel_id}
+POST   /api/v1/community/reports
+POST   /api/v1/community/cases/{case_id}/appeal
+GET    /admin/api/v1/moderation/cases
+POST   /admin/api/v1/moderation/cases/{case_id}/decisions
+POST   /admin/api/v1/moderation/cases/{case_id}/appeal-review
+```
+
+举报请求只携带不可变消息 ID，服务器在受理时重新抓取授权上下文；玩家不能提交原始证据替代服务器取证。`PlayerBlock` 只改变执行者看到的普通公共消息和私聊，`ChannelMute` 只抑制个人订阅，System/Security/GM 通知不可屏蔽。
+
+ModerationCase 的决定使用不可变 UTC `effective_at` / `expires_at` 窗口：`warning` 可无期限，`channel_mute` 和 `suspension` 必须有到期时间，永久 `ban` 使用空 `expires_at` 并通过显式 revoke 终结。状态只允许 `proposed -> active -> expired`、`proposed -> rejected` 或 `active -> revoked`；每案最多一次审计申诉，提交者不得批准自己的案件。稳定错误码为 `COMMUNITY_ACTION_FORBIDDEN`、`PLAYER_BLOCK_INVALID`、`CHANNEL_MUTE_INVALID`、`MODERATION_REPORT_INVALID`、`MODERATION_CASE_NOT_FOUND`、`MODERATION_APPEAL_ALREADY_SUBMITTED` 和 `MODERATION_APPEAL_FORBIDDEN`。
 
 ## 5. WebSocket 边界
 
@@ -365,7 +430,15 @@ Evennia `web/api/views.py` 暴露的是：
 - 稀有物品发放
 - Blueprint 发布
 
-## 10. 最终原则
+## 10. V6 增量与最终原则
+
+在每个游戏实例内，`User` 与 `GameAccount` 是永久一对一映射；`CharacterOwnership` 负责未来多角色扩展。注册成功仍不创建 AuthSession、RefreshTokenFamily、Character 或 Presence，但会在响应中一次性展示 RecoveryCode；服务端只保存其哈希。RecoveryCode 的恢复 / 轮换必须撤销全部旧 AuthSession、refresh family、Presence 和票据，采用账号/IP/设备合并限流与统一错误响应。
+
+M1 后台只提供 2.2 冻结的恢复流程冻结 / 撤销与持有效 code 的最小修复，不提供人工身份裁决、明文 code 查看、免验证改密或账号重分配。该后台路径与玩家恢复共用 `13` 的事务和并发边界，并必须进入 `16` 的权限、审计与失败原子性矩阵。
+
+Character 创建必须引用版本化 `CharacterCreationProfile`。`CharacterDisplayName` 按 NFKC 在实例内唯一，GM 改名 / 重置必须审计；Public V1 不提供玩家自助 rename、delete 或 rebuild。公开实例的注册模式为可审计的 `open / paused / invite_only` 三态；初始 superuser 只能由安全的一次性管理命令创建，不得存在默认账号或密码。
+
+同一自然人可以同时承担多个 `PlatformRole`。内容编辑和发布可以由同一人执行，但必须是分开的、重新认证的、带 diff 和确认的审计动作；普通批次仍禁止自批。紧急回滚必须记录原因和受影响 `ContentReleaseBatch`。
 
 权限要显式、后台要可审计、API 要面向业务域，而不是面向底层对象库。
 

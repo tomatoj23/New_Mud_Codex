@@ -177,7 +177,7 @@ seed input / admin edit
 
 ### 4.2 三类帮助来源
 
-以下三个名词当前以 `requirements_v5.md` 第八章、`UBIQUITOUS_LANGUAGE.md` 与本目录相关设计文档中的约束为准；其中 `UBIQUITOUS_LANGUAGE.md` 负责术语统一，不单独决定帮助子域分类：
+以下三个名词当前以 `requirements_v6.md` 第八章、根目录 `CONTEXT.md`、`UBIQUITOUS_LANGUAGE.md` 与本目录相关设计文档中的约束为准；其中 `UBIQUITOUS_LANGUAGE.md` 负责术语统一，不单独决定帮助子域分类：
 
 - `CommandHelp`
   - 从动作元数据生成
@@ -227,7 +227,7 @@ seed input / admin edit
 
 ## 6. 内容发布与生效边界
 
-根据 `requirements_v5.md`：
+根据 `requirements_v6.md`：
 
 - V1 以冷发布为默认策略
 - 代码更新统一通过重启发布
@@ -249,6 +249,10 @@ seed input / admin edit
 - 现存实例若要同步，只能执行受审计的显式 apply/migration job；该 job 可以安排在安全重载窗口内，但安全重载本身不得选择、迁移或改写任何实例 revision
 - 房间出口、掉落/刷新配置、`behavior_profile_keys` 等结构性字段不在发布时自动改写
 
+每次成功内容发布还必须产生不可变的 `ReleaseManifest` content fragment，至少绑定活动 `ContentReleaseBatch` 的 id、版本与 `release_hash`、该批内容使用的不可变 `SourceSnapshot`，以及 Village / combat compatibility envelopes。该 fragment 只是部署清单的内容侧输入；完整 `ReleaseManifest` 的代码、需求、合同、迁移和测试报告字段及最终权威仍归 `16_OPERATIONS_TESTING_CONTRACT.md`。
+
+部署或紧急回滚必须选择一个协调一致的代码 commit、migration head 与内容批次组合，不能只回滚代码而继续沿用未经该组合验证的 active batch。仅在内容域内部恢复旧内容时仍按本节和 `12` 的批次语义创建新 `ContentReleaseBatch`：复用满足精确上下文条件的旧 revision，或从旧 payload 重编译新 revision；不得原地修改历史 revision、旧批次、SourceSnapshot 或已签署的 ReleaseManifest。
+
 ## 7. 与转换器的衔接
 
 LPC 转换器输出的第一目标不是 Python 类，而是：
@@ -260,7 +264,13 @@ LPC 转换器输出的第一目标不是 Python 类，而是：
 
 转换器和 seed provider 只能把 Blueprint 输入导入为 draft revisions；未经显式原子发布，不得进入运行时活动内容。
 
-## 8. 最终原则
+## 8. V6 增量与最终原则
+
+Public V1 的聊天治理必须建模 `PlayerBlock`、`ChannelMute` 与 `ModerationCase`。举报引用不可变消息 ID，服务器在受理时重新抓取授权上下文；每案最多一次审计申诉。PlayerBlock 只改变执行者看到的普通公共消息和私聊，不删除证据或改变其他收件人；ChannelMute 只抑制个人订阅；SystemNotice、安全和 GM 通知不可屏蔽。普通聊天与私聊保留 30 天，举报证据在结案后保留 180 天，认证 / 安全 / GM 审计保留 365 天，内容发布历史长期保留。
+
+Public V1 的 `VillageInteractionEnvelope` 之外，源码已知但未验证的行为必须通过显式 `UnavailableInteraction` 结果解析。帮助、命令解析、H5 按钮和后台预览都不得把 unavailable 行为当作近似实现或静默成功。
+
+Public V1 候选的活动内容批次必须提供可机器核对的内容清单与 gate 证据：可连通的约 30-60 个 Room、10 个以上具功能或敌对行为的 NPC、20 个以上 Item 定义、至少一条可学习武学路径、至少一条可重复 PvE 循环，以及首次游玩约 2-4 小时的内容量。Room / NPC / Item 的结构数量与引用完整性由内容编译和批次清单证明；武学、PvE 可重复性和游玩时长必须由 `14`、`16` 的行为与试运行证据证明，不能从行数、seed 文件或未验证的 envelope 项推断。
 
 内容系统要优先服务“可制作、可审核、可转换”，而不是优先服务运行时魔法。
 

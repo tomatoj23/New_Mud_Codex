@@ -1,6 +1,6 @@
 # 04 领域模型与世界模型
 
-> 术语说明：本页的账号域、世界域、内容域名词，统一以 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 为准；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准。
+> 术语说明：本页的账号域、世界域、内容域名词，统一以 `requirements_v6.md`、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md` 为准；`requirements_v5.md` 仅为历史基线。
 
 > 实施约束：战斗、武学、物品、Condition 与 Effect 的首发模型边界，以 `docs/new_engine/14_COMBAT_SKILL_ITEM_CONTRACT.md` 为准。
 
@@ -213,7 +213,7 @@ spawn NPC 时，同一事务按 pinned NPC revision 创建 `ActorSkill / JifaBin
 
 ## 4.1 坐标与拓扑策略
 
-`requirements_v5.md` 当前没有把三维坐标、区域动态加载或通用自动寻路冻结为首发正式约束；V5 对地图与移动的基线仍是 XKX100 的房间制世界与 `Room/Exit` 拓扑。
+`requirements_v6.md` 当前没有把三维坐标、区域动态加载或通用自动寻路冻结为 M1 正式约束；V6 对地图与移动的基线仍是 XKX100 的房间制世界与 `Room/Exit` 拓扑。
 
 因此当前设计约束调整为：
 
@@ -275,7 +275,7 @@ after_move(actor, source, target)
 
 ## 7. 区域活跃度与运行时装载
 
-`requirements_v5.md` 当前没有把“活跃区 / 预加载区 / 休眠区”冻结为首发前置。首发默认以单实例、单写者、显式房间拓扑和按需查询为主，不预先引入 `active / preloaded / hibernated` 三态装载模型。
+`requirements_v6.md` 当前没有把“活跃区 / 预加载区 / 休眠区”冻结为 M1 前置。M1 默认以单实例、单写者、显式房间拓扑和按需查询为主，不预先引入 `active / preloaded / hibernated` 三态装载模型。
 
 后续若因为世界规模、后台工具或性能热点需要引入区域活跃度管理，可再单独设计 `RegionRuntimeService`，明确：
 
@@ -286,7 +286,7 @@ after_move(actor, source, target)
 
 ## 8. 路径搜索
 
-`requirements_v5.md` 当前把 `PathfindingService` 视为可扩展公共服务，但没有把通用自动寻路冻结为首发基线。因此当前设计只保留接口挂点，不冻结 A*、三维曼哈顿、体力成本模型等具体实现。
+`requirements_v6.md` 当前把 `PathfindingService` 视为可扩展公共服务，但没有把通用自动寻路冻结为 M1 基线。因此当前设计只保留接口挂点，不冻结 A*、三维曼哈顿、体力成本模型等具体实现。
 
 当前约束应为：
 
@@ -307,7 +307,15 @@ New_Mud 必须显式区分：
   - 默认由运行时服务持有
   - 如需持久化，只落重连恢复或审计所需的快照记录
 
+首发 Character 创建必须引用不可变版本的 `CharacterCreationProfile`。输入只包含 `CharacterDisplayName` 和展示性别/代词；名称按 NFKC、实例内唯一、2-12 个可见字符及保留词/控制字符策略校验。`RetiredCharacter` 保留稳定身份和历史关系，但不再可控、不可自助改名、删除或重建。
+
 ## 10. 建模底线
+
+## V6 增量：Public V1 世界与 Item 生命周期
+
+Public V1 的 `VillageTopologyEnvelope` 固定完整 `d/village` 起始拓扑及静态身份；`VillageInteractionEnvelope` 逐项固定可声明 verified 的交互。任何包络外或未验证行为都必须成为 `UnavailableInteraction`，不能通过 Room 拓扑存在推导为可用。
+
+静态 Entity 只物化一次；允许刷新的 hostile NPC 在有界持久延迟后创建新 Entity，死亡 Entity 不复活。NPC 掉落由 30 秒 `LootClaim` 保护，15 分钟后执行 `ItemRetirement`；玩家普通丢弃物品保留 60 分钟并告警，背包、装备和受保护 Item 不自动退休。ItemRetirement 保留身份与审计历史，不执行硬删除。
 
 如果某个状态满足下面三条，就不要放通用属性：
 

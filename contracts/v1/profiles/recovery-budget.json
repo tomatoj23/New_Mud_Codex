@@ -6,8 +6,9 @@
   "requirement_ids": ["MILESTONE-001", "NFR-002"],
   "source_documents": [
     "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md",
-    "requirements_v5.md"
+    "requirements_v6.md"
   ],
+  "historical_source_documents": ["requirements_v5.md"],
   "approval": {
     "status": "approved",
     "basis": "The project owner approved the first-release recovery target. The linked report proves the M0 dump/restore toolchain and isolated cleanup only; it is not release-gate eligible until every required persistence scope exists and is exercised.",
@@ -37,7 +38,7 @@
     ],
     "latest_report": {
       "artifact_path": "reports/m0-recovery-latest.json",
-      "artifact_sha256": "7be50190df61aba84507f8f086ba1440bd39343fec585f2526edf633e8748f82",
+      "artifact_sha256": "50335d0cc36d507bcbc5a674f8a0ed6d5b1360dc5d1a4fc2a6a43c5899a3aac9",
       "report_id": "m0-recovery-20260719-145739z",
       "evidence_level": "m0_infrastructure",
       "release_gate_eligible": false,

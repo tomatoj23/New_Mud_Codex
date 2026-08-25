@@ -2,7 +2,7 @@
 
 > 状态：分析层文档。本文用于记录 Evennia 6.0 源码事实、优缺点与初步判断，不是 New_Mud 当前权威实施规范。若与 `docs/new_engine/` 冲突，以 `docs/new_engine/` 为准。详见 `docs/19_documentation_governance.md`。
 
-> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 为准；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准。
+> 结构说明：本文按“事实 / 评价 / 设计去向”整理。凡涉及 New_Mud 当前正式术语，以 `requirements_v6.md` 第八章、根目录 `CONTEXT.md` 与 `UBIQUITOUS_LANGUAGE.md` 为准；`requirements_v5.md` 仅作历史对照。
 
 ## 1. 分析范围
 
@@ -46,7 +46,7 @@ Evennia 的 Web 层包括：
 
 ### 2.3 Webclient 仍以文本客户端为中心
 
-Webclient 由 Django template、JavaScript 客户端对象、plugin manager、WebSocket / AJAX 通道组成，本质上是“浏览器里的文本 MUD 客户端”。
+Webclient 由 Django template、JavaScript 客户端对象、plugin manager、WebSocket / AJAX 通道组成，本质上是“浏览器里的文本 MUD 客户端”。本地快照的默认页面还使用 jQuery 3.2.1、Bootstrap 4.0.0 beta 和全局插件管理器；这说明陈旧点主要在默认客户端工程形状，不等于 Django Web 整合能力失效。
 
 ### 2.4 REST API 围绕内部模型设计
 
@@ -101,5 +101,5 @@ Webclient 若保留，更适合作为调试或 GM 工具，而不再是产品中
 
 ## 5. 结论
 
-Evennia Web 层最值得借鉴的是“网站、后台、API 共用同一数据域”的整合方式。分析层对应的结论是：不继承 Twisted 托管和文本 Webclient 中心化，而转向 API-first、移动端优先、后台内容制作优先的 Web 架构。
+Evennia Web 层最值得借鉴的是“网站、后台、API 共用同一数据域”的整合方式。分析层对应的结论是：不继承 Twisted 托管和文本 Webclient 中心化，而转向 API-first、PC/移动 H5 双端、后台内容制作优先的 Web 架构。这里的判断是项目适配性取舍，不是认定 Evennia 的 Django 能力过时。
 

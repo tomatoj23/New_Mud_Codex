@@ -1,7 +1,7 @@
 {
   "contract_version": "1",
   "artifact_type": "protocol_catalog",
-  "requirement_ids": ["AUTH-003", "MILESTONE-001"],
+  "requirement_ids": ["AUTH-003", "AUTH-004", "MILESTONE-001"],
   "source_document": "docs/new_engine/11_PROTOCOL_CATALOG.md",
   "values": {
     "protocol_versions": ["1"],
@@ -12,6 +12,7 @@
       "action.invoke",
       "presence.enter",
       "presence.leave",
+      "presence.recover",
       "presence.takeover",
       "session.authenticate",
       "session.ping",

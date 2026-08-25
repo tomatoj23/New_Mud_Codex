@@ -133,6 +133,14 @@ REQUIRED_RECOVERY_SCOPES = {
     "audit_chain",
 }
 
+FROZEN_PROTOCOL_REQUEST_MINIMUM = {"presence.recover"}
+FROZEN_PROTOCOL_ERROR_MINIMUM = {
+    "PRESENCE_RECOVERY_UNAVAILABLE",
+    "RECOVERY_CODE_INVALID",
+    "CHARACTER_PROFILE_INVALID",
+    "MODERATION_REPORT_INVALID",
+}
+
 SKILL_COMBAT_ROOTS = {
     "cmds/skill/enable.c",
     "cmds/skill/exert.c",
@@ -193,7 +201,8 @@ def utf8_sorted(values: Iterable[str]) -> list[str]:
 def active_documents(repository_root: Path) -> list[Path]:
     documents = [
         repository_root / "README.md",
-        repository_root / "requirements_v5.md",
+        repository_root / "requirements_v6.md",
+        repository_root / "CONTEXT.md",
         repository_root / "UBIQUITOUS_LANGUAGE.md",
     ]
     documents.extend(sorted((repository_root / "docs").rglob("*.md")))
@@ -405,6 +414,29 @@ def validate_catalogs(
             result.check(
                 str(value) in source_text, f"{relative}: {value!r} absent from source document"
             )
+        if filename == "protocol.json":
+            request_section = source_text.split("## 5. 请求目录", 1)[-1].split("## 6.", 1)[0]
+            frozen_requests = {
+                match.group(1)
+                for line in request_section.splitlines()
+                if (match := re.match(r"^\|\s*`([^`]+)`\s*\|", line))
+            }
+            for value in frozen_requests:
+                result.check(
+                    value in catalog["values"]["request_types"],
+                    f"{relative}: frozen request {value!r} is missing from machine catalog",
+                )
+            for value in FROZEN_PROTOCOL_REQUEST_MINIMUM:
+                result.check(
+                    value in frozen_requests,
+                    f"{relative}: verifier minimum {value!r} is absent from source document",
+                )
+        if filename == "protocol-errors.json":
+            for value in FROZEN_PROTOCOL_ERROR_MINIMUM:
+                result.check(
+                    value in catalog_values(catalog),
+                    f"{relative}: frozen error {value!r} is missing from machine catalog",
+                )
 
     registry = instances.get("catalogs/registry.json")
     if registry is None:

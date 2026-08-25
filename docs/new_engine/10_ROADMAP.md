@@ -2,7 +2,7 @@
 
 ## 1. 编号与追溯规则
 
-`requirements_v5.md` 使用需求里程碑 `M0-M6` 描述产品结果。本路线图使用开放式 `Engine Stage Ex` 描述实现依赖与可交付增量。
+`requirements_v6.md` 使用需求里程碑 `M0-M6` 描述产品结果；`requirements_v5.md` 仅保留为历史基线。本路线图使用开放式 `Engine Stage Ex` 描述实现依赖与可交付增量。
 
 两套编号不等价，也不建立一一映射。一个需求里程碑可以跨多个 Engine Stage，一个 Engine Stage 也可以承接多个需求里程碑。
 
@@ -24,7 +24,7 @@
 
 ## 3. Engine Stage E0：合同基线与工程骨架
 
-需求追溯：需求里程碑 M0、M1；V5 第 5.4、6.13-6.14、7.2、7.3、15.1 节。
+需求追溯：需求里程碑 M0、M1；V6 第 5.4、6.13-6.14、7.2、7.3、15.1 节。
 
 目标：
 
@@ -62,17 +62,17 @@
 - 在源快照产生前，任何报告都不宣称已与 XKX100 权威基线对齐
 - capacity profile、浏览器矩阵或恢复预算缺失时 E0 不得完成
 
-### 3.1 当前执行状态（2026-07-19）
+### 3.1 当前执行状态（2026-08-25，Issue #5 验收前）
 
-E0 已建立文档与 Git 基线、Django/ASGI/PostgreSQL 工程骨架、初始内容模型与迁移、机器合同、来源快照、双 manifest、复合 bundle、CI 和可执行结构校验。Python 3.14.2 私有运行时、完整依赖锁、PostgreSQL 18.4 迁移往返和静态检查均已验证。三个非功能 profile 已批准；浏览器矩阵冻结官方精确目标组合，恢复预算绑定了 schema、迁移历史和逐表行数均一致的 M0 隔离恢复报告。
+E0 已建立文档与 Git 基线、Django/ASGI/PostgreSQL 工程骨架、初始内容模型与迁移、机器合同、来源快照、双 manifest、复合 bundle、CI 和可执行结构校验。Python 3.14.2 私有运行时、完整依赖锁、PostgreSQL 18.4 迁移往返和静态检查均已验证。三个非功能 profile 已批准；浏览器矩阵冻结官方精确目标组合，恢复预算绑定了 schema、迁移历史和逐表行数均一致的 M0 隔离恢复报告。Engine Stage E0 / Slice 2 的实现已通过 Issues #1–#4 完成 Registry exact dependency、冻结 seed artifact、受审计 bootstrap、active/pinned resolver、服务器启动生命周期、只读 readiness、并发收敛、事务回滚和失败审计。
 
-E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch resolver 与 pinned historical revision resolver 尚未形成可执行纵向验收。浏览器 `tested_versions`、容量报告和覆盖五个业务范围的发布级恢复报告仍属于 M1 发布候选证据，不伪装为 M0 已执行结果。当前证据和精确阻塞项见 `18_IMPLEMENTATION_STATUS.md`。
+E0 在 Issue #5 完成前仍保持 `blocked`：实现已经存在，但当前 V6 基线上的 PostgreSQL 合同、服务集成、启动级 E2E、全量 pytest、静态门禁、M0 与 Markdown 链接证据尚待一次分层收口并写入正式状态账本。浏览器 `tested_versions`、容量报告和覆盖五个业务范围的发布级恢复报告属于后续 M1 或 `PublicV1Gate` 证据，不伪装为 E0、M0 或 M1 内部已执行结果。当前证据边界见 `18_IMPLEMENTATION_STATUS.md` 与 `PHASE2_CONTENT_STARTUP_WORKLOG.md`。
 
 2026-07-19 已确认的 E0 收口与 E1 连接闭环纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。该计划细化执行顺序与阶段验收，但不改变本路线图的 Engine Stage 边界。
 
 ## 4. Engine Stage E1：认证、会话与 H5 连接闭环
 
-需求追溯：需求里程碑 M0、M1；V5 第 8、9、15.2 节。
+需求追溯：需求里程碑 M0、M1；V6 第 8、9、15.2 节。
 
 目标：
 
@@ -105,7 +105,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 5. Engine Stage E2：世界、动作与 H5 场景纵切
 
-需求追溯：需求里程碑 M1；V5 第 4、5、11.1-11.4 节。
+需求追溯：需求里程碑 M1；V6 第 4、5、11.1-11.4 节。
 
 目标：
 
@@ -130,7 +130,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 6. Engine Stage E3：聊天、帮助与 H5 交互增量
 
-需求追溯：需求里程碑 M1、M2；V5 第 10.9、11.2、12 节。
+需求追溯：需求里程碑 M1、M2；V6 第 10.9、11.2、12 节。
 
 目标：
 
@@ -152,7 +152,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 7. Engine Stage E4：战斗、武学、物品与 H5 玩法纵切
 
-需求追溯：需求里程碑 M1；V5 第 10.1-10.5、11.2、15.2 节。
+需求追溯：需求里程碑 M1；V6 第 10.1-10.5、11.2、15.2 节。
 
 目标：
 
@@ -182,7 +182,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 8. Engine Stage E5：调度、恢复与世界过程
 
-需求追溯：需求里程碑 M1、M2；V5 第 4.5-4.7、5.8、13 节。
+需求追溯：需求里程碑 M1、M2；V6 第 4.5-4.7、5.8、13 节。
 
 目标：
 
@@ -205,7 +205,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 9. Engine Stage E6：Blueprint 后台、完整发布与回滚
 
-需求追溯：需求里程碑 M0、M1、M2；V5 第 5.4、6.13-6.14、11.2、12 节。
+需求追溯：需求里程碑 M0、M1、M2；V6 第 5.4、6.13-6.14、11.2、12 节。
 
 目标：
 
@@ -232,7 +232,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 10. Engine Stage E7：XKX100 转换与黄金差分
 
-需求追溯：需求里程碑 M4；V5 第 7、15.5 节。
+需求追溯：需求里程碑 M4；V6 第 7、15.5 节。
 
 目标：
 
@@ -252,7 +252,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 验收：
 
 - source snapshot、任一 manifest 或复合验收 bundle 的 ID/哈希不匹配时拒绝转换
-- 定义数与初始运行时生成数完全符合 V5 第 7.3 节
+- 定义数与初始运行时生成数完全符合 V6 第 7.3 节
 - 黄金行为的必做状态差异与事件输出全部通过；只有纯展示差异或非必做项可进入有负责人、依据和复核日期的例外清单
 - 武学文件不得追加为世界 roots；转换与差分必须复用 E0 冻结的两类 roots/dependency 清单
 - 合成 fixture 结果不得作为 XKX100 对齐证据
@@ -260,7 +260,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 11. Engine Stage E8：原版玩法与内容扩展
 
-需求追溯：需求里程碑 M3、M5；V5 第 10.7-10.10、15.4、15.6 节。
+需求追溯：需求里程碑 M3、M5；V6 第 10.7-10.10、15.4、15.6 节。
 
 目标：
 
@@ -282,7 +282,7 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 ## 12. Engine Stage E9：运维、恢复与发布门禁
 
-需求追溯：需求里程碑 M1、M2、M4、M5；V5 第 13、14 节。
+需求追溯：需求里程碑 M1、M2、M4、M5；V6 第 13、14 节。
 
 目标：
 
@@ -301,17 +301,17 @@ E0 仍为 `blocked`，不得进入完成态：seed bootstrap、active batch reso
 
 - 16 定义的必测项和发布证据全部通过
 - 各部署环境已在发布审批前批准 RPO/RTO 目标，恢复演练的实测恢复点与恢复时长均达标
-- 默认 capacity profile、浏览器矩阵、RPO/RTO 与备份保留目标全部达标
+- M1 内部候选至少完成其范围内的安全、数据一致性、调度与基础恢复证据；完整 capacity profile、浏览器矩阵、soak、五个业务范围恢复与备份保留证据由 `PublicV1Gate` 重新执行
 - 任何协议、迁移、原子发布、黄金差分或来源完整性门禁失败都阻断上线
 - 生产环境不依赖未声明的 Redis、Celery 或多实例语义
 
-E1-E4 通过后可形成 M1-A 内部可玩验证。E5、E6 与 E9 的 M1 必做门禁全部通过后才形成 M1-B；只有 M1-B 等同需求里程碑 M1 完成。
+E1-E4 通过后可形成 M1-A 内部可玩验证。E5、E6 与 E9 的 M1 范围门禁全部通过后才形成 M1-B；只有 M1-B 等同需求里程碑 M1 完成。完整 Public V1 运维证据不计入 M1-B，且 M1-A / M1-B 都是内部、封闭步骤，不构成公开发布。
 
 运维能力必须从 Engine Stage E0 起持续建设；Engine Stage E9 是完整发布门禁的收口点，不是首次开始写日志和测试。
 
 ## 13. Engine Stage E10：微信小程序交付
 
-需求追溯：需求里程碑 M6；V5 第 9.6、15.7 节。
+需求追溯：需求里程碑 M6；V6 第 9.6、15.7 节。
 
 目标：
 
@@ -364,3 +364,9 @@ E1-E4 通过后可形成 M1-A 内部可玩验证。E5、E6 与 E9 的 M1 必做�
 - XKX100 世界与武学 manifest 的复合验收 bundle 在明确兼容包络内通过可复现黄金差分
 - 发布具备备份恢复、可观测性、安全与来源完整性证据
 - 新玩法无需推翻核心身份、协议、内容和发布模型
+
+### 15.1 PublicV1Gate（RELEASE-001）
+
+PublicV1Gate 独立于 M0-M6 和 Engine Stage Ex，由 owner-operated 官方单实例执行。它要求完整 `ReleaseManifest` 绑定 commit、`requirements_v6.md`、11-16 合同、迁移 head、active ContentReleaseBatch、SourceSnapshot、Village / combat envelopes 与所有发布候选报告；代码、迁移和内容必须协调回滚。
+
+Gate 证据还必须包含 7 天封闭试运行、至少 5 名非管理员测试者、至少 20 次核心循环、完整浏览器矩阵、容量与 soak、五个业务范围恢复、S0/S1 清零以及受约束 S2 例外记录。Gate 通过后才开放 `open` 注册；实例可审计切换为 `paused` 或 `invite_only`。公开状态页、维护通知、SystemNotice 和恢复 / 举报 / 申诉 / 客服入口是 gate 交付物。

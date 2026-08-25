@@ -1,6 +1,6 @@
 # Plan: M0 收口与 E1 连接闭环
 
-> Source PRD: `requirements_v5.md`；实施路线：`docs/new_engine/10_ROADMAP.md`。
+> Source PRD: `requirements_v6.md`；`requirements_v5.md` 仅作历史基线；实施路线：`docs/new_engine/10_ROADMAP.md`。
 >
 > 冻结合同：`docs/new_engine/11_PROTOCOL_CATALOG.md`、`12_REGISTRY_BLUEPRINT_CONTRACT.md`、`13_SESSION_AUTH_STATE_MACHINE.md`、`15_FRONTEND_H5_CONTRACT.md`、`16_OPERATIONS_TESTING_CONTRACT.md`。
 
@@ -21,7 +21,7 @@
 
 ---
 
-## Phase 1: E0 非功能证据收口
+## Engine Stage E0 / Slice 1: 非功能证据收口
 
 **User stories**: 作为发布负责人，我可以看到经过批准且身份明确的最低浏览器、容量和恢复基线，并能通过自动门禁确认这些基线不是待定占位符。覆盖 `MILESTONE-001`、`CLIENT-001`、`NFR-001`、`NFR-002`。
 
@@ -32,7 +32,7 @@
 ### Acceptance criteria
 
 - [x] 三个 profile 均包含负责人、批准日期、非 pending 状态和可回查依据。
-- [x] PC 与移动浏览器条目均冻结精确 `target_versions`，保持 V5 要求的视口、中文输入和无障碍最低范围，并明确不伪造 `tested_versions`。
+- [x] PC 与移动浏览器条目均冻结精确 `target_versions`，保持 V6 要求的视口、中文输入和无障碍最低范围，并明确不伪造 `tested_versions`。
 - [x] 在隔离环境完成 PostgreSQL 备份恢复演练，记录数据集身份、开始/结束时间、实测 RPO/RTO、校验结果和报告哈希。
 - [x] 恢复报告满足独立 schema，由恢复预算通过路径、报告 ID 与 SHA-256 引用，并明确不具备发布门禁资格。
 - [x] M0 合同校验不再报告 profile 审批、浏览器目标版本或恢复基础设施报告缺失。
@@ -40,7 +40,7 @@
 
 ---
 
-## Phase 2: E0 受审计内容启动闭环
+## Engine Stage E0 / Slice 2: 受审计内容启动闭环
 
 **User stories**: 作为服务器运营人员，我可以从受审计内容包首次启动一个实例；重复启动不会重复导入，新对象读取活动批次，已有钉定对象在发布切换后仍读取原 revision。覆盖 `CONTENT-001`、`WORLD-001`、`MILESTONE-001`。
 
@@ -56,11 +56,11 @@
 - [ ] 已钉定实例在活动批次切换后仍解析原 historical revision 及其两类 exact dependencies。
 - [ ] 缺少活动批次、哈希不一致、依赖缺失或 compiler contract 不匹配时启动明确失败。
 - [ ] PostgreSQL 约束测试、服务集成测试和启动级端到端测试覆盖成功、重试、篡改和批次切换路径。
-- [ ] Phase 1 与本阶段全部通过后，E0 才能从 `blocked` 转为完成，并同步状态账本与需求追踪索引。
+- [ ] Engine Stage E0 / Slice 1 与本阶段全部通过后，`ENGINE-001 / Engine Stage E0` 才能从 `blocked` 转为完成，并同步状态账本与需求追踪索引；`MILESTONE-001 / M0` 独立按 V6 当前 M0 清单收口。
 
 ---
 
-## Phase 3: E1 注册与独立登录闭环
+## Engine Stage E1 / Slice 1: 注册与独立登录闭环
 
 **User stories**: 作为新玩家，我可以在 H5 注册账号，再独立登录、刷新会话并退出；注册成功不会让我处于已登录状态。覆盖 `AUTH-001`、`AUTH-002`、`CLIENT-001`、`MILESTONE-002`。
 
@@ -71,6 +71,7 @@
 ### Acceptance criteria
 
 - [ ] 注册校验用户名和密码，原子创建 User/GameAccount，且不创建 AuthSession、token 或隐式登录状态。
+- [ ] 注册事务一次性签发明文 `RecoveryCode`，服务端只保存不可逆哈希；恢复或主动轮换时生成新 code，并撤销旧 AuthSession、RefreshTokenFamily、Presence 与未使用票据。
 - [ ] login 为账号创建符合唯一性约束的 AuthSession 与 RefreshTokenFamily，并返回短期 access token。
 - [ ] Refresh Token 只存在于受保护 Cookie，不进入 WebSocket payload、响应 JSON、本地持久存储或 Authorization header。
 - [ ] refresh 每次轮换 credential generation，旧凭据重放按冻结状态机终结相关 family/session。
@@ -80,7 +81,7 @@
 
 ---
 
-## Phase 4: E1 创建角色、连接、进入与恢复闭环
+## Engine Stage E1 / Slice 2: 创建角色、连接、进入与恢复闭环
 
 **User stories**: 作为已登录玩家，我可以创建唯一角色，建立 WebSocket，进入起始房间并取得完整最小状态；断线后可以在新连接上安全重建。覆盖 `AUTH-003`、`WORLD-001`、`CLIENT-001`、`MILESTONE-002`。
 
@@ -91,22 +92,24 @@
 ### Acceptance criteria
 
 - [ ] 每个 GameAccount 最多创建一个 Character，并保留明确的 CharacterOwnership 关系。
+- [ ] 角色创建通过版本化 `CharacterCreationProfile`，提交 `CharacterDisplayName` 及仅用于展示的性别/代词；名称按 NFKC、实例内唯一和 V6 字符策略校验，`RetiredCharacter` 不得自助重建。
 - [ ] 新 WebSocket 在认证前只有 ConnectionSession，`session.authenticate` 成功后才绑定现有 AuthSession。
 - [ ] `presence.enter` 只允许账号拥有的角色，并从 E0 活动批次解析起始 Room 的 exact revision。
 - [ ] 首次进入返回完整且自洽的 scene/character snapshot，H5 只在 snapshot 屏障完成后替换权威 store。
 - [ ] 网络断开原子关闭旧 Presence 并写入 grace PresenceSnapshot；`session.resume` 在新连接上轮换 ticket 与 generation。
+- [ ] 页面刷新丢失内存 `resume_ticket` 时，同一 AuthSession 可调用 `presence.recover`；成功轮换 ticket/generation 并返回完整 snapshot，找不到自有租约时返回 `PRESENCE_RECOVERY_UNAVAILABLE`，不得跨会话接管。
 - [ ] 同一角色已有 active/grace 租约时，普通 enter 返回 `CHARACTER_OCCUPIED`，不会隐式接管。
 - [ ] REST、WebSocket、数据库并发、断线恢复及 PC/移动 H5 端到端测试全部通过。
 
 ---
 
-## Phase 5: E1 跨设备占用与显式接管闭环
+## Engine Stage E1 / Slice 3: 跨设备占用与显式接管闭环
 
 **User stories**: 作为在另一设备重新登录的玩家，我能看见角色已被占用并主动确认接管；接管成功后新设备取得唯一控制权，旧设备明确失权。覆盖 `AUTH-003`、`CLIENT-001`、`MILESTONE-002`。
 
 ### What to build
 
-在 Phase 4 的单 Presence 租约上增加显式 takeover 纵向流程。H5 对 `CHARACTER_OCCUPIED` 展示确认交互；获授权请求在一个事务中替换租约、generation、resume ticket 与 PresenceSnapshot，并写入事务 outbox。提交后通知旧连接，失败或并发竞争保持单一赢家和可恢复状态。
+在 Engine Stage E1 / Slice 2 的单 Presence 租约上增加显式 takeover 纵向流程。H5 对 `CHARACTER_OCCUPIED` 展示确认交互；获授权请求在一个事务中替换租约、generation、resume ticket 与 PresenceSnapshot，并写入事务 outbox。提交后通知旧连接，失败或并发竞争保持单一赢家和可恢复状态。
 
 ### Acceptance criteria
 
@@ -116,10 +119,10 @@
 - [ ] 提交后旧连接收到 `presence.taken_over` 并失去后续动作权限；通知失败不回滚新权威状态。
 - [ ] 两个并发 takeover 至多一个成功，失败方获得稳定机器错误且不能复用旧 ticket。
 - [ ] H5 在两台浏览器上下文完成占用提示、确认接管、新端同步和旧端失权端到端验证。
-- [ ] Phase 3-5 的认证、恢复和 takeover 证据共同满足 E1 连接闭环；状态账本和追踪索引按实际结果更新。
+- [ ] Engine Stage E1 / Slices 1-3 的认证、恢复和 takeover 证据共同满足 E1 连接闭环；状态账本和追踪索引按实际结果更新。
 
 ---
 
 ## Out of scope
 
-本计划不把 E2 及之后的完整移动、物品、聊天、帮助、战斗、调度、Blueprint 后台、转换黄金差分或生产发布门禁提前塞入 E1。Phase 4 只实现进入与恢复所必需的最小 Character、Room 和 snapshot；后续玩法继续按 `10_ROADMAP.md` 形成新的纵向计划。
+本计划不把 E2 及之后的完整移动、物品、聊天、帮助、战斗、调度、Blueprint 后台、转换黄金差分或生产发布门禁提前塞入 E1。Engine Stage E1 / Slice 2 只实现进入与恢复所必需的最小 Character、Room 和 snapshot；后续玩法继续按 `10_ROADMAP.md` 形成新的纵向计划。

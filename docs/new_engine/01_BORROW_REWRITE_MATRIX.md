@@ -1,18 +1,18 @@
 # 01 Borrow / Rewrite 决策矩阵
 
-> 术语说明：讨论 Evennia 来源时可保留源术语；讨论 New_Mud 设计时，以 `requirements_v5.md` 第八章与 `UBIQUITOUS_LANGUAGE.md` 为准；若两者表述粒度不同或发生冲突，以 `requirements_v5.md` 为准。
+> 术语说明：讨论 Evennia 来源时可保留源术语；讨论 New_Mud 设计时，以 `requirements_v6.md` 与根目录 `CONTEXT.md` 为准；`requirements_v5.md` 仅为历史基线。
 
 > 实施约束：战斗、武学、物品与 Effect 持久化边界，以 `docs/new_engine/14_COMBAT_SKILL_ITEM_CONTRACT.md` 为准。
 
 ## 1. 结论先行
 
-对 New_Mud 来说，Evennia 不能“整套搬运”，但也绝不是只能参考概念。更准确的做法是：
+对 New_Mud 来说，Evennia 不能整套搬运，但也绝不是只能参考概念。更准确的做法是：
 
-- 直接照搬少数成熟抽象与 hook 顺序。
+- 复用少数成熟抽象的语义、处理顺序与测试不变量。
 - 保留核心思想，但彻底重写运行时与持久化实现。
 - 明确放弃那些为 telnet/Twisted/高度动态运行时服务的设计。
 
-## 2. 可直接借鉴，接近照抄
+## 2. 可复用语义与处理顺序
 
 ### 2.1 命令生命周期
 
@@ -61,7 +61,7 @@
 建议直接借鉴的内容：
 
 - 文件帮助条目与数据库帮助条目并行存在
-- 文件帮助条目可以走 Python dict 或模块注册
+- 文件帮助条目可以由 Python dict 或模块注册提供；这只是来源侧经验，不规定 New_Mud 的运行时接口
 - 帮助系统对象与 Web/命令系统复用同一接口
 
 ## 3. 保留思想，重写实现
@@ -186,7 +186,7 @@
 放弃原因：
 
 - 本项目主协议是 WebSocket，不需要 Portal 为 telnet/ssh 做隔离
-- 双进程只会放大会话同步、故障恢复、部署与日志复杂度
+- 对本项目而言，双进程会放大会话同步、故障恢复、部署与日志复杂度；这属于适配性取舍，不代表 Evennia 在传统多协议场景中不可用
 
 ### 4.2 Lockstring 作为核心权限模型
 
@@ -221,6 +221,6 @@
 
 ## 6. 最终原则
 
-真正应该“照抄”的不是 Evennia 的运行框架，而是它少数经过长期验证的抽象接口和 hook 顺序。真正必须“重写”的，是那些让这些抽象成立的旧运行时实现。
+真正应该复用的是 Evennia 少数经过长期验证的抽象语义、hook 顺序、输入输出不变量和边界测试。必须重写的是支撑这些语义的旧运行时实现；不得复制 Twisted `Deferred`、Portal/Server 进程形状、动态状态注入或源码组织。现代性判断见 `docs/20_evennia_modernity_assessment.md`。
 
 

@@ -1,5 +1,7 @@
 # 16 运维、测试与发布门禁
 
+> V6 边界：本文的 M1 必测项支持内部 / 封闭交付；完整浏览器、capacity / soak、五范围恢复与公开运营资料必须在独立 `PublicV1Gate`（`RELEASE-001`）中重新执行。M1-B 通过不等于 Public V1 可发布。
+
 > 状态：首发实施契约。本文把稳定性、可维护性、安全性和可复现验收落实为工程门禁。任何首发候选版本都必须满足本文，而不是只通过功能演示。
 
 ## 1. 环境一致性
@@ -36,7 +38,8 @@ PostgreSQL 契约测试和端到端测试必须覆盖：
 - register/login/refresh/logout 四个端点都拒绝未允许 Origin；跨源 register/login 必须覆盖 CSRF/session swapping 反例。
 - 登录生成随机 opaque `device_id`，测试确认它不等于也不派生自 IP、User-Agent 或浏览器指纹；认证失败只暴露稳定 code。
 - `session.authenticate` 同 ConnectionSession 幂等补绑、payload 冲突，以及跨 ConnectionSession 重新验证和绑定。
-- enter/resume/takeover 在 pending 准备、提交、激活和 finalization 各边界的故障注入；不得出现可收命令的 pending Presence 或可重放的虚假成功。
+- enter/resume/recover/takeover 在 pending 准备、提交、激活和 finalization 各边界的故障注入；不得出现可收命令的 pending Presence 或可重放的虚假成功。
+- 页面重载丢失内存 ticket 后，`presence.recover` 只允许同一 AuthSession 恢复自己的 active/grace 租约，递增 generation、撤销旧 ticket、签发新 ticket并返回完整 snapshot；无自有租约与跨 AuthSession 请求统一失败，不得泄露占用详情、退化为 enter 或自动 takeover。
 - 在提交后激活前及激活后 finalization 前杀死 owner；启动扫描/超时 sweeper 必须关闭新 snapshot、撤销新 ticket、稳定失败终结、取消成功 outbox 并释放唯一占用。
 - outbox worker 在 `activation_pending / active / compensated` 三态竞跑；成功类只在 active 投递一次，补偿时取消，takeover 的 committed revocation 可提交后投递且不声称新端成功。
 - takeover 回滚保持旧端可用；提交后 outbox 投递失败不回滚，旧端通过下一请求校验或重连收敛。
@@ -45,6 +48,7 @@ PostgreSQL 契约测试和端到端测试必须覆盖：
 - refresh 同 key 同请求安全重放、同 key 请求冲突、successor superseded，以及不同 key 重用 used token 的 replay 撤销。
 - `RequestTerminalRecord` 与 refresh terminal 在重试窗口、active secret reference、family 绝对到期和清理缓冲各边界的保留/清理测试；pending 不得被普通清理器删除。
 - refresh 提交后丢响应并重载时复用持久 key，多标签页保持 single-flight；不确定 cookie 遇 conflict/superseded 时安全 logout，不用新 key 触发误 replay。
+- M1 后台 RecoveryCode 流程覆盖角色权限、重新认证、reason/support case 和审计：冻结 / 撤销可用，最小修复只在同一权威服务验证玩家仍持有效 code 后成功。无 code、越权、并发消费、密码与 code 均丢失或事务故障时，不得改密、签发凭据、复活会话或把账号重分配给其他 User。
 
 ## 3. 可观测性
 
@@ -101,11 +105,11 @@ M0 可以先用 `m0_infrastructure` 级隔离演练验证 PostgreSQL 客户端�
 
 除非已批准 profile 采用更严格目标，首发生产环境固定 RPO 不超过 15 分钟、RTO 不超过 60 分钟，并至少保留 7 份每日备份和 4 份每周备份。
 
-降低这些目标必须修改 `requirements_v5.md`；部署配置和审批记录只能提高目标。
+降低这些目标必须修改 `requirements_v6.md`；部署配置和审批记录只能提高目标。
 
 ## 7. 性能与容量
 
-M0 必须版本控制 `capacity_profile`，记录环境、数据集、负载模型、采样窗口和阈值。默认 profile 为：
+M0 必须版本控制 Public V1 使用的 `capacity_profile`，记录环境、数据集、负载模型、采样窗口和阈值。M1-B 可做内部抽样，但完整 profile 证据只在 `PublicV1Gate` 重新执行。默认 profile 为：
 
 - 应用 4 vCPU / 8 GiB，PostgreSQL 4 vCPU / 8 GiB，同区域网络，生产构建，不启用 Redis。
 - 10000 个账号与角色、10000 个 Blueprint revision、100000 个 Item Entity。
@@ -133,7 +137,7 @@ M0 必须版本控制 `capacity_profile`，记录环境、数据集、负载模�
 - 新连接建立后的完整状态重建 P95 不超过 2 秒。
 - 两小时基线中不得出现数据不一致、重复结算、未处理异常或非计划断线。
 
-延迟不含客户端公网传输和显式 Scheduler 等待。采用更严格目标不需要修改需求；放宽任一最低目标必须先修改 `requirements_v5.md`。
+延迟不含客户端公网传输和显式 Scheduler 等待。采用更严格目标不需要修改需求；放宽任一最低目标必须先修改 `requirements_v6.md`。
 
 ## 8. XKX100 参考基线
 
@@ -209,6 +213,8 @@ manifest 还必须记录 `alley1.east -> sroad3` external boundary、定义计�
 
 包络内每项能力只允许 `verified / blocked / unverified`。只有 `verified` 可计入对齐声明；包络外行为不得在报告或发布说明中被推断为已对齐。
 
+首条 `GoldenSkillChain` 必须把 `bahuang-gong` 的 `exert powerup` 与 `baihua-cuoquan` 的 `jifa / prepare / perform cuo` 固定在同一不可变 golden case 或其显式引用中，绑定 `xkx100-skill-combat-v1`、完整初始态、RNG / 时钟、expected diff、事件与 case hash。两段任一缺少来源闭包、exact revision 或非允许差异时，M1-A / M1 保持 `blocked / unverified`。`benlei-shou` 双准备只作为后置用例，不得伪装成首条链的必做通过证据，也不得替代上述候选链。
+
 ### 8.1 世界物化与重启幂等
 
 fixture 必须覆盖 world init 连续执行与进程重启；static/spawn 唯一键命中时不得新增 Room、Exit、NPC、Item、`ActorSkill` 或 binding。
@@ -253,6 +259,8 @@ fixture 必须覆盖 world init 连续执行与进程重启；static/spawn 唯�
 
 两种成功都必须断言 Item `state_version` 及受影响 Character 的两个聚合版本推进，资源/Effect 与 Item 状态同事务提交。故障注入必须证明失败时所有字段和版本不变；若 Item 有 SpawnMaterialization，最终消耗后重启也不得改写记录或重生。
 
+Item 生命周期测试使用冻结时钟覆盖：NPC death/drop 原子创建 30 秒 `LootClaim`；claim 内非领取者被拒绝、恰好到期后公开；多请求并发拾取只有一个赢家。未拾取 NPC loot 在 900 秒策略边界进入保留 identity/history 的 `ItemRetirement`。玩家普通丢弃 Item 在 3600 秒前收到告警并到期退休；重新拾取、进入背包、装备或受保护 policy 会阻止该清理。清理任务重试、与拾取竞跑和进程重启都不得硬删除、重复领取、错误退休或复活死亡 Entity / retired Item。
+
 `xkx100-skill-combat-v1` 及其依赖闭包未实际冻结时，武学/战斗黄金链必须标记 `manual_review` 或 `blocked`，不得计为通过。合成 fixture 只能验证引擎机制，不能替代 XKX100 黄金差分或对齐证据。
 
 本机绝对路径只用于定位候选输入，不能作为验收身份。快照或 manifest 变化必须走显式评审、创建新版本并重新生成差分报告。
@@ -264,6 +272,8 @@ fixture 必须覆盖 world init 连续执行与进程重启；static/spawn 唯�
 内容许可、权利证明和公开发布法律判断由具体部署者在工程流程之外负责，不属于 M0-M6 或发布门禁。CI、构建和部署不得要求 `content_release_mode`，也不得从来源记录推断权利状态。
 
 ## 10. 发布门禁
+
+本节未加限定的“发布候选”指 Public V1 候选；M1-B 的内部候选只执行 V6 明确列出的 M1 范围证据，不得把本节完整清单倒推为 M1 已完成。
 
 发布候选必须同时满足：
 
@@ -278,3 +288,22 @@ fixture 必须覆盖 world init 连续执行与进程重启；static/spawn 唯�
 - capacity profile、浏览器矩阵和恢复预算全部达标
 
 发布门禁和必做能力不得用例外改写为通过。仅非必做项的延期处置可记录负责人、风险、补救措施和失效日期，且不得改变门禁结论。
+
+## V6 增量：PublicV1Gate 与 ReleaseManifest
+
+`PublicV1Gate`（`RELEASE-001`）独立于 M0-M6 和 Engine Stage Ex，只验证一个 owner-operated 官方单实例。M1-A / M1-B 是封闭内部步骤，不能自动开启公开注册。通过 gate 前必须完成：
+
+- 7 天封闭试运行、至少 5 名非管理员测试者、至少 20 次核心循环。
+- 完整浏览器矩阵、容量与两小时 soak、覆盖账号 / 角色 / 世界拓扑 / 内容批次 / 审计链五个范围的发布级恢复演练。
+- S0 / S1 清零；有 workaround、负责人和到期日的受限 S2 例外；S3 可公开记录。
+- 社区规则、恢复 / 关闭说明、保留摘要、可用性声明和内容责任确认已发布。
+- RecoveryCode 恢复/轮换、账号 `active -> cooling_off -> retired` 生命周期、旧会话与 Presence 撤销以及恢复后重新 enter 的 E2E 证据。
+- PlayerBlock、ChannelMute、不可变消息取证、一次申诉、处罚 `effective_at / expires_at`、自批禁止和 30/180/365 天保留清理的 moderation E2E 与审计证据。
+- active `ContentReleaseBatch` 与 ReleaseManifest 的机器清单证明可连通的约 30-60 个 Room、10 个以上具功能或敌对行为的 NPC、20 个以上 Item 定义和至少一条武学路径；E2E 证明至少一条可重复 PvE 循环，封闭试运行记录首次游玩约 2-4 小时。计数、行为、时长和 envelope 状态任一缺证都不得通过 gate。
+- Public V1 协议 / E2E 必须证明 Character 间只有双方确认的非致命 `Sparring` 可以开始，致命或 involuntary 动作使用既有稳定错误码拒绝；玩家败北产生 `SafeDefeat`，不创建 Character death、不丢失玩家 Item，也不回退不可逆成长。
+
+每次部署必须提交完整 `ReleaseManifest`，至少绑定：代码 commit、`requirements_v6.md` 版本、11-16 合同版本、迁移 head、active `ContentReleaseBatch`、不可变 `SourceSnapshot`、Village / combat compatibility envelopes、黄金 / 差分 / 浏览器 / 容量 / 恢复测试报告。回滚必须协调代码、迁移与内容批次；紧急回滚还要记录原因和受影响批次。计划冷维护提前 24 小时公告，执行 drain、健康检查和证据记录；紧急维护建立 incident 记录。
+
+Public V1 无支付、订阅、付费 Item 或真实货币经济；实例注册模式只能为审计的 `open / paused / invite_only`。初始 superuser 由安全的一次性管理命令创建，不得使用默认凭据。平台必须提供公开 status、maintenance notice、SystemNotice 和统一恢复 / 举报 / 申诉 / 客服入口。
+
+Public V1 H5 E2E 必须覆盖未认证和已认证状态下的公开 status、计划维护窗口、drain 状态、活动 incident、`system.maintenance` / SystemNotice 与恢复通知。进入 drain 后不能新建 enter 或 IC action，已提交终结仍安全收敛；health check、status 投影和 H5 展示不得互相伪造，维护与安全通知不得被玩家屏蔽。
