@@ -1,0 +1,39 @@
+{
+  "contract_version": "1",
+  "artifact_type": "content_seed_bundle",
+  "mudlib_key": "jinyong.core",
+  "seed_bundle_id": "jinyong.seed.v1",
+  "target_content_release": "jinyong.release",
+  "manifest_version": "1.0.0",
+  "compiler_contract_version": "blueprint-compiler/1",
+  "canonicalization": "RFC8785-JCS/UTF-8",
+  "hash_algorithm": "sha256",
+  "blueprints": [
+    {
+      "blueprint_key": "room.xiangyang.east_gate",
+      "kind": "room",
+      "version": "1.0.0",
+      "parent_keys": [],
+      "source_type": "file",
+      "tags": ["public_v1", "xiangyang"],
+      "behavior_profile_keys": ["profile.room.default"],
+      "spawn_policy": {"update_mode": "new_only"},
+      "data": {
+        "display_name": "襄阳东门",
+        "spawn_entries": [],
+        "external_exit_boundaries": []
+      }
+    }
+  ],
+  "registry_context": [
+    {
+      "registry_kind": "behavior_profile",
+      "registry_key": "profile.room.default",
+      "registry_version": "1.0.0",
+      "definition_hash": "94c19bd346c9c4148c2aa8d7388ce056618fc68af6f0dae46e824239caaf6d81"
+    }
+  ],
+  "registry_context_hash": "0474fbd88ab0d4f875122fde101b34f56a779f8d59e89cdcde13dd5e4179261d",
+  "content_hash": "22311f4c18bd2890cf57e19c926e4dbf8f1ed39810bf14d1cd0c4f650ec4dd05",
+  "artifact_hash": "073ac8cce19d4375a230de0b471e1ee2e58664645b34416de695f0b9ecdf8a24"
+}

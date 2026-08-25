@@ -37,6 +37,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"new_mud.mudlibs.jinyong_core" = ["seed/*.json"]
+
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "new_mud.settings.test"
 pythonpath = ["src"]

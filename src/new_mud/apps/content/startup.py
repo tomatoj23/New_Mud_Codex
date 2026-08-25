@@ -469,6 +469,35 @@ def _prepare_blueprints(
     return tuple(prepared_by_key[key] for key in sorted(prepared_by_key))
 
 
+def seed_registry_context(
+    bundle: SeedBundle,
+    *,
+    registry_catalog: RegistryCatalog,
+) -> tuple[dict[str, str], ...]:
+    """Return the exact active Registry context selected by a seed bundle."""
+    exact_references = {
+        (
+            dependency.reference.registry_kind,
+            dependency.reference.registry_key,
+            dependency.reference.registry_version,
+            dependency.reference.definition_hash or "",
+        )
+        for blueprint in _prepare_blueprints(bundle, registry_catalog=registry_catalog)
+        for dependency in blueprint.registry_dependencies
+    }
+    return tuple(
+        {
+            "registry_kind": registry_kind,
+            "registry_key": registry_key,
+            "registry_version": registry_version,
+            "definition_hash": definition_hash,
+        }
+        for registry_kind, registry_key, registry_version, definition_hash in sorted(
+            exact_references
+        )
+    )
+
+
 def _release_hash(prepared: Sequence[_PreparedBlueprint]) -> str:
     items = [
         {
