@@ -59,6 +59,16 @@ def verification_keyrings() -> VerificationKeyRings:
         )
         for value in getattr(settings, setting_name, {}).values()
     ]
+    ring_material = [
+        ring.read_key(key_id)
+        for ring in (
+            rings.contact_encryption,
+            rings.contact_lookup,
+            rings.code_pepper,
+            rings.delivery_payload,
+        )
+        for key_id in ring.key_ids
+    ]
     external_material = [
         value
         for value in (
@@ -68,11 +78,14 @@ def verification_keyrings() -> VerificationKeyRings:
         )
         if value
     ]
+    external_bytes = [value.encode("utf-8") for value in external_material]
     if (
         not getattr(settings, "AUTH_TOKEN_SIGNING_KEY", "")
         or len(set(encoded_material)) != len(encoded_material)
+        or len(set(ring_material)) != len(ring_material)
         or len(set(external_material)) != len(external_material)
         or set(encoded_material).intersection(external_material)
+        or set(ring_material).intersection(external_bytes)
     ):
         raise VerificationServiceUnavailable
     return rings

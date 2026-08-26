@@ -34,6 +34,7 @@ from new_mud.apps.identity.verification_crypto import (
     decrypt_value,
     encrypt_value,
     keyed_digest,
+    keyed_digest_candidates,
     verification_code_digest,
 )
 from new_mud.apps.identity.verification_delivery import (
@@ -150,7 +151,6 @@ def test_lookup_and_code_digests_use_independent_contexts() -> None:
         destination_lookup_digest=lookup_digest.digest,
         user_id=None,
     )
-
     assert lookup_digest.key_id == "lookup"
     assert registration_digest.key_id == "pepper"
     assert lookup_digest.digest != registration_digest.digest
@@ -178,6 +178,55 @@ def test_lookup_and_code_digests_use_independent_contexts() -> None:
     )
 
 
+def test_rotated_digest_keyrings_write_current_and_read_old_keys() -> None:
+    old_only = KeyRing(current_key_id="old", encoded_keys={"old": key_material(5)})
+    old_lookup = keyed_digest("player@example.com", keyring=old_only, context="contact:email")
+    old_code = verification_code_digest(
+        "123456",
+        keyring=old_only,
+        purpose="registration",
+        channel="email",
+        destination_lookup_digest=old_lookup.digest,
+        user_id=None,
+    )
+    rotated = KeyRing(
+        current_key_id="current",
+        encoded_keys={"old": key_material(5), "current": key_material(6)},
+    )
+
+    current_lookup = keyed_digest(
+        "player@example.com",
+        keyring=rotated,
+        context="contact:email",
+    )
+    restored_lookup = keyed_digest(
+        "player@example.com",
+        keyring=rotated,
+        context="contact:email",
+        key_id="old",
+    )
+    restored_code = verification_code_digest(
+        "123456",
+        keyring=rotated,
+        purpose="registration",
+        channel="email",
+        destination_lookup_digest=old_lookup.digest,
+        user_id=None,
+        key_id="old",
+    )
+    candidates = keyed_digest_candidates(
+        "player@example.com",
+        keyring=rotated,
+        context="contact:email",
+    )
+
+    assert current_lookup.key_id == "current"
+    assert restored_lookup == old_lookup
+    assert restored_code == old_code
+    assert {candidate.key_id for candidate in candidates} == {"current", "old"}
+    assert old_lookup in candidates
+
+
 def test_registration_verification_request_persists_only_protected_delivery_state(client) -> None:
     destination = "Player.Name+news@例子.测试"
 
@@ -191,6 +240,7 @@ def test_registration_verification_request_persists_only_protected_delivery_stat
     assert response.json() == {"status": "accepted", "retry_after": 60}
     assert response.headers["Cache-Control"] == "no-store"
     assert set(response.json()) == {"status", "retry_after"}
+    assert mail.outbox == []
     device_cookie = response.cookies["new_mud_verification_device"]
     assert device_cookie["path"] == "/api/v1/auth/"
     assert device_cookie["secure"] is True
@@ -397,6 +447,19 @@ def test_registration_verification_rejects_unsupported_request_shapes_without_st
         (
             "token_key_reused",
             {"AUTH_TOKEN_SIGNING_KEY": key_material(ord("c"))},
+        ),
+        (
+            "equivalent_key_material_reused",
+            {
+                "AUTH_CONTACT_ENCRYPTION_KEYS": {
+                    "contact-encryption-v1": base64.urlsafe_b64encode(bytes([251]) * 32).decode(
+                        "ascii"
+                    )
+                },
+                "AUTH_CONTACT_LOOKUP_KEYS": {
+                    "contact-lookup-v1": base64.b64encode(bytes([251]) * 32).decode("ascii")
+                },
+            },
         ),
     ],
 )

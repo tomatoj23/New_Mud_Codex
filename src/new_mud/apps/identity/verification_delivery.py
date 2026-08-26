@@ -86,6 +86,38 @@ class ClaimedDelivery:
     attempt_count: int
 
 
+def _terminalize_delivery_failure(
+    *,
+    challenge: VerificationChallenge,
+    outbox: VerificationDeliveryOutbox,
+    provider_category: str,
+    now,
+) -> None:
+    if challenge.state == VerificationChallenge.State.PENDING_DELIVERY:
+        challenge.state = VerificationChallenge.State.DELIVERY_FAILED
+        challenge.terminal_at = now
+        challenge.version += 1
+        challenge.save(update_fields=("state", "terminal_at", "version"))
+    outbox.state = VerificationDeliveryOutbox.State.DELIVERY_FAILED
+    outbox.payload_ciphertext = None
+    outbox.lease_owner = None
+    outbox.lease_expires_at = None
+    outbox.provider_category = provider_category
+    outbox.terminal_at = now
+    outbox.version += 1
+    outbox.save(
+        update_fields=(
+            "state",
+            "payload_ciphertext",
+            "lease_owner",
+            "lease_expires_at",
+            "provider_category",
+            "terminal_at",
+            "version",
+        )
+    )
+
+
 def _terminalize_one_exhausted_lease(*, now) -> bool:
     with transaction.atomic():
         outbox = (
@@ -101,28 +133,11 @@ def _terminalize_one_exhausted_lease(*, now) -> bool:
         if outbox is None:
             return False
         challenge = VerificationChallenge.objects.select_for_update().get(pk=outbox.challenge_id)
-        if challenge.state == VerificationChallenge.State.PENDING_DELIVERY:
-            challenge.state = VerificationChallenge.State.DELIVERY_FAILED
-            challenge.terminal_at = now
-            challenge.version += 1
-            challenge.save(update_fields=("state", "terminal_at", "version"))
-        outbox.state = VerificationDeliveryOutbox.State.DELIVERY_FAILED
-        outbox.payload_ciphertext = None
-        outbox.lease_owner = None
-        outbox.lease_expires_at = None
-        outbox.provider_category = "attempts_exhausted"
-        outbox.terminal_at = now
-        outbox.version += 1
-        outbox.save(
-            update_fields=(
-                "state",
-                "payload_ciphertext",
-                "lease_owner",
-                "lease_expires_at",
-                "provider_category",
-                "terminal_at",
-                "version",
-            )
+        _terminalize_delivery_failure(
+            challenge=challenge,
+            outbox=outbox,
+            provider_category="attempts_exhausted",
+            now=now,
         )
         return True
 
@@ -271,22 +286,18 @@ def _record_failure(
         exhausted = outbox.attempt_count >= settings.AUTH_VERIFICATION_MAX_DELIVERY_ATTEMPTS
         if permanent or exhausted:
             challenge = VerificationChallenge.objects.select_for_update().get(pk=claim.challenge_id)
-            if challenge.state == VerificationChallenge.State.PENDING_DELIVERY:
-                challenge.state = VerificationChallenge.State.DELIVERY_FAILED
-                challenge.terminal_at = now
-                challenge.version += 1
-                challenge.save(update_fields=("state", "terminal_at", "version"))
-            outbox.state = VerificationDeliveryOutbox.State.DELIVERY_FAILED
-            outbox.payload_ciphertext = None
-            outbox.terminal_at = now
-            outcome = DeliveryOutcome.DELIVERY_FAILED
-        else:
-            outbox.state = VerificationDeliveryOutbox.State.PENDING
-            outbox.next_attempt_at = now + timedelta(seconds=min(300, 2**outbox.attempt_count))
-            outcome = DeliveryOutcome.RETRY_SCHEDULED
+            _terminalize_delivery_failure(
+                challenge=challenge,
+                outbox=outbox,
+                provider_category=("permanent_failure" if permanent else "transient_failure"),
+                now=now,
+            )
+            return DeliveryOutcome.DELIVERY_FAILED
+        outbox.state = VerificationDeliveryOutbox.State.PENDING
+        outbox.next_attempt_at = now + timedelta(seconds=min(300, 2**outbox.attempt_count))
         outbox.lease_owner = None
         outbox.lease_expires_at = None
-        outbox.provider_category = "permanent_failure" if permanent else "transient_failure"
+        outbox.provider_category = "transient_failure"
         outbox.version += 1
         outbox.save(
             update_fields=(
@@ -300,7 +311,7 @@ def _record_failure(
                 "version",
             )
         )
-        return outcome
+        return DeliveryOutcome.RETRY_SCHEDULED
 
 
 def deliver_one_verification(

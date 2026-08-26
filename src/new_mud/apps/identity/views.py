@@ -32,8 +32,7 @@ from .verification_requests import (
     request_registration_verification,
 )
 
-RECOVERY_DEVICE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
-VERIFICATION_DEVICE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
+ANONYMOUS_DEVICE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 
 
 def _response(payload: dict[str, object], *, status: int) -> Response:
@@ -85,22 +84,43 @@ def _client_ip(request) -> str:
     return peer
 
 
-def _verification_device_id(request) -> str:
-    candidate = request.COOKIES.get("new_mud_verification_device")
-    if isinstance(candidate, str) and VERIFICATION_DEVICE_PATTERN.fullmatch(candidate):
+def _anonymous_device_id(request, *, cookie_name: str) -> str:
+    candidate = request.COOKIES.get(cookie_name)
+    if isinstance(candidate, str) and ANONYMOUS_DEVICE_PATTERN.fullmatch(candidate):
         return candidate
     return secrets.token_urlsafe(24)
 
 
-def _set_verification_device_cookie(response: Response, device_id: str) -> None:
+def _set_anonymous_device_cookie(
+    response: Response,
+    device_id: str,
+    *,
+    cookie_name: str,
+    max_age: int,
+    path: str,
+) -> None:
     response.set_cookie(
-        "new_mud_verification_device",
+        cookie_name,
         device_id,
-        max_age=settings.AUTH_VERIFICATION_DEVICE_MAX_AGE_SECONDS,
-        path="/api/v1/auth/",
+        max_age=max_age,
+        path=path,
         secure=True,
         httponly=True,
         samesite="Strict",
+    )
+
+
+def _verification_device_id(request) -> str:
+    return _anonymous_device_id(request, cookie_name="new_mud_verification_device")
+
+
+def _set_verification_device_cookie(response: Response, device_id: str) -> None:
+    _set_anonymous_device_cookie(
+        response,
+        device_id,
+        cookie_name="new_mud_verification_device",
+        max_age=settings.AUTH_VERIFICATION_DEVICE_MAX_AGE_SECONDS,
+        path="/api/v1/auth/",
     )
 
 
@@ -157,21 +177,16 @@ def _authentication_request_allowed(
 
 
 def _recovery_device_id(request) -> str:
-    candidate = request.COOKIES.get("new_mud_recovery_device")
-    if isinstance(candidate, str) and RECOVERY_DEVICE_PATTERN.fullmatch(candidate):
-        return candidate
-    return secrets.token_urlsafe(24)
+    return _anonymous_device_id(request, cookie_name="new_mud_recovery_device")
 
 
 def _set_recovery_device_cookie(response: Response, device_id: str) -> None:
-    response.set_cookie(
-        "new_mud_recovery_device",
+    _set_anonymous_device_cookie(
+        response,
         device_id,
+        cookie_name="new_mud_recovery_device",
         max_age=settings.AUTH_RECOVERY_DEVICE_MAX_AGE_SECONDS,
         path="/api/v1/auth/recover",
-        secure=True,
-        httponly=True,
-        samesite="Strict",
     )
 
 

@@ -43,6 +43,10 @@ class KeyRing:
     def current_key(self) -> bytes:
         return self._keys[self.current_key_id]
 
+    @property
+    def key_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(self._keys))
+
     def read_key(self, key_id: str) -> bytes:
         try:
             return self._keys[key_id]
@@ -102,11 +106,30 @@ def decrypt_value(value: EncryptedValue, *, keyring: KeyRing, context: str) -> s
         raise CiphertextInvalid from error
 
 
-def keyed_digest(value: str, *, keyring: KeyRing, context: str) -> DigestedValue:
+def keyed_digest(
+    value: str,
+    *,
+    keyring: KeyRing,
+    context: str,
+    key_id: str | None = None,
+) -> DigestedValue:
+    selected_key_id = key_id or keyring.current_key_id
     payload = f"v1\x1f{context}\x1f{value}".encode()
     return DigestedValue(
-        digest=hmac.new(keyring.current_key, payload, hashlib.sha256).hexdigest(),
-        key_id=keyring.current_key_id,
+        digest=hmac.new(keyring.read_key(selected_key_id), payload, hashlib.sha256).hexdigest(),
+        key_id=selected_key_id,
+    )
+
+
+def keyed_digest_candidates(
+    value: str,
+    *,
+    keyring: KeyRing,
+    context: str,
+) -> tuple[DigestedValue, ...]:
+    return tuple(
+        keyed_digest(value, keyring=keyring, context=context, key_id=key_id)
+        for key_id in keyring.key_ids
     )
 
 
@@ -118,6 +141,7 @@ def verification_code_digest(
     channel: str,
     destination_lookup_digest: str,
     user_id: str | None,
+    key_id: str | None = None,
 ) -> DigestedValue:
     context = "\x1f".join(
         (
@@ -128,4 +152,4 @@ def verification_code_digest(
             user_id or "<unbound>",
         )
     )
-    return keyed_digest(code, keyring=keyring, context=context)
+    return keyed_digest(code, keyring=keyring, context=context, key_id=key_id)
