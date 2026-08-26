@@ -164,6 +164,110 @@ MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 TRACEABILITY_ROW_RE = re.compile(r"^\|\s*`([A-Z]+-[0-9]{3})`\s*\|\s*`([a-z_]+)`\s*\|")
 LOCK_ENTRY_RE = re.compile(r"^([A-Za-z0-9_.-]+)==([A-Za-z0-9][A-Za-z0-9_.+!-]*)$")
 
+AUTHENTICATION_AUTHORITY_MARKERS = {
+    "requirements_v6.md": {
+        "`AUTH-005`",
+        "`VerifiedContactMethod`",
+        "`VerificationChallenge`",
+        "RecoveryCode 已退役",
+        "Character Slice 2",
+    },
+    "CONTEXT.md": {
+        "**VerifiedContactMethod**",
+        "**VerificationChallenge**",
+        "A retired player-held proof",
+    },
+    "docs/adr/0004-recovery-code-and-presence-recovery-boundaries.md": {
+        "Status: superseded by ADR-0005",
+    },
+    "docs/adr/0005-verified-contact-methods-replace-recovery-code.md": {
+        "`VerifiedContactMethod`",
+        "`VerificationChallenge`",
+        "Character、Presence、PresenceRecovery 和 takeover",
+    },
+    "docs/adr/0006-encrypted-verified-contact-storage.md": {"keyed lookup digest"},
+    "docs/adr/0007-durable-verification-delivery-outbox.md": {
+        "PostgreSQL 持久 outbox",
+    },
+    "docs/adr/0008-access-tokens-require-active-auth-session.md": {
+        "`active` 的 AuthSession",
+    },
+    "docs/new_engine/08_PERMISSIONS_ADMIN_API.md": {
+        "/api/v1/auth/registration-verification/request",
+        "/api/v1/auth/password-reset/request",
+        "`RECOVERY_CODE_RETIRED`",
+        "`VerifiedContactMethod`",
+    },
+    "docs/new_engine/10_ROADMAP.md": {
+        "Auth Baseline Amendment",
+        "Character Slice 2",
+        "Issue #10",
+    },
+    "docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md": {
+        "`VerificationChallenge`",
+        "`VerifiedContactMethod`",
+        "`RECOVERY_CODE_RETIRED`",
+        "`active` AuthSession",
+    },
+    "docs/new_engine/15_FRONTEND_H5_CONTRACT.md": {
+        "/api/v1/auth/registration-verification/request",
+        "/api/v1/auth/password-reset/request",
+        "邮箱验证码",
+    },
+    "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md": {
+        "`VerificationDeliveryOutbox`",
+        "`Idempotency-Key`",
+        "`RECOVERY_CODE_RETIRED`",
+    },
+    "docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md": {
+        "| `AUTH-005` | `specified` |",
+        "Issue #10",
+        "Issue #11",
+    },
+    "docs/new_engine/18_IMPLEMENTATION_STATUS.md": {
+        "Auth Baseline Amendment",
+        "`AUTH-005`",
+        "Issue #10",
+        "Issue #11",
+    },
+    "docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md": {
+        "`VerifiedContactMethod`",
+        "`VerificationChallenge`",
+        "ADR-0005",
+    },
+    "docs/new_engine/NEXT_SESSION_HANDOFF.md": {
+        "Auth Baseline Amendment",
+        "Character Slice 2",
+        "Issue #11",
+        "Issue #12",
+    },
+    "plans/m0-e1-tracer-bullets.md": {
+        "Auth Baseline Amendment",
+        "Character Slice 2",
+        "Issue #10",
+        "Issue #11",
+    },
+}
+
+OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS = {
+    "docs/new_engine/08_PERMISSIONS_ADMIN_API.md": {
+        "一次性明文 RecoveryCode",
+        "### 4.4 RecoveryCode 与账号生命周期",
+    },
+    "docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md": {
+        "REST register 只原子创建 User、GameAccount 与 RecoveryCode 哈希",
+        "### 10.1 RecoveryCode 与 GameAccount 生命周期",
+    },
+    "docs/new_engine/15_FRONTEND_H5_CONTRACT.md": {
+        "4.2 的四个开户/认证端点",
+        "只在该响应一次展示 RecoveryCode",
+    },
+    "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md": {
+        "M1 后台 RecoveryCode 流程覆盖",
+        "register/login/refresh/logout 四个端点都拒绝未允许 Origin",
+    },
+}
+
 
 @dataclass
 class VerificationResult:
@@ -262,6 +366,33 @@ def validate_documents(repository_root: Path, result: VerificationResult) -> Non
                 result.error(f"{relative}: link escapes repository: {target}")
                 continue
             result.check(resolved.exists(), f"{relative}: broken local link: {target}")
+
+
+def validate_authentication_authority(repository_root: Path, result: VerificationResult) -> None:
+    for relative, markers in AUTHENTICATION_AUTHORITY_MARKERS.items():
+        path = repository_root / relative
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            result.error(f"{relative}: cannot validate authentication authority: {error}")
+            continue
+        for marker in sorted(markers):
+            result.check(
+                marker in text,
+                f"{relative}: authentication authority marker {marker!r} is missing",
+            )
+
+    for relative, markers in OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS.items():
+        path = repository_root / relative
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        for marker in sorted(markers):
+            result.check(
+                marker not in text,
+                f"{relative}: obsolete authentication authority marker {marker!r} remains",
+            )
 
 
 def load_schemas(contract_root: Path, result: VerificationResult) -> dict[str, Any]:
@@ -877,6 +1008,7 @@ def verify_repository(
     result = VerificationResult()
     contract_root = repository_root / "contracts" / "v1"
     validate_documents(repository_root, result)
+    validate_authentication_authority(repository_root, result)
     schemas = load_schemas(contract_root, result)
     instances = validate_instances(contract_root, schemas, result)
     requirements = parse_traceability(repository_root, result)

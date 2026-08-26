@@ -1,6 +1,6 @@
 # RecoveryCode、PresenceRecovery 与账号关闭边界
 
-Status: accepted
+Status: superseded by ADR-0005
 
 注册事务一次性展示 `RecoveryCode`，服务端只保存不可逆哈希。密码找回、账号恢复和主动轮换都会签发新 code，并撤销该 User 的全部 AuthSession、RefreshTokenFamily 与未使用票据、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence。恢复操作不会恢复旧 Presence；用户必须重新登录并重新进入世界。
 

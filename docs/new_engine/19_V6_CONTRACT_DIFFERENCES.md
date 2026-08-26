@@ -15,7 +15,11 @@
 | V6 结果 | 受影响合同 | 同步内容 |
 | --- | --- | --- |
 | 每实例一个 User 永久映射一个 GameAccount | 03、08、13 | 身份不拆分；CharacterOwnership 只承接未来多角色 |
-| 一次性可见、服务端只存哈希的 RecoveryCode | 08、13、15、16 | `/auth/recover`、`/auth/recovery-code/rotate`、`/account/close`、`/account/reopen`；恢复轮换 code，并撤销旧 AuthSession/refresh family/tickets、终止 PresenceSnapshot 租约、关闭运行时 Presence；统一错误和合并限流 |
+| `VerifiedContactMethod` 与 `VerificationChallenge` 取代 RecoveryCode | 08、13、15、16、17 | 新注册先验证 email；密码重置使用用途隔离的短期 challenge 并即时撤销全部旧认证；旧 recover/rotate 先统一 410，再于 Public V1 前删除 |
+| 联系方式密文与 keyed lookup digest 分离 | 08、13、16、ADR-0006 | Django `User.email` 保持为空；完整目标应用层加密、精确查询独立摘要、密钥隔离与轮换 |
+| 验证消息使用 PostgreSQL 持久 outbox | 08、13、16、ADR-0007 | HTTP 不同步发 SMTP；非枚举 202、幂等请求、同 code 重试、provider 接受后激活和 terminal payload 擦除 |
+| Access Token 必须解析到 `active` AuthSession | 08、13、16、ADR-0008 | 密码重置提交后旧 access/refresh 跨实例立即失效，注册与重置均不自动登录 |
+| ADR-0005 取代 ADR-0004 的 RecoveryCode 决策 | CONTEXT、ADR-0004 至 0008、17 | RecoveryCode 只保留历史 provenance；PresenceRecovery、账号重新启用与 takeover 继续是独立概念和后续切片 |
 | `presence.recover` | 11、13、15、16 | 同 AuthSession 恢复自身 active/grace PresenceSnapshot 租约并创建新一代运行时 Presence，递增 generation、旋转 ticket；跨会话仍需 takeover |
 | CharacterCreationProfile / CharacterDisplayName / RetiredCharacter | 04、08、12、15 | typed-registry profile definition、精确版本/hash、内容批次与起始 revision 固定、`GET /api/v1/character-creation-profiles`、`POST /api/v1/characters`、NFKC 名称规则、展示性别、幂等创建、GM 审计和不可自助重建 |
 
@@ -39,4 +43,4 @@
 
 ## 不在本次实现授权内
 
-本轮只授权文档、词汇、ADR、需求追踪和合同差异同步。没有授权功能代码、数据库迁移、客户端实现或公开部署；现有 E0 seed / resolver WIP 与其他工作树改动必须保留并另行评估。
+Issue #11 只授权 V6、冻结合同、词汇、ADR、需求追踪、状态、计划、差异和交接同步，以及对应文档合同校验。没有授权业务代码、数据库迁移、运行配置、客户端实现或公开部署；SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 和 takeover 均不得提前实现。

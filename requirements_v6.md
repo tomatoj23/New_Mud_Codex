@@ -1217,6 +1217,9 @@ Item 的容器能力、容量或接受规则无法唯一解析时必须进入 `m
 - CharacterOwnership
 - AuthSession
 - Presence
+- VerifiedContactMethod
+- VerificationChallenge
+- RecoveryCode（已退役历史概念）
 
 ### 8.2 身份模型
 
@@ -1229,6 +1232,8 @@ Item 的容器能力、容量或接受规则无法唯一解析时必须进入 `m
 | CharacterOwnership | 角色归属关系 | 是 |
 | AuthSession | 登录后认证会话 | 是 |
 | Presence | 控角中的在线状态 | 是 |
+| VerifiedContactMethod | User 已证明控制的恢复与安全通知渠道；不是登录名 | 是，首期仅 email |
+| VerificationChallenge | 按用途、渠道、目标和适用 User 隔离的短期单次证明 | 是，首期用于注册与密码重置 |
 
 在每个游戏实例内，一个 `User` 永久映射到一个 `GameAccount`。`CharacterOwnership` 仍作为独立关系建模，以便未来扩展多个 Character，但该扩展不能改变现有 `User -> GameAccount` 身份边界，也不能把同一 User 拆成多个游戏账号。
 
@@ -1236,9 +1241,11 @@ Item 的容器能力、容量或接受规则无法唯一解析时必须进入 `m
 
 长期目标仍包括以下能力：
 
-- 支持手机号注册
+- 支持以已验证手机号作为注册与恢复渠道，但手机号仍不是登录名
 - 支持微信小程序授权登录
 - 同一 User 可绑定多种登录身份
+- 支持受重新认证、双渠道证明或高风险等待期约束的联系方式换绑
+- 支持与密码重置用途分离的账号重新启用 challenge
 - 首发后可放宽一账号多角色，具体上限由产品策略另行冻结；该变化只影响 `CharacterOwnership`，不改变每实例一 User 一 GameAccount。
 
 ### 8.4 首发闭环边界
@@ -1249,21 +1256,29 @@ Item 的容器能力、容量或接受规则无法唯一解析时必须进入 `m
 - 手机号注册正式接入
 - 微信授权登录
 
-首发必须提供用户名密码自助注册。注册标识使用独立账号名，不要求手机号或邮箱。Public V1 通过 `PublicV1Gate` 后默认开放自助注册；运营可审计地将实例置于 `open`、`paused` 或 `invite_only` 模式，模式变化必须有操作者、原因和生效时间。
+首发必须提供已验证邮箱、独立账号名和密码组成的自助注册。邮箱只用于证明可用联系方式、账号恢复和安全通知，不是登录名、无密码登录凭据或 MFA。未来短信可以作为另一个验证与恢复渠道，但本轮只启用 `channel=email`。Public V1 通过 `PublicV1Gate` 后默认开放自助注册；运营可审计地将实例置于 `open`、`paused` 或 `invite_only` 模式，模式变化必须有操作者、原因和生效时间。
 
-注册成功必须在一个事务中创建 `User` 与对应 `GameAccount`，但不得创建 `AuthSession`、RefreshTokenFamily 或 Presence。客户端随后使用独立 login 端点登录。
+注册发码阶段不得创建 User 或预留账号名。最终注册必须在一个事务中消费 active registration `VerificationChallenge`，创建 `User`、对应 `GameAccount` 与唯一 verified email `VerifiedContactMethod`，但不得创建 `AuthSession`、RefreshTokenFamily、token、Character 或 Presence。客户端随后使用普通 login 端点以账号名和密码登录。
 
 账号名采用大小写不敏感的规范化唯一键，首发只允许 3-32 位 ASCII 小写字母、数字和下划线。角色显示名属于 Character，不得与登录账号名混用。
 
 注册必须使用 Django 密码校验、Origin 校验、限流和稳定错误码。重复账号名、不可接受输入和策略拒绝不得泄露内部用户记录。
 
-注册事务必须签发一次性可见的 `RecoveryCode`，服务端只保存不可逆哈希。密码找回、账号恢复或主动轮换都会生成新 code，并撤销该 User 的全部 AuthSession 与 RefreshTokenFamily、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并撤销未使用票据。若密码和 RecoveryCode 同时丢失且不存在外部身份，管理员不得把账号重新分配给声称的玩家；人工支持只能冻结 / 撤销或修复一个仍持有有效 code 的流程，不能依据游戏 trivia 推断所有权。
+RecoveryCode 已退役：不得继续签发、展示或消费，既有记录只作为撤销后的历史事实。旧 `/api/v1/auth/recover` 与 `/api/v1/auth/recovery-code/rotate` 在兼容期统一返回 HTTP `410` 与错误码 `RECOVERY_CODE_RETIRED`，并在 Public V1 前删除。
 
-恢复接口对账号、IP 和设备采用合并限流与统一错误响应；恢复失败不得锁死正常密码登录。M1 必须提供受审计的后台冻结 / 撤销与最小修复流程，Public V1 才承诺玩家可用 RecoveryCode 自助恢复。
+忘记密码时，用户通过 verified email 接收短期 `VerificationChallenge` 并设置新密码；成功事务必须消费 challenge、撤销该 User 跨实例的全部 AuthSession、RefreshTokenFamily 与 active credential，并取消适用的未完成恢复任务。旧 access/refresh 凭据在事务提交后立即失效，用户必须重新登录；密码重置不得改变 GameAccount lifecycle、自动恢复 Presence 或取得 Character 控制权。
+
+验证码 request 对格式有效的未知、占用、不可恢复或不可达联系方式返回相同 `202` 外形，不暴露 challenge、User、投递或 provider 状态。request 必须使用 `Idempotency-Key`，并通过 PostgreSQL 持久化的联系方式、IP、匿名设备合并限流；普通账号名/密码登录不依赖邮件 provider。六位验证码从成功激活起十分钟有效，最多五次校验，手动重发冷却为 60 秒。
+
+完整联系方式只允许应用层密文保存，精确查询与唯一性使用独立 keyed lookup digest；Django `User.email` 保持为空且不是回退来源。验证码只长期保存带用途上下文的摘要，临时完整目标和验证码只存在于加密 outbox payload，terminal 后擦除。HTTP 请求不得同步连接 SMTP；持久 outbox worker 负责投递与有界重试。
+
+每个 User 每种渠道最多一个 active 或 unreachable `VerifiedContactMethod`；同一规范化联系方式最多属于一个未永久退休 User。失去一个渠道不会自动解绑或转移所有权；同时失去密码和全部已验证渠道时，人工支持只能冻结账号并保全审计，不能依据游戏资料重新分配所有权。联系方式换绑、账号关闭与重新启用由后续独立规格实现；`cooling_off -> active` 必须使用用途独立的 account-reopen challenge，不能复用 password-reset challenge。
+
+本认证基线修订的稳定需求标识为 `AUTH-005`，实施单元称为 `Engine Stage E1 / Auth Baseline Amendment`，必须先于 Character Slice 2 完成。Issue #9 与原 E1 / Slice 1 仍是当时 RecoveryCode 实现和零隐式登录的历史证据；该历史不授权继续把 RecoveryCode 当作现行产品凭据。
 
 首发与 Public V1 均不提供玩家自助改名、删除或重建 Character。GM 改名 / 重置必须审计，测试环境允许显式 reset。账号关闭时只立即撤销控制权并进入可恢复的 `cooling_off`；只有冷静期届满、GameAccount 进入 `retired` 后，Character 才成为 `RetiredCharacter`，其名称永不自动复用。退休时对相关 User 数据执行匿名化 / 禁用，但不硬删除稳定 ID 和历史关系。
 
-首发认证固定为账号密码注册与登录。
+首发登录固定为账号名和密码；邮箱和未来手机号不作为登录名、passwordless 或 MFA。
 
 登录成功后创建 active AuthSession，并签发短期 JWT Access Token 与首代 Refresh Token。refresh 只允许为仍处于 `active` 的同一 AuthSession
 轮换 refresh credential 并签发新 access token；不得创建新 AuthSession，也不得复活 `revoked / expired / logged_out` 会话。
@@ -1277,7 +1292,7 @@ AuthIdentity、手机号和微信身份绑定均为首发后能力。
 
 ### 8.5 认证策略
 
-玩家侧注册不签发 token。登录成功后采用 JWT Access Token + 轮换 Refresh Token；轮换前必须重新确认 AuthSession 仍为 `active`。
+玩家侧注册和密码重置均不签发 token。登录成功后采用 JWT Access Token + 轮换 Refresh Token；每个受保护 HTTP/WebSocket 入口必须确认 token 仍解析到 `active` AuthSession 及可用 User/GameAccount，轮换前也必须重新确认 AuthSession 仍为 `active`。
 
 Refresh Token 仅可在 REST refresh endpoint 中作为轮换凭据，或由 REST logout endpoint 从受保护 Cookie 读取作为 AuthSession locator。它不得进入 WebSocket payload 或 Authorization header。
 
@@ -1301,8 +1316,9 @@ logout 还可以使用内存中的 access token Bearer 作为独立 locator；�
 ### 8.7 安全要求
 
 - 密码哈希采用 Django 标准密码哈希体系
-- 手机号等敏感字段加密存储
-- 注册、验证码与登录接口限流
+- 完整邮箱、手机号等敏感字段应用层加密存储，精确查询使用独立 keyed digest
+- 注册、验证码、密码重置与登录接口使用彼此适用的持久化限流
+- 验证消息通过持久 outbox 异步投递，公开 request 使用非枚举响应
 - 支持异地登录检测
 - 关键账号操作进入审计日志
 
@@ -1787,7 +1803,8 @@ M2-M3 才恢复 XKX100 的完整经济候选基线：
 
 ### 11.2 首发闭环必做能力
 
-- 用户名密码注册与登录
+- 已验证邮箱、独立账号名和密码注册；账号名和密码登录
+- 已验证邮箱短期验证码找回密码，并即时撤销全部旧认证状态
 - 角色创建
 - H5 适配 PC 浏览器与移动端浏览器
 - 房间 / 出口 / 场景浏览
@@ -1830,7 +1847,7 @@ M2-M3 才恢复 XKX100 的完整经济候选基线：
 
 1. 校验 `source_snapshot.json`、世界与武学 manifest、复合验收 bundle、逐文件哈希和聚合哈希。
 2. 将白名单内容以 Blueprint 草稿导入 PostgreSQL，执行校验并创建发布批次。
-3. 完成冷发布后，注册账号、使用账号密码登录、创建唯一角色并进入 `alley1`。
+3. 完成冷发布后，验证邮箱并注册账号、使用账号名和密码登录、创建唯一角色并进入 `alley1`。
 4. 执行“查看 -> 西北移动 -> 发起战斗 -> 查看战利品”的固定流程。
 5. 使用武学 manifest 纳入闭包的技能完成 `jifa` / `prepare` 与 `perform` / `exert` 校验链。
 6. 确认 `alley1.east` 被报告为不可进入的外部边界，且未被静默删除或伪造。
@@ -1885,13 +1902,15 @@ Public V1 仅验证一个 owner-operated 官方实例。通过 gate 后，实例
 
 运维必须提供公开状态页、维护公告、游戏内 `SystemNotice`，以及统一的恢复 / 申诉 / 举报 / 客服入口。计划中的冷维护至少提前 24 小时公告，执行 drain、证据记录、健康检查和异常事件记录；紧急维护必须建立 incident 记录。
 
-Public V1 发布前必须公开：社区规则、RecoveryCode 与账号关闭说明、数据保留摘要、可用性声明，以及运营者对发布内容责任的确认。上述资料不把法律判断重新引入工程自动化门禁。
+Public V1 发布前必须公开：社区规则、已验证联系方式恢复与账号关闭说明、数据保留摘要、可用性声明，以及运营者对发布内容责任的确认。上述资料不把法律判断重新引入工程自动化门禁。
+
+Public V1 开放自助注册前必须使用受控域名和正式邮件服务，并完成 SPF、DKIM、DMARC、退信处理、配额、告警与基础送达证据。163 SMTP 只允许显式 opt-in 的本机开发 smoke，不属于发布证据。
 
 ### 11.10 Public V1 社区治理与保留
 
 Public V1 必须提供 `PlayerBlock`、`ChannelMute`、带不可变消息 ID 的举报、服务器取证上下文、GM 警告 / 定时禁言 / 定时停权 / 封禁，以及每案一次的审计申诉。`PlayerBlock` 只影响执行者看到的普通公共消息和私聊，不删除证据或改变其他接收者；`ChannelMute` 只抑制个人订阅；系统、安全和 GM 通知不可屏蔽。
 
-默认保留期：普通 `ChatMessage` / `DirectMessage` 30 天；举报证据为结案后 180 天；认证、安全与 GM 审计 365 天；内容发布历史长期保留。账号关闭立即撤销会话并进入 30 天可恢复冷静期，只有 RecoveryCode 可恢复；期满后 User 数据匿名化 / 禁用，GameAccount 与 Character 退休，稳定 ID 仍可用于历史记录。
+默认保留期：普通 `ChatMessage` / `DirectMessage` 30 天；举报证据为结案后 180 天；认证、安全与 GM 审计 365 天；内容发布历史长期保留。未来账号关闭立即撤销会话并进入 30 天可恢复冷静期，保留已验证联系方式并只允许用途独立的 account-reopen challenge 恢复；期满后 User 数据匿名化 / 禁用，联系方式撤销并解绑，GameAccount 与 Character 退休，稳定 ID 仍可用于历史记录。账号关闭、重新启用和联系方式换绑不属于当前 Auth Baseline Amendment 的运行实现。
 
 ### 11.11 Public V1 例外与后置能力
 
@@ -1949,6 +1968,8 @@ M2 再补齐任务、世界事件、商店、掉落、对话树与触发条件�
 
 超管负责角色授予与紧急处置；运营负责账号、公告和发布审批；内容编辑只能处理草稿与被授权发布流；GM / 客服处理玩家问题；QA / 只读巡检不得执行写操作。
 
+玩家密码重置只通过仍可用的 `VerifiedContactMethod` 自助完成。后台不得查看完整联系方式或验证码、绕过 challenge、直接替用户设置密码，或依据 Character/游戏资料重分配账号；密码与全部已验证渠道同时丢失时只能冻结账号并保全审计。
+
 ---
 
 ## 十三、非功能性要求
@@ -1966,6 +1987,8 @@ M2 再补齐任务、世界事件、商店、掉落、对话树与触发条件�
 - 操作审计
 - 常见输入过滤与校验
 - 后台与玩家认证边界分离
+- VerifiedContactMethod 密文、lookup digest、验证码 pepper、投递 payload、Django、SMTP 与 token 密钥彼此独立
+- 认证 request 非枚举、幂等、持久限流；缺钥、限流或投递基础设施异常时验证功能 fail closed，普通登录保持可用
 
 ### 13.2 稳定性
 
@@ -1992,12 +2015,14 @@ M2 再补齐任务、世界事件、商店、掉落、对话树与触发条件�
 - 在线连接数监控
 - 慢查询监控
 - 任务失败告警
+- 验证 outbox backlog/oldest age、claim lease、投递延迟/结果、challenge 激活/消费/锁定、限流与安全通知失败告警
 - 战斗错误与协议错误统计
 
 ### 13.5 测试要求
 
 - 单元测试覆盖核心规则
 - 集成测试覆盖登录、移动、战斗、聊天
+- PostgreSQL 集成测试覆盖已验证邮箱注册、密码重置、跨实例认证撤销、challenge/outbox、幂等与持久限流
 - 转换器测试覆盖 XKX100 样例与关键回归样本
 - 黄金行为测试固定随机种子、时钟、时区与初始状态
 - 差分测试在相同输入下对比 XKX100 夹具与 New_Mud 的状态差异和事件输出
@@ -2121,13 +2146,14 @@ Redis 只有在需要 Channels channel layer、缓存或限流时才引入，不
 - 冻结 Blueprint 草稿、校验、发布批次、冷发布与批次回滚契约
 - 生成并版本控制 `source_snapshot.json`、独立的世界与武学 fixture manifest，以及同时引用二者的复合验收 bundle
 - 批准首发 capacity profile、精确浏览器测试矩阵与恢复预算
-- 冻结用户名密码注册、登录、恢复和后台角色权限边界
+- 冻结已验证联系方式注册、账号名/密码登录、邮箱密码重置、RecoveryCode 退役和后台角色权限边界
 
 M0 只有在上述制品、合同和决策记录全部存在且通过自动校验后才可完成。源快照、任一 manifest 或复合 bundle 未冻结时，M0 必须保持 `blocked`。
 
 ### 15.2 需求里程碑 M1：首发可玩闭环
 
-- 实现用户名密码注册、独立登录、JWT Access Token 与轮换 Refresh Token
+- 实现已验证邮箱、账号名和密码注册，普通账号名/密码登录，JWT Access Token 与轮换 Refresh Token
+- 实现邮箱密码重置、跨实例全部认证状态即时撤销与 RecoveryCode 退役
 - 实现唯一角色创建、进入世界、断线安全重建与跨设备单 PresenceSnapshot 租约
 - 实现 PC 与移动端浏览器 H5 主流程
 - 实现移动、查看、公共聊天、私聊、背包、装备与物品使用
@@ -2140,7 +2166,7 @@ M1 使用两个内部检查点降低反馈周期；二者都是内部 / 封闭�
 
 | 检查点 | 可交付结果 | 完成边界 |
 |:---|:---|:---|
-| M1-A 可玩验证 | 注册、登录、进入固定区域、移动、聊天、战斗、武学链和战利品闭环 | 首发兼容包络必须 verified；只用于内部验收，不构成公开发布 |
+| M1-A 可玩验证 | 已验证邮箱注册、登录、进入固定区域、移动、聊天、战斗、武学链和战利品闭环 | 首发兼容包络必须 verified；只用于内部验收，不构成公开发布 |
 | M1-B 发布候选 | 白名单后台编辑、发布/回滚、调度恢复，以及 M1 范围内的安全和恢复检查通过 | 等同 M1 完成，但不构成公开发布 |
 
 M1-A 不是独立需求里程碑。只有 M1-B 通过，需求里程碑 M1 才能标记 `complete`。浏览器完整矩阵、容量 / soak、五个业务范围恢复与 Public V1 试运行证据属于 `RELEASE-001`，不能用 M1-B 替代。
@@ -2149,7 +2175,7 @@ M1-A 不是独立需求里程碑。只有 M1-B 通过，需求里程碑 M1 才�
 
 - 完善内容编辑、差异对比、发布审计与回滚工具
 - 完善任务、商店、掉落、刷新与公告能力
-- 完善自助密码找回、账号恢复、日志查看与巡检工具
+- 完善联系方式管理、账号关闭/重新启用、日志查看与巡检工具
 - 补齐关键后台操作的权限、审计与回归测试
 
 ### 15.4 需求里程碑 M3：原版玩法补齐
@@ -2206,9 +2232,11 @@ M1-A 不是独立需求里程碑。只有 M1-B 通过，需求里程碑 M1 才�
 - 前端采用 uni-app + Vue 3
 - 首发支持 H5，并覆盖 PC 浏览器与移动端浏览器
 - 首发浏览器、视口、中文输入和无障碍最低范围以第 9.2.1 节为准
-- 首发认证固定为用户名密码注册与登录、JWT Access Token 与轮换 Refresh Token
+- 首发注册固定为已验证邮箱、独立账号名和密码；登录仍只使用账号名与密码，并采用 JWT Access Token 与轮换 Refresh Token
+- 密码重置使用已验证邮箱的短期 VerificationChallenge，成功后即时撤销全部旧认证状态且不自动登录
 - 每个游戏实例内一个 User 永久映射一个 GameAccount；CharacterOwnership 为未来多角色扩展边界
-- 注册签发一次性可见、服务端只存哈希的 RecoveryCode；恢复轮换 code，并撤销旧会话与票据、终止旧 PresenceSnapshot 租约、关闭旧运行时 Presence
+- RecoveryCode 已退役，只保留历史 provenance；现行认证权威使用 VerifiedContactMethod 与 VerificationChallenge
+- Auth Baseline Amendment 必须先于 Character Slice 2；本轮不实现 SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 或 takeover
 - Character 创建使用版本化 CharacterCreationProfile；CharacterDisplayName 按 NFKC 在实例内唯一，性别 / 代词只影响展示
 - 首发每个 GameAccount 最多一个 Character，未来扩展保留 CharacterOwnership
 - 同一 GameAccount 跨会话与设备最多一个处于 `active` 或 `grace_disconnected` 的 PresenceSnapshot 租约
@@ -2254,7 +2282,7 @@ M1-A 不是独立需求里程碑。只有 M1-B 通过，需求里程碑 M1 才�
 - `docs/00-20` 中涉及现行术语、权威顺序、路线图编号或 Evennia 参考边界的分析或治理说明
 - 根目录 `UBIQUITOUS_LANGUAGE.md`
 
-同步重点包括注册与认证、控角约束、ConditionDefinition / EffectInstance、固定夹具、兼容包络、发布闭环、来源可复现性、容量恢复预算、需求追溯和小程序交付。
+同步重点包括已验证联系方式注册与恢复、认证撤销、控角约束、ConditionDefinition / EffectInstance、固定夹具、兼容包络、发布闭环、来源可复现性、容量恢复预算、需求追溯和小程序交付。
 
 V5 已冻结为历史基线。后续修改产品目标、范围、里程碑或验收结果时，必须先修改 V6，并在同一变更中同步受影响合同和追踪索引；实质变化不得回写 V5。
 

@@ -32,10 +32,12 @@ SQLite 结果不能替代 PostgreSQL 主线测试。
 
 PostgreSQL 契约测试和端到端测试必须覆盖：
 
-- `POST /api/v1/auth/register` 精确方法/路径、账号名规范化、密码校验、原子 User/GameAccount 创建，以及注册后零 AuthSession/token/Cookie。
+- `POST /api/v1/auth/registration-verification/request` 的 email 规范化、`Idempotency-Key` 重放/冲突、非枚举 202/no-store、60 秒冷却和联系方式/IP/匿名设备持久限流。
+- `POST /api/v1/auth/register` 原子消费 active registration challenge，执行账号名/密码/联系方式唯一性校验，创建 User/GameAccount/VerifiedContactMethod，以及注册后零 AuthSession/token/Cookie。
+- `POST /api/v1/auth/password-reset/request|confirm` 的非枚举响应、用途隔离、五次尝试/十分钟 TTL、Django 密码策略、并发单消费与失败全回滚。
 - request id 与 Refresh `Idempotency-Key` 的安全格式正反例，以及非 active Presence 调用 `state.sync` 被拒绝。
 - `POST /api/v1/auth/login|refresh|logout` 精确方法/路径、全部开户/认证响应 `Cache-Control: no-store`、H5 refresh Cookie 属性和 token 不进入日志。
-- register/login/refresh/logout 四个端点都拒绝未允许 Origin；跨源 register/login 必须覆盖 CSRF/session swapping 反例。
+- 本节全部开户/认证端点都拒绝未允许 Origin；跨源发码、register、login 与 password reset 必须覆盖 CSRF/session swapping 反例。
 - 登录生成随机 opaque `device_id`，测试确认它不等于也不派生自 IP、User-Agent 或浏览器指纹；认证失败只暴露稳定 code。
 - `session.authenticate` 同 ConnectionSession 幂等补绑、payload 冲突，以及跨 ConnectionSession 重新验证和绑定。
 - enter/resume/recover/takeover 在 pending 准备、提交、激活和 finalization 各边界的故障注入；不得出现可收命令的 pending Presence 或可重放的虚假成功。
@@ -48,7 +50,10 @@ PostgreSQL 契约测试和端到端测试必须覆盖：
 - refresh 同 key 同请求安全重放、同 key 请求冲突、successor superseded，以及不同 key 重用 used token 的 replay 撤销。
 - `RequestTerminalRecord` 与 refresh terminal 在重试窗口、active secret reference、family 绝对到期和清理缓冲各边界的保留/清理测试；pending 不得被普通清理器删除。
 - refresh 提交后丢响应并重载时复用持久 key，多标签页保持 single-flight；不确定 cookie 遇 conflict/superseded 时安全 logout，不用新 key 触发误 replay。
-- M1 后台 RecoveryCode 流程覆盖角色权限、重新认证、reason/support case 和审计：冻结 / 撤销可用，最小修复只在同一权威服务验证玩家仍持有效 code 后成功。无 code、越权、并发消费、密码与 code 均丢失或事务故障时，不得改密、签发凭据、复活会话或把账号重分配给其他 User。
+- `VerificationDeliveryOutbox` 覆盖单 claim、lease 到期、同 code 有界重试、provider transient/permanent failure、接受后崩溃、旧 active 保留、新 active 替代与 terminal payload 擦除；默认测试不得连接公网。
+- reset 后每个受保护 HTTP/WebSocket seam 都拒绝预先捕获的 access token 与 refresh Cookie；AuthSession/family/credential 跨实例全部撤销，安全通知失败不回滚密码。
+- 两个 RecoveryCode 兼容端点统一返回 HTTP `410` 与错误码 `RECOVERY_CODE_RETIRED`，不读取或消费旧 code；开发数据撤销 code 但不删除 User/GameAccount。
+- M1 后台账号安全流程覆盖角色权限、重新认证、reason/support case、冻结 / 撤销和脱敏诊断。越权、缺少可靠所有权证明、密码与全部渠道均丢失或事务故障时，不得改密、签发凭据、复活会话或把账号重分配给其他 User。
 
 ## 3. 可观测性
 
@@ -59,6 +64,7 @@ PostgreSQL 契约测试和端到端测试必须覆盖：
 - 房间广播和聊天投递失败
 - 战斗结算耗时与错误码
 - 调度积压、重试和失败
+- 验证 outbox backlog/oldest age、claim lease、attempts、投递延迟/结果、provider circuit、challenge 激活/消费/锁定、持久限流、安全通知失败和 key lookup failure
 - 数据库连接池、慢查询和锁等待
 - 内容发布、回滚和 apply job 结果
 
@@ -71,6 +77,7 @@ PostgreSQL 契约测试和端到端测试必须覆盖：
 - access / refresh token
 - resume ticket
 - 密码和验证码
+- 完整邮箱/手机号、联系方式 lookup digest 与邮件正文
 - Cookie、Authorization header
 - 手机号明文
 - 私聊正文的无授权副本
@@ -297,7 +304,8 @@ Item 生命周期测试使用冻结时钟覆盖：NPC death/drop 原子创建 30
 - 完整浏览器矩阵、容量与两小时 soak、覆盖账号 / 角色 / 世界拓扑 / 内容批次 / 审计链五个范围的发布级恢复演练。
 - S0 / S1 清零；有 workaround、负责人和到期日的受限 S2 例外；S3 可公开记录。
 - 社区规则、恢复 / 关闭说明、保留摘要、可用性声明和内容责任确认已发布。
-- RecoveryCode 恢复/轮换、账号 `active -> cooling_off -> retired` 生命周期、旧会话/ticket 撤销、active/grace PresenceSnapshot 租约终止、运行时 Presence 关闭以及恢复后重新 enter 的 E2E 证据。
+- 已验证联系方式注册、邮箱密码重置、旧 access/refresh 即时撤销、RecoveryCode 两路 410、持久非枚举投递和滥用控制的 E2E 证据。
+- 账号 `active -> cooling_off -> retired`、用途独立的 account-reopen challenge、旧会话/ticket 撤销、PresenceSnapshot 租约终止和重新 enter 的 E2E 仍是后续独立 gate 要求；不得由当前认证修订冒充完成。
 - PlayerBlock、ChannelMute、不可变消息取证、一次申诉、处罚 `effective_at / expires_at`、自批禁止和 30/180/365 天保留清理的 moderation E2E 与审计证据。
 - active `ContentReleaseBatch` 与 ReleaseManifest 的机器清单证明可连通的约 30-60 个 Room、10 个以上具功能或敌对行为的 NPC、20 个以上 Item 定义和至少一条武学路径；E2E 证明至少一条可重复 PvE 循环，封闭试运行记录首次游玩约 2-4 小时。计数、行为、时长和 envelope 状态任一缺证都不得通过 gate。
 - Public V1 协议 / E2E 必须证明 Character 间只有双方确认的非致命 `Sparring` 可以开始，致命或 involuntary 动作使用既有稳定错误码拒绝；玩家败北产生 `SafeDefeat`，不创建 Character death、不丢失玩家 Item，也不回退不可逆成长。
@@ -305,5 +313,7 @@ Item 生命周期测试使用冻结时钟覆盖：NPC death/drop 原子创建 30
 每次部署必须提交完整 `ReleaseManifest`，至少绑定：代码 commit、`requirements_v6.md` 版本、11-16 合同版本、迁移 head、active `ContentReleaseBatch`、不可变 `SourceSnapshot`、Village / combat compatibility envelopes、黄金 / 差分 / 浏览器 / 容量 / 恢复测试报告。回滚必须协调代码、迁移与内容批次；紧急回滚还要记录原因和受影响批次。计划冷维护提前 24 小时公告，执行 drain、健康检查和证据记录；紧急维护建立 incident 记录。
 
 Public V1 无支付、订阅、付费 Item 或真实货币经济；实例注册模式只能为审计的 `open / paused / invite_only`。初始 superuser 由安全的一次性管理命令创建，不得使用默认凭据。平台必须提供公开 status、maintenance notice、SystemNotice 和统一恢复 / 举报 / 申诉 / 客服入口。
+
+Public V1 开放注册前必须切换到受控域名和正式邮件服务，验证 SPF、DKIM、DMARC、退信、配额、告警与基本送达证据。163 SMTP 只允许 `RUN_SMTP_TESTS=1`、显式收件人和本地秘密注入的开发 smoke；默认 CI 使用 fake/locmem adapter，POP3/IMAP 不参与。
 
 Public V1 H5 E2E 必须覆盖未认证和已认证状态下的公开 status、计划维护窗口、drain 状态、活动 incident、`system.maintenance` / SystemNotice 与恢复通知。进入 drain 后不能新建 enter 或 IC action，已提交终结仍安全收敛；health check、status 投影和 H5 展示不得互相伪造，维护与安全通知不得被玩家屏蔽。

@@ -11,9 +11,9 @@
 - **部署边界**：保持单实例、单写者、单 MUDLib；没有 Redis channel layer 时只运行一个 ASGI 逻辑进程。
 - **持久真源**：PostgreSQL 18 是持久状态权威；连接态 `ConnectionSession` 和活动 `Presence` 留在内存，`AuthSession`、`PresenceSnapshot`、内容 revision 与发布批次按冻结合同持久化。
 - **内容身份**：启动内容只能来自受审计 seed、immutable published revision、exact dependencies 与完整 `ContentReleaseBatch`；新选择读取 active batch，已钉定对象读取 exact historical revision。
-- **REST 路由**：首发认证入口固定为 `/api/v1/auth/register`、`/api/v1/auth/login`、`/api/v1/auth/refresh` 和 `/api/v1/auth/logout`。
+- **REST 路由**：现行认证入口包括 registration-verification request、register、login、refresh、logout 与 password-reset request/confirm；旧 recover/rotate 只保留 410 兼容期。
 - **WebSocket 协议**：连接后依次使用 `session.authenticate`、`presence.enter`、`session.resume`；跨设备替换只能使用显式 `presence.takeover`。
-- **认证边界**：注册不隐式登录；login 创建 AuthSession 与唯一 RefreshTokenFamily；access token 只在内存，Refresh Token 只进入受保护 Cookie 与 refresh/logout REST 边界。
+- **认证边界**：新注册先验证 email 并创建 VerifiedContactMethod，注册与密码重置都不隐式登录；login 创建 AuthSession 与唯一 RefreshTokenFamily；每个受保护入口验证 active AuthSession，access token 只在内存，Refresh Token 只进入受保护 Cookie 与 refresh/logout REST 边界。
 - **账号与角色**：首发每个 GameAccount 最多一个 Character，同时最多一个 `active` 或 `grace_disconnected` PresenceSnapshot 租约。
 - **客户端**：uni-app + Vue 3 H5 与服务端共享机器合同；PC 与移动浏览器在同一纵向切片内验收，不维护独立业务语义。
 - **失败语义**：协议错误码、终结重放、generation、ticket 和 takeover 语义只引用冻结合同，不在实现中创建平行枚举。
@@ -68,6 +68,8 @@
 
 **Status**: `completed`（2026-08-26；Issue #9）
 
+本节保持 Issue #9 当时的历史措辞和验收事实。RecoveryCode 后续被 Issue #10/ADR-0005 取代，不再是现行实现授权。
+
 **User stories**: 作为新玩家，我可以在 H5 注册账号，再独立登录、刷新会话并退出；注册成功不会让我处于已登录状态。覆盖 `AUTH-001`、`AUTH-002`、`CLIENT-001`、`MILESTONE-002`。
 
 ### What to build
@@ -87,7 +89,31 @@
 
 ---
 
-## Engine Stage E1 / Slice 2: 创建角色、连接、进入与恢复闭环
+## Engine Stage E1 / Auth Baseline Amendment: 已验证联系方式注册与账号恢复
+
+**Status**: `specified`（Issue #10；Issue #11 已完成权威修订，运行实现等待 #12–#16）
+
+**User stories**: 作为新玩家，我先验证邮箱再创建账号；作为忘记密码的玩家，我通过已验证邮箱重置密码并让全部旧认证立即失效；作为普通玩家，我始终使用账号名和密码登录，不需要理解“独立登录”或 RecoveryCode。覆盖 `AUTH-005`、`CLIENT-001`、`MILESTONE-002`。
+
+### What to build
+
+按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。该 Amendment 必须完整结束后才能启动 Character Slice 2。
+
+### Acceptance criteria
+
+- [x] Issue #11 将 V6、冻结合同、追踪、状态、差异、计划与交接统一到 VerifiedContactMethod/VerificationChallenge，并保留 Issue #9 历史。
+- [ ] #12 交付 email challenge、独立密钥、加密联系方式/lookup、PostgreSQL 持久限流/outbox、worker 与非枚举 request。
+- [ ] #13 最终 register 原子消费 challenge，创建 User/GameAccount/VerifiedContactMethod，返回零认证状态，并完成 H5 注册/普通登录文案。
+- [ ] #14 password reset 原子撤销跨实例全部 AuthSession/family/credential，旧 access/refresh 立即失败，通知失败不回滚密码。
+- [ ] #15 两个旧 RecoveryCode 端点统一 410，现有开发 code 全撤销，注册/reset/退役通过同一受控切换且普通登录保持可用。
+- [ ] #16 完成 PostgreSQL 并发、迁移、静态、全量、E2E、秘密扫描、可选 SMTP smoke 和 Standards + Spec 双轴证据。
+- [ ] SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 与 takeover 均未提前实现。
+
+---
+
+## Engine Stage E1 / Slice 2: Character Slice 2——创建角色、连接、进入与恢复闭环
+
+**Blocked by**: Auth Baseline Amendment Issue #16。
 
 **User stories**: 作为已登录玩家，我可以创建唯一角色，建立 WebSocket，进入起始房间并取得完整最小状态；断线后可以在新连接上安全重建。覆盖 `AUTH-003`、`WORLD-001`、`CLIENT-001`、`MILESTONE-002`。
 
@@ -131,4 +157,4 @@
 
 ## Out of scope
 
-本计划不把 E2 及之后的完整移动、物品、聊天、帮助、战斗、调度、Blueprint 后台、转换黄金差分或生产发布门禁提前塞入 E1。Engine Stage E1 / Slice 2 只实现进入与恢复所必需的最小 Character、Room 和 snapshot；后续玩法继续按 `10_ROADMAP.md` 形成新的纵向计划。
+本计划不把 E2 及之后的完整移动、物品、聊天、帮助、战斗、调度、Blueprint 后台、转换黄金差分或生产发布门禁提前塞入 E1。Auth Baseline Amendment 不实现 SMS、联系方式换绑、账号关闭/重开或任何 Character/Presence 行为；Character Slice 2 只实现进入与恢复所必需的最小 Character、Room 和 snapshot；后续玩法继续按 `10_ROADMAP.md` 形成新的纵向计划。

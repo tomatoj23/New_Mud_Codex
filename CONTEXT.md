@@ -106,9 +106,17 @@ _Avoid_: character template, birth config, starter preset
 The public name by which a Character is identified to players, distinct from an account name and the Character's stable identity.
 _Avoid_: username, account name, character ID
 
+**VerifiedContactMethod**:
+An email address or phone number whose control a User has proven and may use for account verification, recovery, and security notices. It is not a login name, public profile, or gameplay identity.
+_Avoid_: login identity, RecoveryCode, contact detail
+
+**VerificationChallenge**:
+A short-lived, single-use proof scoped to one purpose, delivery channel, destination, and, when applicable, User. It grants no broader login, account-lifecycle, or Character control authority.
+_Avoid_: RecoveryCode, login code, refresh token
+
 **RecoveryCode**:
-A player-held proof used to recover access when a password is lost; it is not a login credential, AuthSession, or gameplay identity.
-_Avoid_: recovery token, backup password, refresh token
+A retired player-held proof formerly used for account recovery. It remains a historical and audit term but is not an accepted login, recovery, account-lifecycle, or gameplay credential.
+_Avoid_: VerificationChallenge, backup password, refresh token
 
 **RetiredCharacter**:
 A Character whose GameAccount has permanently retired and which can no longer be controlled, while its stable identity and historical relationships remain meaningful.

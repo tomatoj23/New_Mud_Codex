@@ -6,6 +6,7 @@ from pathlib import Path
 
 from scripts.verify_m0 import (
     VerificationResult,
+    validate_authentication_authority,
     validate_recovery_report,
     validate_source_artifacts,
     verify_repository,
@@ -19,6 +20,14 @@ def test_contract_repository_is_ready() -> None:
 
     assert result.errors == []
     assert result.blockers == []
+
+
+def test_current_authentication_authority_is_consistent() -> None:
+    result = VerificationResult()
+
+    validate_authentication_authority(REPOSITORY_ROOT, result)
+
+    assert result.errors == []
 
 
 def test_source_artifact_hash_tampering_is_rejected() -> None:

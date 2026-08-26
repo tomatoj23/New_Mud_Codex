@@ -19,10 +19,10 @@
 13. 所有会创建或重新绑定 Presence 的路径都先创建 inert `pending_enter`；提交前不得接受命令、订阅或接收广播、注册调度或派发领域事件。
 14. REST refresh 的网络重试与攻击 replay 必须由持久幂等终结记录区分，不能把同一逻辑请求的安全重试误判为 token replay。
 15. 依赖 active Presence 的终结必须绑定精确 generation；`state.sync` 还绑定来源 ConnectionSession 与 seq 屏障，不能跨上下文重放 snapshot。
-16. REST register 只原子创建 User、GameAccount 与 RecoveryCode 哈希，不进入本状态机，不得隐式创建 AuthSession、refresh family、Character、PresenceSnapshot 或运行时 Presence；RecoveryCode 明文只在注册响应出现一次。
+16. REST register 只在消费 active registration `VerificationChallenge` 的事务中创建 User、GameAccount 与 verified email `VerifiedContactMethod`，不进入 Presence 状态机，不得隐式创建 AuthSession、refresh family、Character、PresenceSnapshot 或运行时 Presence。
 17. 在每个游戏实例内，一个 User 永久映射一个 GameAccount；CharacterOwnership 是未来多 Character 的唯一扩展边界。
 18. `presence.recover` 只恢复同一 AuthSession 自己的 active/grace PresenceSnapshot 租约并创建新一代运行时 Presence；它不接受跨会话接管。找不到自有可恢复租约时统一返回 `PRESENCE_RECOVERY_UNAVAILABLE`，不得把恢复流程当作普通 enter 或隐式 takeover。
-19. GameAccount 生命周期为 `active -> cooling_off -> retired`；关闭立即撤销该 User 的全部 AuthSession、ticket 和 refresh family，终止 active/grace PresenceSnapshot 租约并关闭对应运行时 Presence。只有有效 RecoveryCode 能在冷静期内恢复到 `active`，恢复不会自动复活旧 Presence。
+19. GameAccount 生命周期为 `active -> cooling_off -> retired`；未来关闭会撤销该 User 的全部认证与控角状态，重新启用必须使用用途独立的 account-reopen challenge，不能复用密码重置。该生命周期、Character/Presence 收敛与 takeover 不在当前 Auth Baseline Amendment 中实现。
 
 ## 2. 对象与存储边界
 
@@ -264,7 +264,7 @@ enter/resume/recover/takeover 事务内必须为需要通知的旧连接或状�
 
 ## 5. 认证与入场
 
-首次使用者先按 `08_PERMISSIONS_ADMIN_API.md` 4.2 完成 register，再调用独立 login。已有账号直接从 login 开始。
+首次使用者先按 `08_PERMISSIONS_ADMIN_API.md` 4.2 完成 register，再调用普通 login。已有账号直接从 login 开始。
 
 固定流程：
 
@@ -488,24 +488,37 @@ AuthSession 到达 `absolute_expires_at` 时，清理任务必须将其置为 `e
 
 全局封禁或管理员撤销按稳定顺序处理 User 的全部 AuthSession、refresh family、连接、active/grace 租约和 resume ticket，并审计操作者、原因、关联请求和前后状态。
 
-### 10.1 RecoveryCode 与 GameAccount 生命周期
+### 10.1 VerifiedContactMethod、VerificationChallenge 与 GameAccount 生命周期
 
-REST 路径及请求 / 响应外形以 `08_PERMISSIONS_ADMIN_API.md` 4.4 为准；本节冻结它们的状态机和事务语义：
+REST 路径及请求 / 响应外形以 `08_PERMISSIONS_ADMIN_API.md` 4.2/4.4 为准；本节冻结认证基线修订的状态和事务语义：
 
-- `POST /api/v1/auth/recover` 只在 RecoveryCode 验证成功且 GameAccount 仍为 `active` 时更新密码。旧 code 在同一事务消费，生成的新 code 取代它；事务内撤销该 User 的全部 AuthSession、RefreshTokenFamily 与未使用 ticket，并终止 active/grace PresenceSnapshot 租约，提交后关闭对应运行时 Presence。成功后必须重新 login 和 enter。
-- `POST /api/v1/auth/recovery-code/rotate` 要求调用者属于仍为 `active` 的 AuthSession 与 GameAccount。成功事务撤销旧 code、生成新 code，撤销包括调用会话在内的全部旧 AuthSession、refresh family 与 ticket，并终止 active/grace PresenceSnapshot 租约；提交后关闭对应运行时 Presence。响应只一次展示新 code，客户端随后处于登出状态。
-- `POST /api/v1/account/close` 锁定并把 `active` GameAccount 改为 `cooling_off`，记录 `cooling_off_started_at / reopen_deadline_at`，立即执行同样的全会话与控角撤销。关闭不消费当前有效 RecoveryCode，因为它是冷静期内 reopen 的唯一玩家证明。
-- `POST /api/v1/account/reopen` 只接受 `cooling_off` 且未超过 30 天 `reopen_deadline_at` 的 GameAccount。有效 code 在同一事务消费，账号回到 `active`，生成并一次展示替代 code；不得恢复旧 AuthSession、PresenceSnapshot 租约、运行时 Presence、Character 控制上下文或任何已撤销 ticket。
+- registration challenge 不绑定 User。最终 register 锁定并重验 active challenge，以账号名和 contact lookup digest 的数据库唯一约束收敛竞争，原子创建 User、当前实例 GameAccount 与 verified email `VerifiedContactMethod` 并消费 challenge；两个并发提交最多一个创建完整身份。
+- password-reset challenge 必须绑定符合资格的 User。成功 confirm 只修改 User 密码，不改变 GameAccount lifecycle，不创建 AuthSession，也不自动恢复 Presence 或取得 Character 控制权。
+- RecoveryCode 不再进入任何状态转换。`POST /api/v1/auth/recover` 与 `POST /api/v1/auth/recovery-code/rotate` 不读取旧 hash，只返回 HTTP `410` 与错误码 `RECOVERY_CODE_RETIRED`；既有开发 code 的撤销属于后续原子切换迁移。
 
-服务端只保存 RecoveryCode 的不可逆 hash、generation、`active / used / revoked` 状态、版本和必要审计时间；明文只在注册或成功替换 code 的响应中出现一次。recover、rotate 和 reopen 的 code 消费与新 hash 创建必须和密码 / lifecycle 变化及全部撤销在一个 PostgreSQL 事务提交，任一步失败都整体回滚。重复使用旧 code、两个请求并发消费同一 generation，或 reopen 与退休任务竞跑时只能有一个赢家；失败者不得签发 code、改变密码、复活会话或覆盖赢家状态。
+`VerificationChallenge` 的 purpose 首期只启用 `registration / password_reset`。状态至少区分 `pending_delivery / active / consumed / superseded / expired / locked / delivery_failed`；purpose、channel、destination 与适用 User 共同进入验证码摘要上下文，任何跨用途、跨渠道、跨 User、已终结或超过五次校验的消费统一失败。provider 接受后才激活 challenge 并从该时刻开始十分钟 TTL；新 challenge 成功激活前，旧 active challenge 继续可用。
 
-账号生命周期事务固定按 `GameAccount -> RecoveryCode hash -> AuthSession（按 id） -> RefreshTokenFamily / credential -> PresenceSnapshot（按 id） -> ResumeTicketCredential（按 id） -> CharacterOwnership / Character` 持锁，并用 row version 与唯一约束重验。login、refresh、Presence 建立及清理路径在提交前必须重读 GameAccount lifecycle/version；看到非 `active` 或版本已变化就回滚，因此恢复、关闭与退休提交后不会留下新建或漏撤销的会话。数据库选择的序列化 / deadlock loser 只能按稳定失败收敛，不能局部提交。
+`VerifiedContactMethod` 是联系方式唯一权威；Django `User.email` 保持为空。每个 User/channel 最多一个 active 或 unreachable 联系方式，同一 channel/lookup digest 最多属于一个未退休 User。完整目标只保存应用层密文，精确查询使用独立 keyed digest；challenge 只保存 peppered code digest，临时 code/目标只存在于可轮换密钥加密的投递 outbox payload，terminal 后擦除。
 
-退休任务在 deadline 后按同一锁序把仍为 `cooling_off` 的 GameAccount 改为 `retired`，撤销 RecoveryCode，匿名化 / 禁用 User，并把 Character 置为 `RetiredCharacter`；稳定 id 与要求保留的历史关系不删除。`retired` 是终态，`account/reopen` 不得恢复它。reopen 先提交则退休任务重验后无操作；退休先提交则 reopen 不得把终态改回 `active`。
+投递 outbox 通过 lease 与并发安全 claim 由独立 worker 处理。一次逻辑任务重试同一 code；provider 接受与本地确认之间崩溃可以重复投递同一 code，但不能产生第二个 active code。公开 request 不等待 SMTP，不根据联系方式存在、占用、资格或单封投递结果改变响应。
 
-所有 RecoveryCode 验证在读取敏感账号状态前执行账号、IP 与设备合并限流，并返回相同结构、缓存策略与无账号存在性泄露的稳定错误。账号不存在、code 错误、code 已消费或敏感状态不可确认时不得暴露区别；只有持有有效 code 后才能返回窗口过期或不可 reopen 的状态错误。失败尝试不得锁死或改变正常密码登录，日志、指标和审计不得记录明文 code、密码、token 或 ticket。
+密码重置事务固定按以下顺序持锁，并在提交前重验版本与资格：
 
-M1 后台冻结 / 撤销与最小修复也必须使用本节同一锁序、RecoveryCode 验证和撤销事务。操作者可以冻结恢复尝试、撤销账号会话，或在玩家仍提交有效 code 时修复卡住的 recover 事务；不得读取或代填明文 code、绕过 code 校验、从游戏资料推断所有权、把账号转给其他 User，或在密码与 code 均丢失时生成替代凭据。后台修复成功与玩家 recover 相同：轮换 code、撤销全部旧会话与控角状态，且不自动创建 AuthSession / Presence；失败原子保持原状态。
+```text
+User
+  -> VerifiedContactMethod
+  -> VerificationChallenge
+  -> GameAccount（instance_id、id 排序）
+  -> AuthSession（id 排序）
+  -> RefreshTokenFamily / credential（id 排序）
+  -> 适用的 VerificationChallenge / delivery outbox
+```
+
+成功事务设置 Django 密码哈希、消费 reset challenge、撤销该 User 跨实例的全部 AuthSession、refresh family 与 active credential，并取消适用的未完成恢复任务。每个受保护 HTTP/WebSocket 入口都必须让 Access Token 解析到仍为 `active` AuthSession 和可用 User/GameAccount；因此事务提交后，旧 access JWT 即使尚未到期也立即失败。安全通知写入独立 outbox；通知失败只告警和审计，不回滚密码或复活旧认证状态。
+
+未来 `account/close`、`account/reopen`、联系方式换绑及其与 Presence/ticket 的收敛由独立规格实现。已冻结的长期边界是：`cooling_off -> active` 使用用途独立的 account-reopen challenge，永久 `retired` 不可恢复；任何成功换绑或重开都撤销全部认证状态，不自动恢复旧 Presence。当前 Auth Baseline Amendment 只保留未来撤销接缝，不创建 Character、PresenceSnapshot、ResumeTicketCredential 或 takeover 行为。
+
+后台只能冻结恢复流程、撤销认证状态和读取脱敏诊断；不得读取/代填完整联系方式或 code、绕过 challenge、从游戏资料推断所有权，或在密码与全部渠道都丢失时生成替代凭据。
 
 ## 11. 审计与脱敏
 
@@ -529,7 +542,8 @@ M1 后台冻结 / 撤销与最小修复也必须使用本节同一锁序、Recov
 
 ## 13. Engine Stage E1 必测场景
 
-- REST register 原子创建 User 与 GameAccount，重复或非法账号名返回稳定错误，且不产生任何认证会话或 token 行。
+- registration-verification request 非枚举、幂等且持久限流；outbox worker 在 provider 接受后激活 challenge，重试同一 code 并在 terminal 擦除 payload。
+- REST register 原子消费 registration challenge 并创建 User、GameAccount 与 verified email；重复账号名/联系方式、双消费或故障回滚不产生半身份，且不产生任何认证会话或 token 行。
 - REST 登录、WebSocket authenticate、单角色 enter 与完整 snapshot。
 - `session.authenticate` 同连接同请求重放确认绑定；跨连接复用 request id 仍重新验证 token 和绑定新连接。
 - 同一 GameAccount 两个 AuthSession 并发 enter，只有一个获得 Presence。
@@ -550,9 +564,11 @@ M1 后台冻结 / 撤销与最小修复也必须使用本节同一锁序、Recov
 - refresh 同 key 同 payload 安全重放，同 key 不同 payload 返回冲突，不同 key 重用 used token 才撤销 family、AuthSession 和 ticket、终止 active/grace PresenceSnapshot 租约并关闭对应运行时 Presence。
 - 并发路径不能为同一 AuthSession 创建第二个 family；family 终态不可复活，身份 tombstone 不可通过清理删除后重建。
 - used refresh Cookie 可完成显式 logout；损坏 Cookie 加有效 access Bearer 仍撤销会话；Cookie/Bearer 指向不同会话时撤销候选集合。
-- RecoveryCode recover/rotate 只允许一个并发 code 消费赢家，原子轮换 code，并撤销全部旧 AuthSession、RefreshTokenFamily 与 ticket、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence；统一错误与账号/IP/设备合并限流不泄露账号存在性，也不锁死密码登录。
-- M1 后台恢复测试覆盖角色权限、重新认证、reason/support case、冻结 / 撤销和持有效 code 的最小修复；无 code、越权、并发消费或故障注入都不能改密、重分配账号或产生新凭据。
-- account close/reopen/retirement 覆盖 `active -> cooling_off -> active` 与 `active -> cooling_off -> retired` 两条边界、30 天截止竞跑、RetiredCharacter，以及 reopen 后零 AuthSession / PresenceSnapshot 租约 / 运行时 Presence。
+- password-reset request 对未知、占用、unreachable 与不可恢复联系方式保持相同 202；confirm 并发消费最多一个成功，失败路径不改变密码或正常登录。
+- reset 提交同时撤销 User 跨实例全部 AuthSession/family/credential；预先捕获的 access token 与 refresh Cookie 在公开入口立即失败，安全通知失败不回滚密码事务。
+- 两个旧 RecoveryCode 端点统一返回 HTTP `410` 与错误码 `RECOVERY_CODE_RETIRED`，不读取或消费旧 code；当前开发 code 的撤销与账号保留由切换迁移验证。
+- M1 后台账号安全测试覆盖角色权限、重新认证、reason/support case、冻结 / 撤销和脱敏诊断；越权、缺少可靠所有权证明或故障注入不能改密、重分配账号或产生新凭据。
+- account close/reopen/retirement、联系方式换绑、Character、PresenceRecovery 与 takeover 只检查未提前实现；其长期边界保留给后续独立切片。
 - 两个 locator 都无效时仍统一 `204 / no-store` 并清 Cookie，且审计不得伪称已撤销无法定位的服务端会话。
 - successor 已被后续轮换后，同 key 重试返回 `REFRESH_REQUEST_SUPERSEDED` 且不撤销 family。
 - 终结清理在 24 小时重试边界、active ticket、family 绝对到期和 secret cleanup grace 各边界正确保留；`activation_pending` 只能先补偿，不能直接删除。
@@ -574,7 +590,7 @@ M1 后台冻结 / 撤销与最小修复也必须使用本节同一锁序、Recov
 
 `Engine Stage E1` 必须完成：
 
-- register 与 login 的显式边界，以及注册后零认证会话不变量。
+- 在 Character Slice 2 前完成 `Auth Baseline Amendment`：已验证邮箱注册、普通 login、邮箱密码重置、即时认证撤销、RecoveryCode 退役，以及注册/重置后的零认证会话不变量。
 - enter、leave、resume、recover 与 takeover。
 - refresh family 幂等旋转、superseded 结果和攻击 replay 撤销。
 - active snapshot 检查点、崩溃收敛与 grace 清理。

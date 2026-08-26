@@ -84,7 +84,7 @@ active Presence 的每个文本或结构化 `action.invoke` 都必须把当前 `
 
 ### 3.2 REST refresh 幂等
 
-H5 只调用 `08_PERMISSIONS_ADMIN_API.md` 4.2 的四个开户/认证端点；refresh token 由浏览器自动携带强制安全 Cookie，JavaScript 不得读取、复制或另行传输。每次逻辑 refresh 生成符合 `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$` 的 `Idempotency-Key`，同一次网络重试必须复用。
+H5 只调用 `08_PERMISSIONS_ADMIN_API.md` 4.2 冻结的开户/认证端点；refresh token 由浏览器自动携带强制安全 Cookie，JavaScript 不得读取、复制或另行传输。每次逻辑 refresh 生成符合 `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$` 的 `Idempotency-Key`，同一次网络重试必须复用。
 
 统一 logout helper 必须使用 `credentials=include`；access token 仍在内存时同时携带 Bearer，页面重载后 token 已丢失时只依赖 Cookie。无论网络结果能否确认，helper 随后都关闭 WebSocket，清除 pending refresh、access token、ticket 与领域 stores；不得持久化 Bearer 或把 refresh token 放入 Authorization header。
 
@@ -124,6 +124,7 @@ H5 只调用 `08_PERMISSIONS_ADMIN_API.md` 4.2 的四个开户/认证端点；re
 
 - 注册
 - 登录
+- 忘记密码
 - 角色创建与当前角色状态
 - 世界主界面
 - 场景查看与移动
@@ -154,13 +155,14 @@ PC H5：
 
 两端共享领域状态和协议，不要求像素级一致。
 
-首发最低支持矩阵：
+当前 Auth Baseline Amendment 的主自动验收视口：
 
-- 桌面 Chrome、Edge、Firefox 和 macOS Safari 最近两个稳定主版本。
-- iOS 16 及以上 Safari；Android 10 及以上 Chrome 最近两个稳定主版本。
-- 360x640、768x1024、1280x720 与 1920x1080 CSS 像素视口。
-- 桌面 200% 页面缩放、键盘焦点可见和 WCAG 2.1 AA 核心文本对比度。
-- 主要触控目标不小于 44x44 CSS 像素。
+- 1280×720 CSS 桌面。
+- 412×915 CSS / DPR 3 现代移动竖屏。
+- 915×412 CSS / DPR 3 长比例移动横屏。
+- 360×640 只作为无横向溢出的守卫，不是主流程设计目标。
+
+物理 1080p、1.5K、2K 与 21:9 设备通过 CSS viewport/DPR 组合和后续发布矩阵覆盖。Public V1 仍要求桌面 Chrome、Edge、Firefox、macOS Safari 最近两个稳定主版本，iOS 16+ Safari、Android 10+ Chrome、200% 缩放、键盘焦点、核心文本对比度和不小于 44×44 CSS 像素的主要触控目标；本切片不得把较小自动矩阵冒充完整发布证据。
 
 中文输入法 composition 期间，Enter、空格或候选选择不得提交命令。只在 `compositionend` 后按用户明确操作发送。
 
@@ -172,7 +174,8 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 
 - Access token 只存放在受控内存状态，不得写入 localStorage、sessionStorage、IndexedDB、Cookie 或容器持久存储。未来若改变该边界，必须先修订本合同与威胁模型。
 - H5 Refresh token 必须只使用 `08` 4.2 冻结的 host-only `new_mud_refresh` Cookie，并强制 `Secure / HttpOnly / SameSite=Strict / Path=/api/v1/auth/`；不得降级到 JS 可读存储、JSON body 或 Authorization header。
-- 日志和错误报告必须脱敏 token、resume ticket、手机号和聊天私信。
+- 邮箱、验证码、新密码、投递状态和 reset 结果只存在于当前表单内存；离开流程后清理，不得写入 localStorage、sessionStorage、IndexedDB、Cache Storage 或 Cookie。
+- 日志和错误报告必须脱敏 token、resume ticket、完整邮箱/手机号、验证码和聊天私信。
 - 客户端不显示服务端堆栈或内部对象 id 之外的敏感实现信息。
 
 ## 7. 测试要求
@@ -188,26 +191,29 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 - 绑定型终结跨连接 `resume_required`、旧 snapshot 丢弃和显式 takeover 测试
 - Presence generation 改变后的旧 action/ui/sync 终结返回 `REQUEST_CONTEXT_CHANGED`，客户端不应用旧结果
 - `state.sync` 跨连接或 barrier 已推进时用新 request id 重建屏障，不把历史 snapshot 设为基线
-- register/login/refresh/logout 精确路径、四端点跨源拒绝与 refresh Cookie 强制属性测试
-- 注册成功后无 token、Cookie 或 AuthSession，并只在该响应一次展示 RecoveryCode；重复账号名与密码策略失败只返回稳定错误码
+- registration-verification request、register、login、refresh、logout、password-reset request/confirm 的精确路径、跨源拒绝、no-store 与 refresh Cookie 强制属性测试
+- 发码 request 使用 `Idempotency-Key`、只手动重发，并对未知/占用/不可恢复地址显示同一 accepted 文案；客户端不轮询投递状态
+- 注册成功后无 token、Cookie 或 AuthSession，且不显示或持久化 RecoveryCode；重复账号名、联系方式占用、验证码与密码策略失败只返回稳定错误码
 - 角色创建覆盖 profile 版本、NFKC 名称策略、名称占用的统一错误、幂等重试、RetiredCharacter 不可自助重建及账号最多一个 Character
-- RecoveryCode 恢复/轮换撤销全部旧 AuthSession、RefreshTokenFamily 和 ticket，终止 active/grace PresenceSnapshot 租约并关闭对应运行时 Presence；账号关闭进入 30 天 cooling-off，恢复后不自动回场景
+- 邮箱密码重置成功后返回普通登录入口、不自动登录；旧 access/refresh 立即失败，通知投递失败不把 UI 伪装成密码事务失败
 - PlayerBlock、ChannelMute、消息举报、一次申诉、GM 处罚时限和系统/安全/GM 通知不可屏蔽的端到端测试
 - logout 覆盖损坏 Cookie + 有效 access、Cookie/Bearer 指向不同会话和零 locator 三种路径；客户端始终完成本地清理
 - refresh 提交后响应丢失再重载时复用持久 key，多标签页只发送一个逻辑请求
 - pending refresh 的 key 冲突、superseded、过期记录均安全登出，不以新 key 重交不确定 Cookie
 - refresh 同 key 安全重试与服务端真实 replay 撤销测试
 - localStorage、sessionStorage、IndexedDB、Service Worker cache 与日志的终结 payload/ticket 泄漏扫描
-- PC 与窄屏移动端视觉回归
+- 1280×720、412×915 DPR3、915×412 DPR3 主流程视觉回归，以及 360×640 无横向溢出守卫
 - 精确支持矩阵、200% 缩放、输入法、触控目标、键盘焦点、对比度和长文本溢出测试
 
 ## 8. V6 增量、Public V1 客户端边界与首发验收
 
-Public V1 H5 必须提供 RecoveryCode 首次展示后的安全说明、账号关闭 / 恢复入口、PlayerBlock / ChannelMute、消息举报和统一支持入口；举报提交只携带不可变消息 ID，服务器负责取证上下文。角色创建页先调用 `GET /api/v1/character-creation-profiles` 获取当前 profile identity 与展示选项，再调用 `POST /api/v1/characters`，显式提交 `creation_profile_key / creation_profile_version`、`display_name`、展示性别和代词，并展示稳定策略错误；不得缓存或自行构造内部初始状态，同一 GameAccount 已有 Character 时不得显示可重建入口。恢复页调用 `/api/v1/auth/recover`，关闭页调用 `/api/v1/account/close`，恢复成功后必须重新 login 和 enter，不得自动恢复旧 Presence。UI 与内容为简体中文，Unicode 输入与显示完整支持；没有支付、订阅、付费 Item 或真实货币界面。
+H5 注册先调用 `POST /api/v1/auth/registration-verification/request`，显示非枚举 accepted 文案与 60 秒手动重发倒计时，再提交邮箱、验证码、账号名和密码；成功后显示“注册成功，请登录”。“忘记密码”调用 `POST /api/v1/auth/password-reset/request` 与 `POST /api/v1/auth/password-reset/confirm`，成功后返回普通登录入口。界面只使用“注册”“登录”“邮箱验证码”“忘记密码”等用户语言，不展示“独立登录”、RecoveryCode、challenge identity、投递状态或内部恢复术语。
+
+Public V1 H5 还必须提供 PlayerBlock / ChannelMute、消息举报和统一支持入口；举报提交只携带不可变消息 ID，服务器负责取证上下文。角色创建页先调用 `GET /api/v1/character-creation-profiles` 获取当前 profile identity 与展示选项，再调用 `POST /api/v1/characters`，显式提交 `creation_profile_key / creation_profile_version`、`display_name`、展示性别和代词，并展示稳定策略错误；不得缓存或自行构造内部初始状态，同一 GameAccount 已有 Character 时不得显示可重建入口。账号关闭/重开与联系方式换绑页面由后续独立规格定义；当前修订不创建这些页面，也不自动恢复旧 Presence。UI 与内容为简体中文，Unicode 输入与显示完整支持；没有支付、订阅、付费 Item 或真实货币界面。
 
 H5 的全局导航必须提供公开 status 入口，展示服务端提供的当前健康摘要、计划维护窗口、drain 状态、活动 incident 与最后更新时间，不能由客户端自行推断服务健康。`system.maintenance` 与 `SystemNotice` 必须在 PC / 移动端一致显示；进入 drain 后客户端停止发起新的 enter 和 IC action、保留已提交请求的终结处理，并按服务器指令完成离场 / 重连。紧急 incident 更新和恢复通知必须可在未进入 Presence 时读取，且不得被 PlayerBlock 或 ChannelMute 屏蔽。
 
-- 新用户可在 H5 注册并使用独立 login 登录；注册成功不能被当成认证成功。
+- 新用户可在 H5 验证邮箱、注册并使用普通 login 登录；注册成功不能被当成认证成功。
 - PC 和移动端 H5 均完成同一条首发纵切。
 - 断线恢复不产生重复动作或本地权威状态。
 - 跨连接历史终结不会直接激活 Presence，非 active Presence 不能发起 `state.sync` 或 IC 动作。

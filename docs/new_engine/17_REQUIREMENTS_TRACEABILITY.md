@@ -14,7 +14,9 @@
 
 这些值表示需求追踪记录的证据成熟度，不替代 V6 对产品里程碑规定的 `not_started / in_progress / blocked / complete`。因此 `MILESTONE-001=verified` 表示已有证据证明产品里程碑 `M0=complete`；不得把产品 M0 自身写成 `verified`。
 
-当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的注册和独立登录闭环。`AUTH-001`、`AUTH-002` 已有 PostgreSQL、REST、安全属性和 H5 自动端到端证据；RecoveryCode 的 Slice 1 部分已实现，但 PresenceRecovery、后台最小修复和账号生命周期后续矩阵尚未交付，因此 `AUTH-004` 仅为 `implemented`。browser、capacity、recovery 三份非功能 profile 已批准，但发布级浏览器矩阵、容量、soak 和五范围恢复证据仍未完成，所以 `CLIENT-001`、`NFR-001`、`NFR-002` 与 `RELEASE-001` 继续保持 `blocked`；`MILESTONE-002` 也不因单一切片完成而提升。
+当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的历史注册/登录闭环。`AUTH-001`、`AUTH-002` 仍保留 Issue #9 的 PostgreSQL、REST、安全属性和 H5 自动端到端证据；2026-08-26 的产品修订不倒写这些事实，但 RecoveryCode 已不再是现行凭据。Issue #10 建立 `AUTH-005` 的 VerifiedContactMethod/VerificationChallenge 认证权威，Issue #11 先完成权威同步；实现必须按 #12–#16 完成后，才能进入 Character Slice 2。`AUTH-004` 的旧复合语义已退役，User/GameAccount 基数与 PresenceRecovery 分别由 `IDENTITY-001`、`AUTH-006` 追踪。
+
+browser、capacity、recovery 三份非功能 profile 已批准，但发布级浏览器矩阵、容量、soak 和五范围恢复证据仍未完成，所以 `CLIENT-001`、`NFR-001`、`NFR-002` 与 `RELEASE-001` 继续保持 `blocked`；`MILESTONE-002` 也不因认证权威修订或单一切片完成而提升。
 
 带执行日期、环境版本、测试结果和当前阻塞项的证据账本见 `18_IMPLEMENTATION_STATUS.md`；本索引只维护需求状态与必要证据映射，不重复保存运行日志。
 
@@ -23,7 +25,7 @@
 | 需求 ID | 状态 | 产品结果 | V6 来源（V5 历史） | 实施权威 | 里程碑 | 必要证据 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `PROD-001` | `retired` | 已废弃：content release mode 与内容授权不再属于工程门禁 | 2.7 | — | — | 本次有意需求变更记录 |
-| `AUTH-001` | `verified` | 新玩家可用用户名密码注册；注册不隐式登录 | V6 4.1、8.4、11.2 | 08 第 4.2 节、13 第 1/5 节 | M1 | Issue #9：User/GameAccount/RecoveryCode 原子事务、统一错误/限流、独立 login 与 H5 E2E |
+| `AUTH-001` | `verified` | 新玩家以账号名和密码注册；注册不隐式登录 | V6 4.1、8.4、11.2 | 08 第 4.2 节、13 第 1/5 节 | M1 | Issue #9 历史证据：User/GameAccount/RecoveryCode 原子事务、统一错误/限流、普通 login 与 H5 E2E；RecoveryCode 后由 AUTH-005 取代 |
 | `AUTH-002` | `verified` | login 创建唯一 AuthSession/family，refresh 轮换，logout 幂等收敛 | 8.4-8.5 | 08 第 4.2 节、13 | M1 | Issue #9：真库约束与并发、refresh terminal/replay、双 locator logout、前端 single-flight 与 H5 E2E |
 | `AUTH-003` | `specified` | 每账号最多一个角色和一个 active/grace PresenceSnapshot 租约 | 8.6 | 11、13 | M1 | 数据库约束、并发 enter/takeover E2E |
 | `WORLD-001` | `specified` | 固定小巷纵切可进入、查看、移动、生成、战斗和查看战利品 | 7.3、11.4 | 12、14、16 第 8 节 | M1 | fixture、世界物化、端到端测试 |
@@ -42,7 +44,10 @@
 | `MILESTONE-007` | `specified` | M6：微信小程序交付，完成微信 AuthIdentity、授权登录与客户端适配 | 15.7 | 03、08、15、16 | M6 | 小程序 E2E、AuthIdentity、兼容矩阵与发布证据 |
 | `CONVERT-001` | `implemented` | 转换和黄金验收绑定不可变 source snapshot、双 manifest 与 bundle | 7.2-7.16 | 09、16 第 8 节 | M0、M4 | `contracts/v1/artifacts/`、`generate_source_contracts.py` 与哈希篡改测试；M4 差分制品仍待实现 |
 | `ENGINE-001` | `verified` | Engine Stage E0 readiness：真实 seed loading、Registry exact dependencies、并发、审计和 readiness 集成可执行 | V6 15.0、17 | 06、10、12、16 | Engine Stage E0 | Issues #1–#4 实现提交；Issue #5 的 PostgreSQL、服务集成、启动 E2E、全量与静态门禁全部通过 |
-| `AUTH-004` | `implemented` | 每实例一个 User 永久映射一个 GameAccount；RecoveryCode 恢复撤销旧会话/ticket、终止 PresenceSnapshot 租约并关闭运行时 Presence；同一 AuthSession 可用 `presence.recover` 恢复自有 PresenceSnapshot 租约 | V6 8.2-8.5、11.13 | 08 第 2.2/4.4 节、11、13 第 10.1 节、16 第 2.1 节 | M1、RELEASE-001 | Issue #9 已验证 RecoveryCode 哈希/轮换、User 全会话撤销、合并限流与未来 Presence 单一收敛缝；PresenceRecovery、后台修复和账号关闭/reopen 仍待后续切片 |
+| `AUTH-004` | `retired` | 已退役的复合要求：RecoveryCode 恢复与 PresenceRecovery 曾被放在同一追踪项 | 历史 V6 8.2-8.5、11.13 | ADR-0004（被 ADR-0005 取代） | — | Issue #9 保留 RecoveryCode 哈希/轮换、User 全会话撤销与合并限流的历史证据；ID 不复用 |
+| `IDENTITY-001` | `verified` | 每个实例一个 User 永久映射一个 GameAccount | V6 8.2 | 03、08、ADR-0002 | M1 | Issue #9：数据库唯一约束、迁移与并发证据 |
+| `AUTH-005` | `specified` | 新注册验证唯一邮箱且零认证状态；邮箱密码重置即时撤销全部旧认证；RecoveryCode 退役 | V6 8.1-8.7、11.2、15.1-15.2 | 08 第 2.2/4.2/4.4 节、13 第 1/10.1 节、15、16 第 2.1 节、ADR-0005 至 0008 | M1、RELEASE-001 | Issue #10 规格、Issue #11 权威同步；实现与证据由 #12–#16 交付 |
+| `AUTH-006` | `specified` | 同一 AuthSession 可恢复自己的 active/grace PresenceSnapshot；跨 AuthSession 必须显式 takeover | V6 8.6 | 11、13 第 6.4/8 节、15 | M1、RELEASE-001 | Character Slice 2 的 PresenceRecovery 与后续 takeover E2E；不得由 AUTH-005 提前实现 |
 | `CHARACTER-001` | `specified` | CharacterCreationProfile、CharacterDisplayName 与 RetiredCharacter 生命周期可审计且不自助重建 | V6 8.8 | 08 第 4.3 节、12 第 5.15 节、15 | M1、RELEASE-001 | profile hash/exact revision、NFKC/策略测试、GM 审计、关闭恢复 E2E |
 | `WORLD-002` | `specified` | Public V1 完整 Village topology 与逐项交互包络可声明，未验证交互显式不可用 | V6 7.2.1、7.3、11.7 | 04、09、12 | RELEASE-001 | topology / interaction envelope、UnavailableInteraction 报告 |
 | `PVP-001` | `specified` | Public V1 只允许非致命 Sparring，玩家失败采用 SafeDefeat | V6 10.4.2、11.11 | 14 | RELEASE-001 | 互认 / 致命拒绝 / SafeDefeat E2E |

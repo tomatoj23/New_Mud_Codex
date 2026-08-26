@@ -1,8 +1,8 @@
-# 下一会话交接：E1 / Slice 1 已关闭，下一步 Slice 2
+# 下一会话交接：Auth Baseline Amendment 权威已修订，下一步 Issue #12
 
 > 快照日期：2026-08-26。
 >
-> 本文件是无会话记忆时的现行启动入口，汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序。它不创造需求、合同或正式状态；冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
+> 本文件是无会话记忆时的现行启动入口。它汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序；不创造需求、合同或正式状态。冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
 
 ## 1. 新会话先做什么
 
@@ -19,144 +19,110 @@ git log -8 --decorate --oneline
 
 期望结果：
 
-- 分支是 `main`，工作树为空，`HEAD` 与 `origin/main` 相同，ahead/behind 为 `0 0`。
-- 历史包含 `bb6deec`（Issue #7：V6 与现行文档一致性审计）、Issue #8 的 E0 交接归档检查点，以及 Issue #9 的 E1 / Slice 1 提交。
-- GitHub Issues #1–#9 均已关闭。使用仓库内可用的 `gh` CLI 复核 Issue #9 的关闭评论和对应提交；不要只凭本文缓存的状态开始修改。
+- 分支是 `main`，工作树为空；若不为空，先辨认并保留已有修改。
+- Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
+- GitHub 原生子票顺序为 #11–#16，阻塞链为 `#11 -> #12 -> #13 -> #14 -> #15 -> #16`。
+- #11 关闭后，唯一 frontier 是 #12；不要跳到 Character Slice 2。
 
-若工作树不干净，先辨认并保留已有修改；若 `HEAD` 与 `origin/main` 不一致，先确认差异来源。完成这两个检查以前，不创建 ticket、不改文档、不写代码。
-
-当前已验证的开发环境是 Windows 10 `10.0.19045`、仓库私有 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。若新会话的 PATH 尚未刷新而找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`；先运行 `auth status`，预期 GitHub.com 账号为 `tomatoj23`。
+若本机 PATH 找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`。当前已验证环境是 Windows 10 `10.0.19045`、仓库 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。
 
 ## 2. 当前结论
 
 ### 2.1 已完成并固定
 
-- 产品里程碑 M0 已 `complete`；追踪记录 `MILESTONE-001` 已 `verified`。
-- `ENGINE-001 / Engine Stage E0` 已 `verified`，E0 的两个切片均已关闭。
-- Engine Stage E1 / Slice 1 已 `verified`：注册、独立 login、refresh/logout、RecoveryCode 与 H5 single-flight 已完成，严格未实现 Character、ConnectionSession、Presence、PresenceSnapshot、恢复控角或 takeover。
-- E0 / Slice 2 已实现并验收：Registry 与 Blueprint 两类 exact dependency、冻结 seed artifact、受审计 bootstrap、active/pinned resolver、服务器启动生命周期、只读 readiness、并发收敛、事务回滚和失败审计。
-- 2026-08-26 已完成 V6、领域词汇、工程术语索引、冻结合同、计划和全部非历史项目文档的一致性审计。
-- E0 工作日志与旧交接入口已原样归档到 `archive/handoffs/2026-08-26-e0-closeout/`；只有回查历史过程时才读取，归档文本不再维护。
+- 产品里程碑 M0 已 `complete`；`MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 已 `verified`。
+- Issue #9 / Engine Stage E1 / Slice 1 仍是当时注册、普通登录、refresh/logout、RecoveryCode 与 H5 single-flight 的已验证历史事实。
+- Issue #10 已批准 `AUTH-005`：VerifiedContactMethod 与 VerificationChallenge 取代 RecoveryCode，当前渠道只启用 email。
+- Issue #11 已把 V6、冻结合同、追踪、状态、差异、路线、tracer plan 和本交接统一到新认证权威；本票没有修改数据库、运行配置或业务行为。
+- CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
+- Character Slice 2 被整个 Auth Baseline Amendment 阻塞；只有 Issue #16 完成后才能启动。
 
-### 2.2 Issue 与提交索引
+### 2.2 Issue 索引
 
-| Issue | 提交 | 已固定边界 |
+| Issue | 状态/职责 | 阻塞 |
 | --- | --- | --- |
-| #1 | `31f6c1a` | Registry exact dependencies |
-| #2 | `c727fba` | 冻结 seed artifact 与受审计 bootstrap |
-| #3 | `2eeb682` | 启动生命周期与 readiness |
-| #4 | `9401955` | 并发启动、事务失败矩阵与失败审计 |
-| #5 | `8297c94` | 分层证据、正式状态同步与 E0 关闭 |
-| #6 | `4d2fe6b`、`c588c69` | `CONTEXT.md` 与工程术语索引分权及领域词项整理 |
-| #7 | `bb6deec` | V6 与全部非历史项目文档一致性审计 |
-| #8 | 以 Issue 关闭评论为准 | 归档 E0 交接材料并重建本入口 |
-| #9 | 以 Issue 关闭评论为准 | E1 / Slice 1 注册与独立登录闭环、分层证据和状态同步 |
+| #9 | 已关闭；E1 / Slice 1 历史证据 | — |
+| #10 | Open Spec；已验证联系方式注册与账号恢复基线修订 | — |
+| #11 | 权威修订；V6/合同/追踪/状态/计划/交接 | 无 |
+| #12 | challenge、crypto、持久限流、outbox 与 worker 投递 tracer | #11 |
+| #13 | 已验证邮箱最终注册与 H5 | #12 |
+| #14 | 邮箱密码重置、即时认证撤销与 H5 | #13 |
+| #15 | RecoveryCode 退役与原子切换 | #14 |
+| #16 | 分层证据、SMTP opt-in smoke 与双轴复审 | #15 |
 
-V6、冻结合同和机器制品的审计前置基线是 `d14ce67`。上表用于定位检查点，不代替 `git log`、Issue 关闭证据或现行状态账本。
-
-## 3. 不得混用的当前状态
+## 3. 不得混用的状态
 
 | 命名空间/记录 | 当前值 | 准确含义 |
 | --- | --- | --- |
 | 产品里程碑 M0 | `complete` | V6 的 M0 产品结果已完成 |
-| `MILESTONE-001` | `verified` | 有证据证明 M0 已 `complete` |
+| `MILESTONE-001` | `verified` | 有证据证明 M0 已 complete |
 | `ENGINE-001` / E0 | `verified` | Engine Stage E0 实现与验收已关闭 |
-| `CONTENT-001` | `implemented` | E0 内容启动闭环已实现；M1 完整后台发布服务未实现 |
-| `WORLD-001` | `specified` | 世界物化、移动、战斗和战利品 E2E 尚未实现 |
-| `AUTH-001`、`AUTH-002` | `verified` | Issue #9 已完成注册、独立登录、refresh/replay、logout 与 H5 Slice 1 验收 |
-| `AUTH-003` | `specified` | Character、ConnectionSession 与 Presence 租约尚未实现 |
-| `AUTH-004` | `implemented` | RecoveryCode 的哈希、轮换、合并限流和 User 全会话撤销已实现；PresenceRecovery、后台修复及 close/reopen 尚未实现 |
-| `MILESTONE-002` | `specified` | M1-A/M1-B 门禁已有定义，不能从 E0 推断完成 |
-| `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 浏览器、容量/soak 与发布级恢复证据未完成 |
-| `RELEASE-001` / `PublicV1Gate` | `blocked` | 尚不具备公开接纳真实玩家的发布证据 |
+| `AUTH-001`、`AUTH-002` | `verified` | Issue #9 的注册零隐式登录和会话生命周期历史证据仍成立 |
+| `AUTH-004` | `retired` | RecoveryCode + PresenceRecovery 的旧复合追踪项已拆开，ID 不复用 |
+| `IDENTITY-001` | `verified` | 每实例一个 User 永久映射一个 GameAccount 已由 Issue #9 验证 |
+| `AUTH-005` | `specified` | 新认证权威已明确，运行实现与最终证据仍待 #12–#16 |
+| `AUTH-006` | `specified` | PresenceRecovery 属于未来 Character Slice 2，takeover 仍独立 |
+| `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器、容量/soak 与发布级恢复证据未完成 |
+| `RELEASE-001` / PublicV1Gate | `blocked` | 尚不具备公开接纳真实玩家的发布证据 |
 
-产品里程碑状态使用 `not_started / in_progress / blocked / complete`；`17_REQUIREMENTS_TRACEABILITY.md` 的追踪记录使用 `specified / implemented / verified / blocked / retired`。不要把产品 M0 写成 `verified`，也不要把 `MILESTONE-001` 写成 `complete`。
+追踪状态使用 `specified / implemented / verified / blocked / retired`；产品里程碑状态使用 `not_started / in_progress / blocked / complete`。不要把产品 M0 写成 verified，也不要把 `MILESTONE-001` 写成 complete。
 
-## 4. 已冻结、不要重新解释的决策
+## 4. 已冻结、不要重新解释的认证决策
 
-- `CONTEXT.md` 是领域词汇唯一权威；`UBIQUITOUS_LANGUAGE.md` 只是非权威工程术语、来源名称和合同导航索引。
-- `Presence` 是 AuthSession 控制 Character 的运行时控制上下文；`PresenceSnapshot` 是 active/grace 的持久恢复租约与检查点。
-- `Actor` / `ActorRef` 只表示 Character 或 NPC，不表示 User、Room、Item、平台操作者或任意 Entity。
-- `RetiredCharacter` 只在其 GameAccount 已进入永久 `retired` 后成立；临时 `cooling_off` 不产生 RetiredCharacter。
-- 领域概念 `CharacterCreationProfile` 由 typed registry 的 `CharacterCreationProfileDefinition` 表示；不要改回自由字符串或未版本化配置。
-- E0 已固定活动批次读取 exact revision、钉定对象读取 historical revision，以及 Blueprint/Registry 两类 exact dependency；E1 只能消费这些边界，不能另造“latest”解析路径。
-- `requirements_v5.md` 是不再维护的历史基线。现行工作以 V6 为产品权威，不向 V5 回写。
+- 登录仍只使用账号名和密码；邮箱、未来手机号不是登录名、passwordless 或 MFA。
+- 新注册必须先验证 email，最终事务创建 User、当前实例 GameAccount 与 VerifiedContactMethod，但创建零 AuthSession/token/Character/Presence。
+- password reset 只使用 purpose 隔离的短期 VerificationChallenge，成功后撤销 User 跨实例全部 AuthSession/family/credential，不改变 GameAccount lifecycle，也不自动登录。
+- RecoveryCode 不再签发、展示或消费。旧 recover/rotate 先返回 `410 RECOVERY_CODE_RETIRED`，Public V1 前删除。
+- 完整联系方式只保存应用层密文；精确查询和唯一性只使用独立 keyed lookup digest；Django `User.email` 保持为空。
+- HTTP 不同步发送 SMTP。VerificationDeliveryOutbox 与独立 worker 负责投递、同 code 重试、provider 接受后激活和 terminal payload 擦除。
+- 格式有效的 request 返回非枚举 202；request 需要 `Idempotency-Key`，限流状态持久化到 PostgreSQL，并合并联系方式、IP 和匿名设备维度。
+- 每个受保护 HTTP/WebSocket 入口必须把 access token 解析到仍 active 的 AuthSession；JWT 剩余寿命不能绕过撤销。
+- 默认自动测试使用 fake/locmem 邮件适配器且零公网。163 SMTP 只用于显式 opt-in 的开发 smoke；秘密只从 Git 忽略的本地环境文件或部署 secret manager 注入。
 
-## 5. 最近一次可复核验证
+## 5. 历史边界
 
-Issue #9 的 2026-08-26 E1 / Slice 1 验收证据：
+- Issue #9、`AUTH-001/002` 与 E1 / Slice 1 的 134 项真库 pytest、静态门禁和 H5 E2E 证据不被倒写。
+- 历史文本中的“独立登录”和 RecoveryCode 描述只说明当时交付，不是当前产品文案或后续实现授权。
+- ADR-0004 已由 ADR-0005 取代其中 RecoveryCode 决策；其“不自动恢复 Presence”以及 PresenceRecovery 与显式 takeover 分离的边界继续成立。
+- `requirements_v5.md`、归档 handoff 与旧工作日志保持只读历史，不回写新决策。
 
-- `RUN_POSTGRES_TESTS=1` 全量 pytest：`134 passed`；仅有已记录的 Daphne / Python 3.16 asyncio policy 弃用警告。
-- Auth API 与迁移结构：`49 passed`；身份专项（含 PostgreSQL 合同）：`61 passed`；RecoveryCode 跨实例撤销、登录/账号生命周期并发、refresh terminal 保留与 family/credential 不可变触发器均由测试覆盖。
-- Ruff lint 通过、69 files formatted；mypy 69 source files 通过；Django check 0 issues；无 migration drift；identity `0003 -> 0002 -> 0003` 往返通过；`pip check` 通过。
-- `verify_m0.py`：57,053 checks，READY；Vue typecheck、Vitest 11 passed、H5 build 通过。
-- Playwright：10 passed、8 个按项目适用性跳过；三种主视口（1280×720、412×915 CSS / DPR 3、915×412 CSS / DPR 3）均完成注册/独立登录/refresh/logout/机器错误流程；桌面额外覆盖响应丢失重载复用 key、双标签 single-flight 和持久存储泄漏扫描。360×640 只作无横向溢出守卫。
-- npm audit critical 门禁通过；仍有 9 low、9 moderate、1 high，唯一 high 位于 uni-app 约束的 Vite 5 工具链，强制修复需跨到 Vite 8.2.2。
-- 当前环境没有可供 in-app Browser 使用的浏览器，未完成额外人工可见检查；不据此填充发布级 `tested_versions`。
+## 6. 当前明确不实现
 
-Issue #8 的 2026-08-26 交接重建证据：
+- SMS provider、手机号国家规则、短信模板报备、成本、consent 与发送限制。
+- 邮箱/手机号作为登录名、passwordless、MFA 或微信登录。
+- 联系方式管理页面、自助换绑、24 小时 replacement worker。
+- 账号关闭、重新启用、永久退休任务与公开端点。
+- Character、CharacterOwnership、ConnectionSession、Presence、PresenceSnapshot、enter、resume、PresenceRecovery 与 takeover。
+- CAPTCHA provider、完整发布浏览器矩阵、容量/soak 或 PublicV1Gate 完成声明。
 
-- 原 handoff 与 worklog 的归档 blob 分别和 `bb6deec` 中对应文件完全一致，归档过程没有改写历史文本。
-- `scripts/verify_m0.py`：57,053 checks，READY。
-- 现行 Markdown：133 checks，0 errors。
-- E1 未勾选验收项机器计数为 24。
+## 7. Issue #12 的唯一合法启动顺序
 
-Issue #5 的 2026-08-25 E0 验收证据：
+1. 完成第 1 节仓库与 Issue 检查，确认 #11 已关闭、#12 无其他 open blocker 且未被他人认领。
+2. 阅读 Issue #10、#12、`CONTEXT.md`、ADR-0005 至 ADR-0008，以及 V6 第 8 章和 08/13/16 的认证修订段落。
+3. 认领 #12；按 `/implement` 内部逐条 `/tdd`，先确认公开 seam：registration-verification REST、PostgreSQL 持久不变量、worker + fake provider。
+4. 只实现 #12 的 challenge/crypto/lookup/outbox/limiter/worker tracer，不提前实现最终 register、password reset、RecoveryCode 切换或 H5 页面。
+5. PostgreSQL 测试串行运行；默认测试零公网，不使用真实 SMTP 作为必需门禁。
+6. 完成受影响测试、全量/静态门禁和 Standards + Spec 双轴复审后提交、回填并关闭 #12；随后 frontier 才是 #13。
 
-- PostgreSQL-enabled 全量 pytest：`73 passed`。
-- 默认全量 pytest：`57 passed`，另有 16 项仅因未设置 `RUN_POSTGRES_TESTS=1` 跳过；这些项目已由真库全量覆盖。
-- Ruff lint 通过；Ruff format 检查为 52 个文件已格式化。
-- mypy 检查 52 个源文件，0 issues。
-- Django check 0 issues；无 migration drift；`pip check` 通过。
+## 8. 权威来源
 
-Issue #7 的 2026-08-26 文档审计证据：
-
-- `scripts/verify_m0.py`：57,055 checks，READY，0 profile blocker。
-- Markdown：135 checks，0 errors。
-- 文档合同测试、差异检查通过；检查点提交后本地与远端同步、工作树干净。
-
-这些是最后一次完整检查点的证据，不是未来修改后的自动保证。开始新实现后必须按受影响范围重新执行门禁。
-
-## 6. 仍未完成的事实
-
-- Engine Stage E1 / Slice 1 的 8 项已完成；Slice 2 的 9 项与 Slice 3 的 7 项仍全部未勾选。Character、ConnectionSession、Presence、PresenceSnapshot、enter/resume/PresenceRecovery 与 takeover 均未实现。
-- 浏览器 profile 已批准，Slice 1 已有 PC/现代移动自动 H5 E2E，但 `contracts/v1/profiles/browser-matrix.json` 中所有 `tested_versions` 仍为空，完整中文输入、无障碍和发布浏览器矩阵尚未形成证据。
-- capacity profile 已批准，但容量报告和两小时 soak 报告不存在。
-- `contracts/v1/reports/m0-recovery-latest.json` 只证明 M0 基础设施恢复，`release_gate_eligible=false`；accounts、characters、world_topology、content_batches、audit_chain 五个发布级业务范围均为 `not_implemented`。
-- 尚无合格的 `ReleaseManifest`、7 天封闭试运行、至少 5 名非管理员测试者、至少 20 次核心循环及完整公开资料证据。
-- 完整内容后台发布服务、固定小巷世界物化和玩法 E2E 仍属于后续 M1 工作，不能从 E0 seed/startup 推断完成。
-
-## 7. E1 / Slice 2 的唯一合法启动顺序
-
-本交接检查点不启动 Slice 2，也不创建其工作日志。下一会话只有在用户明确要求继续开发时才执行以下顺序：
-
-1. 完成第 1 节仓库和 Issue 检查，确认不需要恢复未提交工作。
-2. 阅读 `plans/m0-e1-tracer-bullets.md` 的 E1 / Slice 2，以及 `docs/new_engine/04_WORLD_MODEL.md`、`08_PERMISSIONS_ADMIN_API.md`、`11_PROTOCOL_CATALOG.md`、`12_REGISTRY_BLUEPRINT_CONTRACT.md`、`13_SESSION_AUTH_STATE_MACHINE.md`、`15_FRONTEND_H5_CONTRACT.md`、`16_OPERATIONS_TESTING_CONTRACT.md` 的 Character、连接、进入、resume 与 PresenceRecovery 边界。
-3. 同时读取 `CONTEXT.md`、`requirements_v6.md` 第八章、`17_REQUIREMENTS_TRACEABILITY.md` 与 `18_IMPLEMENTATION_STATUS.md`，确认术语和状态没有被后来提交改变。
-4. 用 `gh issue list` 搜索是否已有 E1 / Slice 2 ticket；没有时创建一个只覆盖“创建角色、连接、进入与恢复闭环”的独立 Issue，并在写代码前认领。
-5. 在该 ticket 内 test-first 实现 Slice 2；验收范围是计划中的 9 项，不提前混入 Slice 3 的显式 takeover。
-6. 只有 ticket 的测试、分层门禁、双轴审查、状态同步和提交证据齐备后才关闭 Slice 2。届时再更新本交接入口。
-
-## 8. 权威来源与读取条件
-
-| 需要回答的问题 | 读取来源 |
+| 问题 | 来源 |
 | --- | --- |
-| 产品目标、M1/Public V1 范围、里程碑和验收结果 | `requirements_v6.md` |
-| 领域概念名称和定义 | `CONTEXT.md` |
-| 协议、状态机、事务、失败语义与测试机制 | 受影响的 `docs/new_engine/11-16` |
-| 当前需求证据成熟度 | `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` |
-| 当前实现、环境、验证结果与阻塞项 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
-| E0/E1 纵向切片、顺序与验收清单 | `plans/m0-e1-tracer-bullets.md` |
-| 文档冲突和归档规则 | `docs/19_documentation_governance.md` |
-| E0 历史过程和旧会话状态 | `archive/handoffs/2026-08-26-e0-closeout/`，仅在追溯时读取 |
-
-Issue 与规格统一使用 GitHub Issues 和 `gh` CLI，具体命令见 `docs/agents/issue-tracker.md`。任何交接摘要与权威来源冲突时，先停止状态提升，再按上表修正现行材料。
+| 产品结果、范围、里程碑 | `requirements_v6.md` |
+| 领域名称和定义 | `CONTEXT.md` |
+| 长期认证决策 | `docs/adr/0005-0008` |
+| API、状态机、H5、运维测试机制 | `docs/new_engine/08`、`13`、`15`、`16` |
+| 需求证据成熟度 | `docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md` |
+| 当前实现与验证结果 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
+| 实施顺序 | `docs/new_engine/10_ROADMAP.md`、`plans/m0-e1-tracer-bullets.md` |
+| 完整批准规格 | GitHub Issue #10 |
+| 当前 ticket | GitHub Issue #12 |
 
 ## 9. 工程与证据边界
 
-- 保留工作树中来源不明的既有修改，不执行破坏性还原或清理。
-- `evennia-main/` 和 XKX100 来源目录只作为参考/输入，不在新引擎实现中改写。
-- PostgreSQL 凭据只通过进程环境提供，不进入仓库、文档、日志或合同制品。
-- PostgreSQL 测试与全量 pytest 严格串行，统一使用 `--basetemp artifacts\reports\pytest-temp`，避免数据库和临时目录竞争。
-- 结构检查、局部测试、profile 批准和内部 M1 候选都不能单独提升正式状态或通过 `PublicV1Gate`。
-- 归档文件只用于历史追溯；现行事实只更新本入口、17/18、计划或对应权威文档。
+- 保留来源不明的已有修改，不执行破坏性还原或清理。
+- `evennia-main/` 和 XKX100 来源目录只作为参考/输入，不改写。
+- 邮箱授权码、PostgreSQL 凭据及所有密钥不进入仓库、Issue、命令参数、日志、fixture 或合同制品。
+- PostgreSQL 测试与全量 pytest 严格串行，避免数据库和临时目录竞争。
+- 结构检查、局部测试、内部候选或 163 smoke 都不能提升 PublicV1Gate。
+- 现行事实只更新本入口、17/18、计划或对应权威文档；归档只用于历史追溯。

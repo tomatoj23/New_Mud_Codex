@@ -78,7 +78,8 @@ Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合
 
 目标：
 
-- 固定用户名密码注册与独立登录
+- 保留 Issue #9 已验证的账号名/密码登录和零隐式登录历史
+- 在 Character Slice 2 前完成 `Auth Baseline Amendment`：已验证邮箱注册、邮箱密码重置、即时认证撤销与 RecoveryCode 退役
 - 固定账号密码、JWT Access Token 与轮换 Refresh Token
 - 落地 ConnectionSession、AuthSession、Presence 与 PresenceSnapshot
 - 落地首发单角色和跨设备单 PresenceSnapshot 租约约束
@@ -87,7 +88,8 @@ Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合
 
 交付：
 
-- REST register、login、refresh 与 logout 四个首发开户/认证端点
+- REST registration-verification request、register、login、refresh、logout、password-reset request/confirm，以及两个 RecoveryCode 410 兼容端点
+- VerifiedContactMethod、VerificationChallenge、验证投递 outbox、持久限流与独立 worker
 - User、GameAccount、CharacterOwnership、Character、Entity/Room 与 AuthSession 持久模型
 - Character 权威位置、最小 scene/character snapshot，以及从 E0 活动批次生成的起始 Room
 - 运行时 ConnectionSession 与 Presence，以及短期持久 PresenceSnapshot
@@ -97,13 +99,24 @@ Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合
 
 验收：
 
-- register 原子创建 User/GameAccount，不创建 AuthSession 或 token；H5 随后独立 login
+- register 原子消费 verified email challenge 并创建 User/GameAccount/VerifiedContactMethod，不创建 AuthSession 或 token；H5 随后普通 login
+- password reset 原子撤销 User 跨实例全部旧 AuthSession/family/credential，旧 access/refresh 立即失败且不改变 GameAccount lifecycle
+- RecoveryCode 不再签发、展示或消费；历史 Issue #9/E1 Slice 1 证据保持可回查
 - 每个 GameAccount 最多创建一个 Character
 - Refresh Token 只用于 REST refresh 轮换或 REST logout Cookie locator；不得进入 WebSocket 或 Authorization header
 - 新 WebSocket 先建 ConnectionSession，再用 access token 绑定 AuthSession
 - 同账号 active 或 grace PresenceSnapshot 租约已占用时，普通 enter 返回 `CHARACTER_OCCUPIED`
 - 显式 takeover 原子替换租约与 ticket、保存 outbox，提交后旧连接收到 `presence.taken_over`
 - H5 可完成登录、进入起始 Room、取得完整最小 snapshot、断线恢复和明确失败展示
+
+### 4.1 当前执行顺序（2026-08-26 Auth Baseline Amendment）
+
+1. Issue #9 / E1 Slice 1 保持 `verified` 历史检查点，不重写为未完成。
+2. Issue #10 固定新的 `AUTH-005` 规格；Issue #11 先完成 V6、冻结合同、追踪、状态、计划和交接权威修订。
+3. Issues #12–#16 按原生 blocked-by 链实现并验证 challenge/outbox、已验证邮箱注册、密码重置与即时撤销、RecoveryCode 原子退役和最终证据。
+4. 只有 #16 完成后才能启动 Character Slice 2；PresenceRecovery 属于该后续切片，显式 takeover 继续属于 Slice 3。
+
+当前修订不实现 SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 或 takeover。163 SMTP 只用于显式 opt-in 的本机开发 smoke，不能作为 Public V1 provider 证据。
 
 ## 5. Engine Stage E2：世界、动作与 H5 场景纵切
 
@@ -339,7 +352,7 @@ E1-E4 通过后可形成 M1-A 内部可玩验证。E5、E6 与 E9 的 M1 范围�
 当前建议顺序如下，但 Engine Stage 仍可按依赖和团队并行度调整：
 
 1. Engine Stage E0：合同、工程骨架、源快照与 CI
-2. Engine Stage E1：认证、会话与 H5 连接
+2. Engine Stage E1：先完成 Auth Baseline Amendment，再进入 Character Slice 2 的会话与 H5 连接
 3. Engine Stage E2：世界、Action 与 H5 场景
 4. Engine Stage E3：聊天、帮助与 H5 通信
 5. Engine Stage E4：战斗、武学、物品与 H5 玩法

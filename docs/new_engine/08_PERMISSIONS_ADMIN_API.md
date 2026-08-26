@@ -93,13 +93,13 @@ Quest、Dialogue、Shop、LootTable、世界事件、定时活动、组织和经
 - 日志与异常查看
 - 公告发布
 
-手机号、邮箱或微信驱动的玩家自助找回属于 M2/M6，不得阻断 M1 的后台恢复最小流程。
+已验证邮箱驱动的玩家自助密码重置属于 `Engine Stage E1 / Auth Baseline Amendment`，必须先于 Character Slice 2；未来 SMS、联系方式换绑、账号重新启用和微信身份仍由独立规格实现。
 
-M1 后台恢复只允许权限矩阵中具“账号封禁与受审计恢复”写权限的 PlatformRole：`super_admin / ops_admin / gm`。`super_admin` 负责紧急处置，`ops_admin` 负责常规冻结、撤销和恢复修复，`gm` 只在分配给自己的 support case 与授权范围内执行相同动作；`qa` 只读，`content_editor` 无权访问。允许的写动作只有冻结或撤销可疑恢复流程、撤销账号的全部会话与凭据，以及修复一个玩家仍持有有效 RecoveryCode 的失败流程。
+M1 后台账号安全处置只允许权限矩阵中具“账号封禁与受审计恢复”写权限的 PlatformRole：`super_admin / ops_admin / gm`。`super_admin` 负责紧急处置，`ops_admin` 负责常规冻结与撤销，`gm` 只在分配给自己的 support case 与授权范围内执行相同动作；`qa` 只读，`content_editor` 无权访问。允许的写动作只有冻结可疑恢复流程、撤销账号的全部会话与凭据，以及检查脱敏的投递/审计状态。
 
-修复必须调用与 `/api/v1/auth/recover` 相同的 code 校验、合并限流、密码策略和原子撤销服务；后台只能查看 code generation / hash 状态与脱敏审计，不能读取明文 code、跳过验证、直接签发所有权证明或依据角色资料和游戏 trivia 重分配账号。密码与 code 都丢失时只能冻结 / 撤销，不能恢复所有权。
+后台不得读取完整联系方式、验证码、投递 payload 或摘要，不能跳过 `VerificationChallenge`、直接替用户改密、签发所有权证明，或依据 Character 资料和游戏 trivia 重分配账号。密码与全部已验证联系方式都丢失时只能冻结 / 撤销并保全审计，不能恢复所有权。
 
-每次动作要求重新认证、稳定 reason、关联 support case、目标 User / GameAccount、操作者和复核结果。成功修复仍轮换 RecoveryCode，撤销全部旧 AuthSession、RefreshTokenFamily 与 ticket、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并只经玩家当前受保护响应一次展示新 code；失败不得改变密码、code、账号 lifecycle 或会话状态。
+每次动作要求重新认证、稳定 reason、关联 support case、目标 User / GameAccount、操作者和复核结果。管理员撤销会话时必须按 User 维度跨实例收敛；投递或安全通知故障只能产生脱敏告警，不得回滚已经提交的玩家密码重置。当前修订不创建账号换绑、关闭、重新启用或 Presence/takeover 的后台动作。
 
 ## 3. Django Admin 的定位
 
@@ -146,37 +146,60 @@ Refresh Token 仅可作为 REST refresh endpoint 的轮换凭据，或作为 log
 
 每个逻辑 refresh 必须携带安全格式的 `Idempotency-Key`。终结记录、同 key 重放、冲突、superseded 与攻击 replay 语义以 `13_SESSION_AUTH_STATE_MACHINE.md` 为准，本文不另建第二套 schema。
 
-### 4.2 首发 H5 注册与认证端点
+### 4.2 已验证联系方式注册与认证端点
 
-首发玩家开户与认证只暴露以下四个端点，不提供无版本别名、GET 变体或把 refresh token 放入 JSON/Authorization header 的兼容路径：
+首发玩家开户、认证与密码重置只暴露以下端点，不提供无版本别名、GET 变体、泛化 purpose 端点或把 refresh token 放入 JSON/Authorization header 的兼容路径：
 
 Authorization header 只允许 logout 携带当前 access token；register、login 与 refresh 不接受该兼容入口，refresh token 在任何端点都不得放入 Authorization header。
 
 | 方法与路径 | 请求 | 成功结果 |
 | --- | --- | --- |
-| `POST /api/v1/auth/register` | JSON `username / password` | `201` User、GameAccount id 与一次性明文 RecoveryCode；不签发 token、不设置 Cookie |
+| `POST /api/v1/auth/registration-verification/request` | JSON `channel / destination`、`Idempotency-Key` | 格式有效时统一 `202 {status: accepted, retry_after: 60}`；不返回 challenge、User 或投递状态 |
+| `POST /api/v1/auth/register` | JSON `username / password / verification` | `201` User、GameAccount id；不签发 token、不设置 Cookie |
 | `POST /api/v1/auth/login` | JSON `username / password` | `200` access token JSON，并设置 refresh Cookie |
 | `POST /api/v1/auth/refresh` | JSON `{}`、refresh Cookie、`Idempotency-Key` | `200` 新 access token JSON，并原子轮换 refresh Cookie |
 | `POST /api/v1/auth/logout` | JSON `{}`、refresh Cookie（若存在）、内存中若存在则携带当前 access Bearer | `204`，撤销可识别认证会话并清除 Cookie |
+| `POST /api/v1/auth/password-reset/request` | JSON `channel / destination`、`Idempotency-Key` | 格式有效时统一 `202 {status: accepted, retry_after: 60}` |
+| `POST /api/v1/auth/password-reset/confirm` | JSON `channel / destination / code / new_password` | `204`，不签发 token、不设置 Cookie |
 
-注册和登录请求最小结构一致：
+发码 request 的最小结构为：
+
+```json
+{
+  "channel": "email",
+  "destination": "player@example.com"
+}
+```
+
+当前运行时只接受 `channel=email`；`sms` 返回 `CONTACT_CHANNEL_UNAVAILABLE`，不创建可调用能力。格式有效的未知、已占用、不可恢复或不可达地址必须走账号无关路径并返回相同 `202` status、body 与 headers。客户端不得获得 challenge identity 或投递状态查询端点，也不得自动重发；冷却结束后只能由用户明确发起新的逻辑请求。
+
+最终注册请求为：
 
 ```json
 {
   "username": "player_name",
-  "password": "user-supplied-password"
+  "password": "user-supplied-password",
+  "verification": {
+    "channel": "email",
+    "destination": "player@example.com",
+    "code": "123456"
+  }
 }
 ```
 
-注册成功响应包含 `user_id / game_account_id / recovery_code`；明文 RecoveryCode 只在这次响应展示，之后不得再次读取或返回。
+注册成功响应只包含 `user_id / game_account_id`。RecoveryCode 已退役，不得在响应、Cookie、页面或持久客户端存储中出现。
 
 注册必须把账号名规范为 3-32 位 ASCII 小写字母、数字和下划线，并按规范值执行大小写不敏感唯一校验。
 
-注册事务只创建 `User`、一对一首发 `GameAccount` 与 RecoveryCode 哈希。任一步失败整体回滚；不得创建 AuthSession、refresh family、credential、Cookie、Character 或 Presence。
+注册发码阶段不创建 User 或预留账号名。最终注册事务锁定并重验 active registration `VerificationChallenge`、Django 密码策略、账号名与联系方式唯一性，原子创建 `User`、一对一首发 `GameAccount` 与 verified email `VerifiedContactMethod`，并消费 challenge。任一步失败整体回滚；不得创建 AuthSession、refresh family、credential、Cookie、Character 或 Presence。
 
 密码必须通过 Django 当前部署的密码校验器。重复账号名统一返回 `REGISTRATION_UNAVAILABLE`，格式或密码策略失败返回 `REGISTRATION_INVALID`。
 
 注册响应不得返回候选 User、密码规则内部实现或堆栈。
+
+password-reset request 只为 active、未禁用且持有可用 `VerifiedContactMethod` 的 User 创建 purpose=`password_reset` challenge/outbox，但公开响应保持非枚举。confirm 必须在一个 PostgreSQL 事务中消费 challenge、执行 Django 密码策略、更新 User 密码，并撤销该 User 跨实例的全部 AuthSession、RefreshTokenFamily 与 active credential，取消适用的未完成恢复任务。它不改变 GameAccount lifecycle，不创建或恢复 Presence，也不自动登录；成功后旧 access/refresh 立即失效。
+
+六位验证码从 provider 接受并激活起十分钟有效，最多五次校验；重发冷却从 request 接受起 60 秒。purpose、channel、destination 和适用 User 必须进入摘要上下文，跨用途或跨渠道消费统一失败。HTTP 请求只写 PostgreSQL challenge/outbox，不同步连接 SMTP；worker 重试同一逻辑任务时重发同一 code，terminal 后擦除加密 payload。
 
 登录和 refresh 的成功响应最小结构一致：
 
@@ -201,11 +224,11 @@ new_mud_refresh=<opaque>; Path=/api/v1/auth/; Secure; HttpOnly; SameSite=Strict;
 ```
 
 Cookie 必须是 host-only（不得设置 `Domain`）；`Max-Age` 不得晚于 refresh family 的绝对截止时间。H5 请求使用同源 `credentials=include`。
-register、login、refresh、logout 四个端点都必须校验允许的 `Origin`，跨源 register/login 也要拒绝以防 CSRF/session swapping；不得为任意跨源开放 credentialed CORS。
+本节全部浏览器认证端点都必须校验允许的 `Origin`，跨源发码、register、login 与 reset 也要拒绝以防 CSRF/session swapping；不得为任意跨源开放 credentialed CORS。
 非浏览器受控客户端的认证传输必须由未来显式版本合同定义，不能绕过该规则。
 
 每个 refresh 必须携带语法为 `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$` 的 `Idempotency-Key`，网络重试复用同一 key。
-缺失或非法 key 在读取/消费 credential 前返回 `REFRESH_IDEMPOTENCY_KEY_INVALID`。register、login、refresh、logout 的全部成功与错误响应都必须发送 `Cache-Control: no-store`，
+缺失或非法 key 在读取/消费 credential 前返回 `REFRESH_IDEMPOTENCY_KEY_INVALID`。两个 verification request 端点也必须携带合法 `Idempotency-Key`：同 key、同请求安全重放同一终结，同 key、不同请求返回稳定冲突。全部认证成功与错误响应都必须发送 `Cache-Control: no-store`，
 不得让 access token 或认证错误进入浏览器/中间缓存。
 
 logout 分别解析 refresh Cookie 与正常有效 access Bearer 的 `auth_session_id`。active/used refresh credential 都可作为显式撤销 locator；无效 locator 被忽略，不进入 refresh replay 判定。
@@ -228,7 +251,7 @@ REST 失败 body 只允许稳定 code：
 }
 ```
 
-账号不存在、密码错误或不可登录统一使用 `AUTH_CREDENTIALS_INVALID`。注册只使用 `REGISTRATION_INVALID` 或 `REGISTRATION_UNAVAILABLE`。
+账号不存在、密码错误或不可登录统一使用 `AUTH_CREDENTIALS_INVALID`。联系方式格式/渠道、限流、验证码和终局提交分别只使用 `CONTACT_INVALID`、`CONTACT_CHANNEL_UNAVAILABLE`、`VERIFICATION_RATE_LIMITED`、`VERIFICATION_CODE_INVALID`、`REGISTRATION_UNAVAILABLE` 或 `PASSWORD_RESET_UNAVAILABLE`；只有与具体账号无关的全局 fail-closed 才返回 `VERIFICATION_SERVICE_UNAVAILABLE`。
 refresh 对外只使用 `REFRESH_IDEMPOTENCY_KEY_INVALID`、`REFRESH_IDEMPOTENCY_CONFLICT`、`REFRESH_REQUEST_SUPERSEDED`、`REFRESH_UNAVAILABLE` 或 `SESSION_REVOKED` 等已登记 code；
 攻击 replay 的审计原因是 `REFRESH_TOKEN_REPLAYED`，对客户端返回 `SESSION_REVOKED`。
 客户端不得按自由文本或仅按 HTTP status 分支；响应不得包含堆栈、凭据、账号存在性、内部对象详情或任意秘密。
@@ -262,20 +285,20 @@ POST /api/v1/characters
 
 成功返回 `201`、Character stable id、display name、完整 profile identity（key/version/definition hash）和初始状态摘要；同一幂等键同一 payload 可安全重放。首发每个 GameAccount 最多一个 Character，因此不另建 `character.choose`。Profile version 不存在、不是当前可选版本、hash/BlueprintRef 无法闭合或初始状态不合法时统一使用 `CHARACTER_PROFILE_INVALID`；其他失败只使用 `CHARACTER_ALREADY_EXISTS`、`CHARACTER_DISPLAY_NAME_INVALID` 或 `CHARACTER_CREATION_UNAVAILABLE`，不得泄露名称是否已被占用。
 
-### 4.4 RecoveryCode 与账号生命周期
+### 4.4 已验证联系方式与账号生命周期
 
-首发和 Public V1 固定使用以下端点：
+RecoveryCode 已退役。兼容期只保留以下终结响应：
 
 ```text
 POST /api/v1/auth/recover
 POST /api/v1/auth/recovery-code/rotate
-POST /api/v1/account/close
-POST /api/v1/account/reopen
 ```
 
-`auth/recover` 接受账号名、RecoveryCode 和新密码；成功时撤销该 User 的全部 AuthSession、RefreshTokenFamily 与 ResumeTicket，终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，生成新 code 并只在该响应中展示一次。`recovery-code/rotate` 需要当前 active AuthSession，轮换后同样撤销旧 code 和全部旧控角状态。恢复失败按账号、IP、设备合并限流，统一返回 `RECOVERY_CODE_INVALID`、`RECOVERY_RATE_LIMITED` 或 `ACCOUNT_RECOVERY_UNAVAILABLE`，不泄露账号存在性。
+两个端点都不得校验、消费、轮换或展示旧 code，只返回 HTTP `410` 与错误码 `RECOVERY_CODE_RETIRED`，并发送 `Cache-Control: no-store`；兼容端点在 Public V1 前删除。现有开发数据中的 active code 在后续切换迁移中全部撤销，但本决定不授权删除 User/GameAccount。
 
-`account/close` 立即撤销会话与 ticket、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并将 GameAccount 置为 `cooling_off`；`account/reopen` 只接受冷静期内的有效 RecoveryCode，成功后回到 `active`，但不自动恢复旧 PresenceSnapshot 或运行时 Presence。冷静期结束进入 `retired`，User 数据匿名化/禁用，Character 进入 `RetiredCharacter`。过期和不可恢复路径使用 `ACCOUNT_REOPEN_WINDOW_EXPIRED`、`ACCOUNT_NOT_REOPENABLE` 或 `ACCOUNT_ALREADY_RETIRED`。所有四个端点发送 `Cache-Control: no-store`，恢复和关闭操作均写审计事件。
+当前 Auth Baseline Amendment 只实现 4.2 的邮箱注册与密码重置，不创建账号关闭、重新启用或联系方式换绑端点。未来 `account/close` 会立即撤销认证和控角状态并进入 `cooling_off`；`account/reopen` 必须使用用途独立的 account-reopen `VerificationChallenge`，不能复用 password-reset challenge。冷静期内保留联系方式，进入永久 `retired` 后撤销并解绑、释放唯一性；任何重新启用都不得自动恢复旧 AuthSession、PresenceSnapshot、运行时 Presence 或 Character 控制权。
+
+未来联系方式换绑必须重新认证、验证新渠道，并使用可用旧渠道证明或 24 小时高风险等待期；成功后发送安全通知并撤销全部会话。SMS、换绑 worker、close/reopen、Character、Presence、PresenceRecovery 与 takeover 都不在当前修订内创建路由、页面、模型或状态转换。
 
 ### 4.5 Public V1 社区治理 API
 
@@ -407,7 +430,8 @@ Evennia `web/api/views.py` 暴露的是：
 - HTTPS / WSS only
 - REST Refresh Token 轮换与 replay 撤销流程
 - Django 标准密码哈希体系
-- 手机号等敏感字段加密存储
+- 完整邮箱、手机号等敏感字段应用层加密存储，精确查询只使用独立 keyed lookup digest
+- 验证码只保存独立 pepper 摘要，临时投递 payload 使用另一把可轮换密钥加密并在 terminal 后擦除
 - 动作频率限制
 - WebSocket 鉴权过期处理
 - 审计日志
@@ -436,9 +460,9 @@ Evennia `web/api/views.py` 暴露的是：
 
 ## 10. V6 增量与最终原则
 
-在每个游戏实例内，`User` 与 `GameAccount` 是永久一对一映射；`CharacterOwnership` 负责未来多角色扩展。注册成功仍不创建 AuthSession、RefreshTokenFamily、Character、PresenceSnapshot 或运行时 Presence，但会在响应中一次性展示 RecoveryCode；服务端只保存其哈希。RecoveryCode 的恢复 / 轮换必须撤销全部旧 AuthSession、refresh family 和票据、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence，并采用账号/IP/设备合并限流与统一错误响应。
+在每个游戏实例内，`User` 与 `GameAccount` 是永久一对一映射；`CharacterOwnership` 负责未来多角色扩展。新注册必须先验证 email，并在同一事务创建 User、GameAccount 与 `VerifiedContactMethod`；成功仍不创建 AuthSession、RefreshTokenFamily、Character、PresenceSnapshot 或运行时 Presence。密码重置通过 purpose 隔离的 `VerificationChallenge` 完成，并在事务内撤销全部旧 AuthSession、refresh family 和 active credential；所有受保护入口必须把 access token 解析到仍为 `active` 的 AuthSession。
 
-M1 后台只提供 2.2 冻结的恢复流程冻结 / 撤销与持有效 code 的最小修复，不提供人工身份裁决、明文 code 查看、免验证改密或账号重分配。该后台路径与玩家恢复共用 `13` 的事务和并发边界，并必须进入 `16` 的权限、审计与失败原子性矩阵。
+M1 后台只提供 2.2 冻结的恢复流程冻结、会话撤销和脱敏诊断，不提供人工身份裁决、完整联系方式/验证码查看、免验证改密或账号重分配。该边界必须进入 `16` 的权限、审计与失败原子性矩阵。
 
 Character 创建必须引用版本化 `CharacterCreationProfile`。`CharacterDisplayName` 按 NFKC 在实例内唯一，GM 改名 / 重置必须审计；Public V1 不提供玩家自助 rename、delete 或 rebuild。公开实例的注册模式为可审计的 `open / paused / invite_only` 三态；初始 superuser 只能由安全的一次性管理命令创建，不得存在默认账号或密码。
 
