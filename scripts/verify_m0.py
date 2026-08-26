@@ -73,7 +73,6 @@ EXPECTED_CATALOG_KEYS = {
         "action_domain",
         "authentication_presence",
         "protocol",
-        "retired_authentication_provenance",
     },
     "protocol-states.json": {"activation_states", "delivery_statuses"},
     "protocol.json": {
@@ -140,16 +139,26 @@ REQUIRED_RECOVERY_SCOPES = {
 }
 
 FROZEN_PROTOCOL_REQUEST_MINIMUM = {"presence.recover"}
-RETIRED_RECOVERY_ERROR_PROVENANCE = {
+REST_ONLY_AUTHENTICATION_ERRORS = {
+    "ACCOUNT_ALREADY_RETIRED",
+    "ACCOUNT_NOT_REOPENABLE",
     "ACCOUNT_RECOVERY_UNAVAILABLE",
+    "ACCOUNT_REOPEN_WINDOW_EXPIRED",
     "RECOVERY_CODE_INVALID",
+    "RECOVERY_CODE_RETIRED",
     "RECOVERY_RATE_LIMITED",
 }
 FROZEN_PROTOCOL_ERROR_MINIMUM = {
     "PRESENCE_RECOVERY_UNAVAILABLE",
-    "RECOVERY_CODE_RETIRED",
     "CHARACTER_PROFILE_INVALID",
     "MODERATION_REPORT_INVALID",
+}
+
+AUTHENTICATION_ADR_FILES = {
+    "docs/adr/0005-verified-contact-methods-replace-recovery-code.md",
+    "docs/adr/0006-encrypted-verified-contact-storage.md",
+    "docs/adr/0007-durable-verification-delivery-outbox.md",
+    "docs/adr/0008-access-tokens-require-active-auth-session.md",
 }
 
 SKILL_COMBAT_ROOTS = {
@@ -186,10 +195,6 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "**VerifiedContactMethod**",
         "**VerificationChallenge**",
         "A retired player-held proof",
-    },
-    "contracts/v1/catalogs/protocol-errors.json": {
-        '"RECOVERY_CODE_RETIRED"',
-        '"retired_authentication_provenance"',
     },
     "UBIQUITOUS_LANGUAGE.md": {
         "**RecoveryCode**（已退役历史术语）",
@@ -240,10 +245,6 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "Auth Baseline Amendment",
         "Character Slice 2",
         "Issue #10",
-    },
-    "docs/new_engine/11_PROTOCOL_CATALOG.md": {
-        "RECOVERY_CODE_RETIRED",
-        "已退役的实现 provenance",
     },
     "docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md": {
         "`VerificationChallenge`",
@@ -301,9 +302,6 @@ OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS = {
         "- 用户名密码注册",
         "一次性明文 RecoveryCode",
         "### 4.4 RecoveryCode 与账号生命周期",
-    },
-    "docs/new_engine/11_PROTOCOL_CATALOG.md": {
-        "`PRESENCE_RECOVERY_UNAVAILABLE`、`RECOVERY_CODE_INVALID`、`RECOVERY_RATE_LIMITED`、`ACCOUNT_RECOVERY_UNAVAILABLE`、",
     },
     "docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md": {
         "REST register 只原子创建 User、GameAccount 与 RecoveryCode 哈希",
@@ -459,6 +457,30 @@ def validate_authentication_authority(repository_root: Path, result: Verificatio
         result,
         OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS,
         must_be_present=False,
+    )
+    for relative in sorted(AUTHENTICATION_ADR_FILES):
+        text = (repository_root / relative).read_text(encoding="utf-8")
+        decision_text = "\n".join(
+            line for line in text.splitlines() if line and not line.startswith(("#", "Status:"))
+        )
+        sentence_count = len(re.findall(r"[。！？](?=\s|$)", decision_text))
+        result.check(
+            1 <= sentence_count <= 3,
+            f"{relative}: authentication ADR must contain 1-3 decision sentences, "
+            f"found {sentence_count}",
+        )
+    plan_path = repository_root / "plans" / "email-verification-and-account-recovery.md"
+    plan_text = plan_path.read_text(encoding="utf-8")
+    password_reset_section = plan_text.split("### D.", 1)[-1].split("### E.", 1)[0]
+    blocker = re.search(r"^\*\*阻塞\*\*：([^。\n]+)。$", password_reset_section, re.MULTILINE)
+    result.check(
+        blocker is not None and blocker.group(1) == "C",
+        "plans/email-verification-and-account-recovery.md: Issue #14 must be blocked only by C",
+    )
+    result.check(
+        "并行" not in password_reset_section,
+        "plans/email-verification-and-account-recovery.md: "
+        "Issue #14 must not claim parallel delivery",
     )
 
 
@@ -659,19 +681,18 @@ def validate_catalogs(
                     f"{relative}: verifier minimum {value!r} is absent from source document",
                 )
         if filename == "protocol-errors.json":
-            active_errors = set(catalog["values"].get("authentication_presence", []))
-            retired_errors = set(catalog["values"].get("retired_authentication_provenance", []))
+            protocol_errors = set(catalog_values(catalog))
             result.check(
-                "RECOVERY_CODE_RETIRED" in active_errors,
-                f"{relative}: current RecoveryCode retirement error is missing",
+                protocol_errors.isdisjoint(REST_ONLY_AUTHENTICATION_ERRORS),
+                f"{relative}: REST-only authentication errors leaked into WebSocket catalog",
             )
+            source_errors = {
+                error for error in REST_ONLY_AUTHENTICATION_ERRORS if error in source_text
+            }
             result.check(
-                active_errors.isdisjoint(RETIRED_RECOVERY_ERROR_PROVENANCE),
-                f"{relative}: retired RecoveryCode errors remain active",
-            )
-            result.check(
-                retired_errors == RETIRED_RECOVERY_ERROR_PROVENANCE,
-                f"{relative}: retired RecoveryCode provenance has drifted",
+                not source_errors,
+                f"{relative}: REST-only authentication errors remain in WebSocket source: "
+                f"{sorted(source_errors)}",
             )
             for value in FROZEN_PROTOCOL_ERROR_MINIMUM:
                 result.check(

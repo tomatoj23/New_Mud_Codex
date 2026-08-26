@@ -103,7 +103,7 @@
 | E1 / Slice 1 前端（2026-08-26） | Vue typecheck 通过；Vitest 11 passed；H5 build 通过；Playwright 10 passed、8 个按项目适用性跳过（含 360×640 最低宽度守卫，以及桌面单次持久 refresh/双标签/泄漏扫描） |
 | E1 / Slice 1 静态与迁移（2026-08-26） | Ruff lint 通过、69 files formatted；mypy 69 source files 通过；Django 0 issues；无 migration drift；identity `0003 -> 0002 -> 0003` 往返通过；`pip check` 通过 |
 | E1 / Slice 1 安全与合同（2026-08-26） | `verify_m0.py` 57,053 checks、READY；npm critical audit 通过（0 critical），仍有上游 uni-app/Vite 兼容链的 19 项非 critical 风险：9 low、9 moderate、1 high |
-| E1 / Auth Baseline Amendment 权威（2026-08-26，Issue #11） | 认证权威合同测试 1 passed；`tests/test_contracts.py` 4 passed；默认全量使用仓库内 `--basetemp` 后 107 passed、28 个 PostgreSQL 条件项跳过；Ruff、70 files format、mypy 69 source files、diff check 通过；`verify_m0.py` 57,162 checks、READY |
+| E1 / Auth Baseline Amendment 权威（2026-08-26，Issue #11） | 认证权威合同测试 1 passed；`tests/test_contracts.py` 4 passed；默认全量使用仓库内 `--basetemp` 后 107 passed、28 个 PostgreSQL 条件项跳过；Ruff、70 files format、mypy 69 source files、diff check 通过；`verify_m0.py` 57,152 checks、READY |
 
 pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两条弃用警告。当前运行时为 Python 3.14.2，且检查当日没有可升级的 Daphne 版本，因此该警告记录为上游兼容性观察项，不构成当前失败。
 
@@ -139,7 +139,7 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 | 对象 | 状态 | 依据 |
 | --- | --- | --- |
 | 文档基线 | `verified` | 2026-08-26 现行 Markdown 已通过 UTF-8、单 H1、标题层级、本地链接和认证权威一致性检查；V5 与归档保持历史来源且未改写 |
-| M0 机器合同基线 | `verified` | 2026-08-26 `verify_m0.py` 通过 57,162 项检查，profile blocker 为空；历史执行数只保留在第 3 节的带日期证据账本 |
+| M0 机器合同基线 | `verified` | 2026-08-26 `verify_m0.py` 通过 57,152 项检查，profile blocker 为空；历史执行数只保留在第 3 节的带日期证据账本 |
 | `CONTENT-001` | `implemented` | Issues #1–#4 已实现两类 exact dependency、冻结 seed bootstrap、active/pinned resolver、启动/readiness、并发/回滚与失败审计；完整后台发布服务仍待 M1 |
 | `WORLD-001` | `specified` | 冻结来源与 seed/startup 验证不等于固定小巷世界物化、移动、战斗和战利品 E2E；这些仍待 M1 |
 | `CONVERT-001` | `implemented` | 来源快照、双 manifest、bundle、生成器与篡改检查已存在；M4 黄金差分仍未实现 |

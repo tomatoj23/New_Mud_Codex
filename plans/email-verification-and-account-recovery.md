@@ -314,7 +314,7 @@ test-first 实现 registration-verification request、register challenge consump
 
 test-first 实现 reset request/confirm、受保护入口 AuthSession 状态校验、跨实例全会话撤销、安全通知和 H5 忘记密码。
 
-**阻塞**：B；可与 C 在独立文件边界并行，集成前串行运行 PostgreSQL。
+**阻塞**：C。
 
 **完成条件**：旧 access/refresh 立即失败，reset 不改变 lifecycle、不自动登录，枚举/并发/通知失败矩阵通过。
 
