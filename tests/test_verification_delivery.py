@@ -21,11 +21,18 @@ from django.utils import timezone
 
 from new_mud.apps.identity.models import (
     GameAccount,
+    SecurityAuditEvent,
+    SecurityNotificationOutbox,
     VerificationChallenge,
     VerificationDeliveryOutbox,
     VerificationRateLimitBucket,
     VerificationRequestRecord,
     VerifiedContactMethod,
+)
+from new_mud.apps.identity.security_notifications import (
+    SecurityNotificationEmail,
+    SecurityNotificationOutcome,
+    deliver_one_security_notification,
 )
 from new_mud.apps.identity.verification import ContactInvalid, normalize_email
 from new_mud.apps.identity.verification_config import verification_keyrings
@@ -72,6 +79,110 @@ def verification_post(
         REMOTE_ADDR=remote_addr,
         headers=headers,
     )
+
+
+def password_reset_request_post(
+    client,
+    payload: Mapping[str, object],
+    *,
+    idempotency_key: str,
+    remote_addr: str = "192.0.2.10",
+):
+    return client.post(
+        reverse("auth-password-reset-request"),
+        payload,
+        content_type="application/json",
+        secure=True,
+        REMOTE_ADDR=remote_addr,
+        headers={
+            "origin": "https://testserver",
+            "idempotency-key": idempotency_key,
+        },
+    )
+
+
+def create_security_notification(
+    *,
+    username: str,
+    destination: str,
+    next_attempt_at,
+    template_key: str = "password_reset_succeeded",
+):
+    user = get_user_model().objects.create_user(username=username)
+    normalized = normalize_email(destination)
+    rings = verification_keyrings()
+    encrypted = encrypt_value(
+        normalized.delivery,
+        keyring=rings.contact_encryption,
+        context="contact:email",
+    )
+    lookup = keyed_digest(
+        normalized.comparison,
+        keyring=rings.contact_lookup,
+        context="contact:email",
+    )
+    contact = VerifiedContactMethod.objects.create(
+        user=user,
+        channel=VerifiedContactMethod.Channel.EMAIL,
+        destination_ciphertext=encrypted.ciphertext,
+        encryption_key_id=encrypted.key_id,
+        lookup_digest=lookup.digest,
+        lookup_key_id=lookup.key_id,
+        verified_at=timezone.now(),
+    )
+    event = SecurityAuditEvent.objects.create(
+        event_type="auth.password_reset.succeeded",
+        user_id_snapshot=str(user.pk),
+        reason_code="PASSWORD_RESET",
+    )
+    return SecurityNotificationOutbox.objects.create(
+        user=user,
+        contact_method=contact,
+        source_event=event,
+        template_key=template_key,
+        next_attempt_at=next_attempt_at,
+    )
+
+
+def create_password_reset_identity(
+    *,
+    username: str,
+    destination: str,
+    user_active: bool = True,
+    contact_state: str = VerifiedContactMethod.State.ACTIVE,
+    account_lifecycle: str = GameAccount.Lifecycle.ACTIVE,
+):
+    user = get_user_model().objects.create_user(username=username, is_active=user_active)
+    GameAccount.objects.create(
+        user=user,
+        instance_id=settings.CONTENT_INSTANCE_ID,
+        lifecycle=account_lifecycle,
+    )
+    normalized = normalize_email(destination)
+    rings = verification_keyrings()
+    encrypted = encrypt_value(
+        normalized.delivery,
+        keyring=rings.contact_encryption,
+        context="contact:email",
+    )
+    lookup = keyed_digest(
+        normalized.comparison,
+        keyring=rings.contact_lookup,
+        context="contact:email",
+    )
+    now = timezone.now()
+    contact = VerifiedContactMethod.objects.create(
+        user=user,
+        channel=VerifiedContactMethod.Channel.EMAIL,
+        state=contact_state,
+        destination_ciphertext=encrypted.ciphertext,
+        encryption_key_id=encrypted.key_id,
+        lookup_digest=lookup.digest,
+        lookup_key_id=lookup.key_id,
+        verified_at=now,
+        unreachable_at=(now if contact_state == VerifiedContactMethod.State.UNREACHABLE else None),
+    )
+    return user, contact
 
 
 def test_email_normalization_supports_idna_without_provider_specific_folding() -> None:
@@ -275,6 +386,221 @@ def test_registration_verification_request_persists_only_protected_delivery_stat
     )
     assert destination not in persisted
     assert "Player.Name+news@xn--fsqu00a.xn--0zwm56d" not in persisted
+
+
+def test_password_reset_request_creates_user_bound_delivery_for_eligible_contact(client) -> None:
+    destination = "Account.Owner@example.com"
+    normalized = normalize_email(destination)
+    rings = verification_keyrings()
+    encrypted = encrypt_value(
+        normalized.delivery,
+        keyring=rings.contact_encryption,
+        context="contact:email",
+    )
+    lookup = keyed_digest(
+        normalized.comparison,
+        keyring=rings.contact_lookup,
+        context="contact:email",
+    )
+    user = get_user_model().objects.create_user(username="password_reset_owner")
+    GameAccount.objects.create(
+        user=user,
+        instance_id=settings.CONTENT_INSTANCE_ID,
+    )
+    VerifiedContactMethod.objects.create(
+        user=user,
+        channel=VerifiedContactMethod.Channel.EMAIL,
+        destination_ciphertext=encrypted.ciphertext,
+        encryption_key_id=encrypted.key_id,
+        lookup_digest=lookup.digest,
+        lookup_key_id=lookup.key_id,
+        verified_at=timezone.now(),
+    )
+
+    response = password_reset_request_post(
+        client,
+        {"channel": "email", "destination": destination},
+        idempotency_key="password-reset-request-1",
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "accepted", "retry_after": 60}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert mail.outbox == []
+    challenge = VerificationChallenge.objects.get()
+    outbox = VerificationDeliveryOutbox.objects.get()
+    request_record = VerificationRequestRecord.objects.get()
+    assert challenge.purpose == VerificationChallenge.Purpose.PASSWORD_RESET
+    assert challenge.channel == VerificationChallenge.Channel.EMAIL
+    assert challenge.user_id == user.pk
+    assert challenge.state == VerificationChallenge.State.PENDING_DELIVERY
+    assert outbox.challenge_id == challenge.pk
+    assert outbox.template_key == "password_reset_verification"
+    assert outbox.state == VerificationDeliveryOutbox.State.PENDING
+    assert request_record.purpose == VerificationChallenge.Purpose.PASSWORD_RESET
+    assert request_record.response_status == 202
+
+
+def test_password_reset_worker_delivers_reset_template_and_activates_challenge(client) -> None:
+    destination = "Reset.Delivery@example.com"
+    normalized = normalize_email(destination)
+    rings = verification_keyrings()
+    encrypted = encrypt_value(
+        normalized.delivery,
+        keyring=rings.contact_encryption,
+        context="contact:email",
+    )
+    lookup = keyed_digest(
+        normalized.comparison,
+        keyring=rings.contact_lookup,
+        context="contact:email",
+    )
+    user = get_user_model().objects.create_user(username="reset_delivery_owner")
+    GameAccount.objects.create(user=user, instance_id=settings.CONTENT_INSTANCE_ID)
+    VerifiedContactMethod.objects.create(
+        user=user,
+        channel=VerifiedContactMethod.Channel.EMAIL,
+        destination_ciphertext=encrypted.ciphertext,
+        encryption_key_id=encrypted.key_id,
+        lookup_digest=lookup.digest,
+        lookup_key_id=lookup.key_id,
+        verified_at=timezone.now(),
+    )
+    response = password_reset_request_post(
+        client,
+        {"channel": "email", "destination": destination},
+        idempotency_key="password-reset-delivery-1",
+    )
+    assert response.status_code == 202
+
+    outcome = deliver_one_verification(worker_id="password-reset-worker")
+
+    assert outcome == DeliveryOutcome.DELIVERED
+    assert len(mail.outbox) == 1
+    message = mail.outbox[0]
+    assert message.to == [destination]
+    assert message.subject == "[New_Mud] 密码重置验证码"
+    assert "密码重置验证码是：" in message.body
+    assert "10 分钟" in message.body
+    assert "工作人员不会索要验证码" in message.body
+    assert user.username not in message.body
+    challenge = VerificationChallenge.objects.get()
+    outbox = VerificationDeliveryOutbox.objects.get()
+    assert challenge.state == VerificationChallenge.State.ACTIVE
+    assert challenge.activated_at is not None
+    assert challenge.expires_at is not None
+    assert outbox.state == VerificationDeliveryOutbox.State.DELIVERED
+    assert outbox.payload_ciphertext is None
+
+
+@pytest.mark.parametrize(
+    ("case", "user_active", "contact_state", "account_lifecycle"),
+    [
+        ("unknown", None, None, None),
+        (
+            "unreachable",
+            True,
+            VerifiedContactMethod.State.UNREACHABLE,
+            GameAccount.Lifecycle.ACTIVE,
+        ),
+        (
+            "disabled",
+            False,
+            VerifiedContactMethod.State.ACTIVE,
+            GameAccount.Lifecycle.ACTIVE,
+        ),
+        (
+            "retired",
+            True,
+            VerifiedContactMethod.State.ACTIVE,
+            GameAccount.Lifecycle.RETIRED,
+        ),
+    ],
+)
+def test_ineligible_password_reset_targets_share_accepted_shape_without_delivery(
+    client,
+    case: str,
+    user_active: bool | None,
+    contact_state: str | None,
+    account_lifecycle: str | None,
+) -> None:
+    destination = f"password-reset-{case}@example.com"
+    if user_active is not None and contact_state is not None and account_lifecycle is not None:
+        create_password_reset_identity(
+            username=f"password_reset_{case}",
+            destination=destination,
+            user_active=user_active,
+            contact_state=contact_state,
+            account_lifecycle=account_lifecycle,
+        )
+
+    response = password_reset_request_post(
+        client,
+        {"channel": "email", "destination": destination},
+        idempotency_key=f"password-reset-{case}",
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {"status": "accepted", "retry_after": 60}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert VerificationChallenge.objects.count() == 0
+    assert VerificationDeliveryOutbox.objects.count() == 0
+    assert VerificationRequestRecord.objects.count() == 1
+
+
+def test_password_reset_request_replays_and_conflicts_with_independent_limits(client) -> None:
+    destination = "password-reset-replay@example.com"
+    create_password_reset_identity(
+        username="password_reset_replay",
+        destination=destination,
+    )
+    payload = {"channel": "email", "destination": destination}
+
+    first = password_reset_request_post(
+        client,
+        payload,
+        idempotency_key="password-reset-replay-key",
+    )
+    bucket_counts = list(
+        VerificationRateLimitBucket.objects.filter(
+            namespace="password-reset-verification"
+        ).values_list("bucket_id", "request_count")
+    )
+    replay = password_reset_request_post(
+        client,
+        {"channel": "email", "destination": destination.upper()},
+        idempotency_key="password-reset-replay-key",
+    )
+    conflict = password_reset_request_post(
+        client,
+        {"channel": "email", "destination": "different-reset@example.com"},
+        idempotency_key="password-reset-replay-key",
+    )
+    registration = verification_post(
+        client,
+        payload,
+        idempotency_key="password-reset-replay-key",
+    )
+
+    assert first.status_code == replay.status_code == registration.status_code == 202
+    assert first.json() == replay.json() == registration.json()
+    assert conflict.status_code == 409
+    assert conflict.json() == {"error": {"code": "CONTACT_INVALID"}}
+    assert VerificationChallenge.objects.count() == 2
+    assert VerificationDeliveryOutbox.objects.count() == 2
+    assert VerificationRequestRecord.objects.count() == 2
+    assert (
+        list(
+            VerificationRateLimitBucket.objects.filter(
+                namespace="password-reset-verification"
+            ).values_list("bucket_id", "request_count")
+        )
+        == bucket_counts
+    )
+    assert set(VerificationRateLimitBucket.objects.values_list("namespace", flat=True)) == {
+        "password-reset-verification",
+        "registration-verification",
+    }
 
 
 def test_rate_limited_request_replays_its_terminal_without_consuming_limits_twice(client) -> None:
@@ -485,6 +811,11 @@ def test_verification_dependency_failure_is_global_while_password_login_remains_
             {"channel": "email", "destination": "player@example.com"},
             idempotency_key=f"{failure_name}-1",
         )
+        password_reset = password_reset_request_post(
+            client,
+            {"channel": "email", "destination": "player@example.com"},
+            idempotency_key=f"{failure_name}-password-reset",
+        )
         login = client.post(
             reverse("auth-login"),
             {"username": failure_name, "password": "safe-example-passphrase-42"},
@@ -495,6 +826,8 @@ def test_verification_dependency_failure_is_global_while_password_login_remains_
 
     assert verification.status_code == 503
     assert verification.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
+    assert password_reset.status_code == 503
+    assert password_reset.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
     assert VerificationChallenge.objects.count() == 0
     assert login.status_code == 200
     assert get_user_model().objects.get(username=failure_name).email == ""
@@ -570,6 +903,14 @@ class RecordingSender:
         self.messages.append(message)
 
 
+class RecordingSecurityNotificationSender:
+    def __init__(self) -> None:
+        self.messages: list[SecurityNotificationEmail] = []
+
+    def send(self, message: SecurityNotificationEmail) -> None:
+        self.messages.append(message)
+
+
 class PermanentlyFailingSender:
     def send(self, message: VerificationEmail) -> None:
         raise DeliveryPermanentError
@@ -579,6 +920,148 @@ def expire_contact_cooldown() -> None:
     VerificationRateLimitBucket.objects.filter(scope="contact", window_seconds=60).update(
         window_started_at=timezone.now() - timedelta(seconds=61)
     )
+
+
+def test_security_notification_worker_skips_unexpired_lease_and_delivers_pending() -> None:
+    now = timezone.now()
+    busy = create_security_notification(
+        username="busy_security_notice",
+        destination="busy-security-notice@example.com",
+        next_attempt_at=now - timedelta(minutes=2),
+    )
+    busy.state = SecurityNotificationOutbox.State.LEASED
+    busy.attempt_count = 1
+    busy.lease_owner = "busy-worker"
+    busy.lease_expires_at = now + timedelta(minutes=5)
+    busy.version += 1
+    busy.save(
+        update_fields=(
+            "state",
+            "attempt_count",
+            "lease_owner",
+            "lease_expires_at",
+            "version",
+        )
+    )
+    create_security_notification(
+        username="pending_security_notice",
+        destination="pending-security-notice@example.com",
+        next_attempt_at=now - timedelta(minutes=1),
+    )
+    sender = RecordingSecurityNotificationSender()
+
+    outcome = deliver_one_security_notification(
+        worker_id="available-worker",
+        sender=sender,
+    )
+
+    assert outcome == SecurityNotificationOutcome.DELIVERED
+    assert [message.destination for message in sender.messages] == [
+        "pending-security-notice@example.com"
+    ]
+
+
+def test_security_notification_worker_terminalizes_notice_for_unreachable_contact(
+    caplog,
+) -> None:
+    notification = create_security_notification(
+        username="unreachable_security_notice",
+        destination="unreachable-security-notice@example.com",
+        next_attempt_at=timezone.now() - timedelta(minutes=1),
+    )
+    contact = notification.contact_method
+    contact.state = VerifiedContactMethod.State.UNREACHABLE
+    contact.unreachable_at = timezone.now()
+    contact.version += 1
+    contact.save(update_fields=("state", "unreachable_at", "version"))
+    sender = RecordingSecurityNotificationSender()
+
+    outcome = deliver_one_security_notification(
+        worker_id="contact-check-worker",
+        sender=sender,
+    )
+
+    assert outcome == SecurityNotificationOutcome.DELIVERY_FAILED
+    assert sender.messages == []
+    notification.refresh_from_db()
+    assert notification.state == SecurityNotificationOutbox.State.DELIVERY_FAILED
+    assert notification.provider_category == "contact_unavailable"
+    assert notification.terminal_at is not None
+    assert SecurityAuditEvent.objects.filter(
+        event_type="auth.security_notification.delivery_failed",
+        reason_code="contact_unavailable",
+    ).exists()
+    assert "security notification delivery failed" in caplog.text
+
+
+def test_security_notification_worker_terminalizes_unsupported_template(caplog) -> None:
+    notification = create_security_notification(
+        username="unsupported_security_notice",
+        destination="unsupported-security-notice@example.com",
+        next_attempt_at=timezone.now() - timedelta(minutes=1),
+        template_key="unsupported_template",
+    )
+
+    outcome = deliver_one_security_notification(worker_id="template-check-worker")
+
+    assert outcome == SecurityNotificationOutcome.DELIVERY_FAILED
+    notification.refresh_from_db()
+    assert notification.state == SecurityNotificationOutbox.State.DELIVERY_FAILED
+    assert notification.provider_category == "permanent_failure"
+    assert SecurityAuditEvent.objects.filter(
+        event_type="auth.security_notification.delivery_failed",
+        reason_code="permanent_failure",
+    ).exists()
+    assert "security notification delivery failed" in caplog.text
+
+
+def test_security_notification_transient_failure_has_bounded_attempts(
+    settings,
+    caplog,
+) -> None:
+    from new_mud.apps.identity.security_notifications import (
+        SecurityNotificationTransientError,
+    )
+
+    class TransientlyFailingSecurityNotificationSender:
+        def send(self, message: SecurityNotificationEmail) -> None:
+            raise SecurityNotificationTransientError
+
+    settings.AUTH_VERIFICATION_MAX_DELIVERY_ATTEMPTS = 2
+    notification = create_security_notification(
+        username="retry_security_notice",
+        destination="retry-security-notice@example.com",
+        next_attempt_at=timezone.now(),
+    )
+    sender = TransientlyFailingSecurityNotificationSender()
+
+    first = deliver_one_security_notification(
+        worker_id="security-retry-worker-1",
+        sender=sender,
+    )
+    notification.refresh_from_db()
+    assert first == SecurityNotificationOutcome.RETRY_SCHEDULED
+    assert notification.state == SecurityNotificationOutbox.State.PENDING
+    assert notification.attempt_count == 1
+    notification.next_attempt_at = timezone.now() - timedelta(seconds=1)
+    notification.save(update_fields=("next_attempt_at",))
+
+    second = deliver_one_security_notification(
+        worker_id="security-retry-worker-2",
+        sender=sender,
+    )
+
+    assert second == SecurityNotificationOutcome.DELIVERY_FAILED
+    notification.refresh_from_db()
+    assert notification.state == SecurityNotificationOutbox.State.DELIVERY_FAILED
+    assert notification.attempt_count == 2
+    assert notification.provider_category == "transient_failure"
+    assert notification.terminal_at is not None
+    assert SecurityAuditEvent.objects.filter(
+        event_type="auth.security_notification.delivery_failed",
+        reason_code="transient_failure",
+    ).exists()
+    assert "security notification delivery failed" in caplog.text
 
 
 def test_exhausted_accepted_then_crashed_delivery_is_terminalized_and_erased(client) -> None:
@@ -817,6 +1300,26 @@ def test_delivery_worker_management_command_processes_pending_task(client) -> No
     )
 
 
+def test_security_notification_management_command_processes_pending_task() -> None:
+    create_security_notification(
+        username="security_notice_command",
+        destination="security-notice-command@example.com",
+        next_attempt_at=timezone.now(),
+    )
+    output = io.StringIO()
+
+    call_command(
+        "process_security_notifications",
+        "--once",
+        stdout=output,
+    )
+
+    assert output.getvalue() == "processed=1 delivered=1 failed=0 retried=0\n"
+    assert (
+        SecurityNotificationOutbox.objects.get().state == SecurityNotificationOutbox.State.DELIVERED
+    )
+
+
 def test_startup_check_rejects_enabled_verification_with_missing_keys() -> None:
     with override_settings(AUTH_CONTACT_LOOKUP_KEYS={}):
         errors = run_checks(tags=[Tags.security])
@@ -1048,6 +1551,94 @@ def test_registration_verification_framework_errors_use_stable_no_store_shape(cl
     for response in (method_error, parse_error):
         assert response.json() == {"error": {"code": "CONTACT_INVALID"}}
         assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize(
+    ("route_name", "error_code"),
+    [
+        ("auth-password-reset-request", "CONTACT_INVALID"),
+        ("auth-password-reset-confirm", "PASSWORD_RESET_UNAVAILABLE"),
+    ],
+)
+def test_password_reset_framework_errors_use_stable_no_store_shape(
+    client,
+    route_name: str,
+    error_code: str,
+) -> None:
+    path = reverse(route_name)
+
+    method_error = client.get(
+        path,
+        secure=True,
+        headers={"origin": "https://testserver"},
+    )
+    parse_error = client.post(
+        path,
+        b'{"channel":',
+        content_type="application/json",
+        secure=True,
+        headers={
+            "origin": "https://testserver",
+            "idempotency-key": "malformed-password-reset",
+        },
+    )
+
+    assert method_error.status_code == 405
+    assert parse_error.status_code == 400
+    for response in (method_error, parse_error):
+        assert response.json() == {"error": {"code": error_code}}
+        assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize(
+    ("route_name", "expected_error"),
+    [
+        ("auth-password-reset-request", "CONTACT_INVALID"),
+        ("auth-password-reset-confirm", "PASSWORD_RESET_UNAVAILABLE"),
+    ],
+)
+def test_password_reset_rejects_cross_origin_and_authorized_requests_without_state(
+    client,
+    route_name: str,
+    expected_error: str,
+) -> None:
+    path = reverse(route_name)
+    payload = {
+        "channel": "email",
+        "destination": "password-reset-boundary@example.com",
+        "code": "123456",
+        "new_password": "safe-boundary-passphrase-42",
+    }
+
+    cross_origin = client.post(
+        path,
+        payload,
+        content_type="application/json",
+        secure=True,
+        headers={
+            "origin": "https://attacker.invalid",
+            "idempotency-key": "cross-origin-password-reset",
+        },
+    )
+    authorized = client.post(
+        path,
+        payload,
+        content_type="application/json",
+        secure=True,
+        headers={
+            "origin": "https://testserver",
+            "authorization": "Bearer unexpected",
+            "idempotency-key": "authorized-password-reset",
+        },
+    )
+
+    assert cross_origin.status_code == 403
+    assert authorized.status_code == 400
+    for response in (cross_origin, authorized):
+        assert response.json() == {"error": {"code": expected_error}}
+        assert response.headers["Cache-Control"] == "no-store"
+    assert VerificationChallenge.objects.count() == 0
+    assert VerificationRequestRecord.objects.count() == 0
 
 
 def test_cross_origin_verification_is_rejected_without_claiming_global_outage(client) -> None:

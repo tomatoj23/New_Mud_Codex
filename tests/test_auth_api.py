@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.core import mail
 from django.core.cache import cache
-from django.test import override_settings
+from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -24,7 +26,10 @@ from new_mud.apps.identity.models import (
     RefreshTokenCredential,
     RefreshTokenFamily,
     SecurityAuditEvent,
+    SecurityNotificationOutbox,
     VerificationChallenge,
+    VerificationDeliveryOutbox,
+    VerificationRateLimitBucket,
     VerifiedContactMethod,
 )
 from new_mud.apps.identity.verification import normalize_email
@@ -79,15 +84,16 @@ def login_in_additional_instance(client, *, username: str, password: str):
         )
 
 
-def request_delivered_registration_code(
+def request_delivered_verification_code(
     client,
     *,
+    route_name: str,
     destination: str,
     idempotency_key: str,
 ) -> str:
     response = auth_post(
         client,
-        "auth-registration-verification-request",
+        route_name,
         {"channel": "email", "destination": destination},
         **{"idempotency-key": idempotency_key},
     )
@@ -95,8 +101,37 @@ def request_delivered_registration_code(
     assert (
         deliver_one_verification(worker_id=f"test-{idempotency_key}") == DeliveryOutcome.DELIVERED
     )
-    body = mail.outbox[-1].body
-    return body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+    match = re.search(r"(?<!\d)\d{6}(?!\d)", mail.outbox[-1].body)
+    assert match is not None
+    return match.group()
+
+
+def request_delivered_registration_code(
+    client,
+    *,
+    destination: str,
+    idempotency_key: str,
+) -> str:
+    return request_delivered_verification_code(
+        client,
+        route_name="auth-registration-verification-request",
+        destination=destination,
+        idempotency_key=idempotency_key,
+    )
+
+
+def request_delivered_password_reset_code(
+    client,
+    *,
+    destination: str,
+    idempotency_key: str,
+) -> str:
+    return request_delivered_verification_code(
+        client,
+        route_name="auth-password-reset-request",
+        destination=destination,
+        idempotency_key=idempotency_key,
+    )
 
 
 def post_registration_with_fresh_verified_email(
@@ -199,6 +234,700 @@ def test_registration_creates_identity_without_authentication(client) -> None:
     assert AuthSession.objects.count() == 0
     assert RefreshTokenFamily.objects.count() == 0
     assert RefreshTokenCredential.objects.count() == 0
+
+
+def test_password_reset_consumes_challenge_without_authenticating_browser(client) -> None:
+    destination = "password-reset@example.com"
+    old_password = "safe-old-passphrase-42"
+    new_password = "safe-new-passphrase-84"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-registration",
+    )
+    registration = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "password_reset_player",
+            "password": old_password,
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": registration_code,
+            },
+        },
+    )
+    assert registration.status_code == 201
+    reset_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-confirm",
+    )
+
+    response = auth_post(
+        client,
+        "auth-password-reset-confirm",
+        {
+            "channel": "email",
+            "destination": destination,
+            "code": reset_code,
+            "new_password": new_password,
+        },
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert "new_mud_refresh" not in response.cookies
+    user = get_user_model().objects.get(username="password_reset_player")
+    assert user.email == ""
+    assert not user.check_password(old_password)
+    assert user.check_password(new_password)
+    reset_challenge = VerificationChallenge.objects.get(
+        purpose=VerificationChallenge.Purpose.PASSWORD_RESET
+    )
+    assert reset_challenge.state == VerificationChallenge.State.CONSUMED
+    assert reset_challenge.consumed_at is not None
+    assert AuthSession.objects.count() == 0
+    assert RefreshTokenFamily.objects.count() == 0
+    assert RefreshTokenCredential.objects.count() == 0
+
+    old_login = auth_post(
+        client,
+        "auth-login",
+        {"username": "password_reset_player", "password": old_password},
+    )
+    new_login = auth_post(
+        client,
+        "auth-login",
+        {"username": "password_reset_player", "password": new_password},
+    )
+    assert old_login.status_code == 401
+    assert new_login.status_code == 200
+
+
+def test_password_reset_immediately_revokes_cross_instance_access_and_refresh() -> None:
+    recovery_client = Client()
+    first_client = Client()
+    second_client = Client()
+    destination = "password-reset-sessions@example.com"
+    old_password = "safe-session-passphrase-42"
+    new_password = "safe-replacement-passphrase-84"
+    registration_code = request_delivered_registration_code(
+        recovery_client,
+        destination=destination,
+        idempotency_key="password-reset-sessions-registration",
+    )
+    registration = auth_post(
+        recovery_client,
+        "auth-register",
+        {
+            "username": "password_reset_sessions",
+            "password": old_password,
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": registration_code,
+            },
+        },
+    )
+    assert registration.status_code == 201
+    create_legacy_recovery_code(game_account_id=registration.json()["game_account_id"])
+    first_login = auth_post(
+        first_client,
+        "auth-login",
+        {"username": "password_reset_sessions", "password": old_password},
+    )
+    second_login = login_in_additional_instance(
+        second_client,
+        username="password_reset_sessions",
+        password=old_password,
+    )
+    assert first_login.status_code == second_login.status_code == 200
+    first_access = first_login.json()["access_token"]
+    reset_code = request_delivered_password_reset_code(
+        recovery_client,
+        destination=destination,
+        idempotency_key="password-reset-sessions-request",
+    )
+
+    reset = auth_post(
+        recovery_client,
+        "auth-password-reset-confirm",
+        {
+            "channel": "email",
+            "destination": destination,
+            "code": reset_code,
+            "new_password": new_password,
+        },
+    )
+
+    assert reset.status_code == 204
+    assert set(AuthSession.objects.values_list("state", flat=True)) == {AuthSession.State.REVOKED}
+    assert set(RefreshTokenFamily.objects.values_list("state", flat=True)) == {
+        RefreshTokenFamily.State.REVOKED
+    }
+    assert not RefreshTokenCredential.objects.filter(
+        state=RefreshTokenCredential.State.ACTIVE
+    ).exists()
+    for index, stale_client in enumerate((first_client, second_client), start=1):
+        stale_refresh = auth_post(
+            stale_client,
+            "auth-refresh",
+            {},
+            **{"idempotency-key": f"stale-after-password-reset-{index}"},
+        )
+        assert stale_refresh.status_code == 401
+        assert stale_refresh.json() == {"error": {"code": "SESSION_REVOKED"}}
+    stale_access = auth_post(
+        first_client,
+        "auth-recovery-rotate",
+        {},
+        authorization=f"Bearer {first_access}",
+    )
+    assert stale_access.status_code == 401
+    assert stale_access.json() == {"error": {"code": "SESSION_REVOKED"}}
+
+
+def test_password_reset_cancels_unfinished_reset_deliveries(client) -> None:
+    destination = "password-reset-cancel@example.com"
+    old_password = "safe-cancel-passphrase-42"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-cancel-registration",
+    )
+    registration = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "password_reset_cancel",
+            "password": old_password,
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": registration_code,
+            },
+        },
+    )
+    assert registration.status_code == 201
+    active_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-cancel-active",
+    )
+    VerificationRateLimitBucket.objects.filter(namespace="password-reset-verification").update(
+        window_started_at=timezone.now() - timedelta(days=2),
+        request_count=0,
+    )
+    pending_request = auth_post(
+        client,
+        "auth-password-reset-request",
+        {"channel": "email", "destination": destination},
+        **{"idempotency-key": "password-reset-cancel-pending"},
+    )
+    assert pending_request.status_code == 202
+    pending_challenge = VerificationChallenge.objects.get(
+        purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+        state=VerificationChallenge.State.PENDING_DELIVERY,
+    )
+    pending_outbox = VerificationDeliveryOutbox.objects.get(challenge=pending_challenge)
+    assert pending_outbox.payload_ciphertext is not None
+
+    reset = auth_post(
+        client,
+        "auth-password-reset-confirm",
+        {
+            "channel": "email",
+            "destination": destination,
+            "code": active_code,
+            "new_password": "safe-cancel-replacement-84",
+        },
+    )
+
+    assert reset.status_code == 204
+    pending_challenge.refresh_from_db()
+    pending_outbox.refresh_from_db()
+    assert pending_challenge.state == VerificationChallenge.State.SUPERSEDED
+    assert pending_challenge.superseded_at is not None
+    assert pending_challenge.terminal_at is not None
+    assert pending_outbox.state == VerificationDeliveryOutbox.State.DELIVERY_FAILED
+    assert pending_outbox.payload_ciphertext is None
+    assert pending_outbox.provider_category == "canceled_by_password_reset"
+    assert pending_outbox.terminal_at is not None
+
+
+def test_password_reset_enqueues_non_secret_security_notification(client) -> None:
+    destination = "password-reset-notification@example.com"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-notification-registration",
+    )
+    registration = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "password_reset_notification",
+            "password": "safe-notification-passphrase-42",
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": registration_code,
+            },
+        },
+    )
+    assert registration.status_code == 201
+    reset_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-notification-request",
+    )
+
+    reset = auth_post(
+        client,
+        "auth-password-reset-confirm",
+        {
+            "channel": "email",
+            "destination": destination,
+            "code": reset_code,
+            "new_password": "safe-notification-replacement-84",
+        },
+    )
+
+    assert reset.status_code == 204
+    notification_model = apps.get_model("identity", "SecurityNotificationOutbox")
+    notification = notification_model.objects.get()
+    contact = VerifiedContactMethod.objects.get()
+    assert notification.user_id == contact.user_id
+    assert notification.contact_method_id == contact.pk
+    assert notification.template_key == "password_reset_succeeded"
+    assert notification.state == "pending"
+    persisted_fields = {field.name for field in notification_model._meta.fields}
+    assert not {
+        "destination",
+        "code",
+        "payload",
+        "payload_ciphertext",
+        "message_body",
+        "access_token",
+        "refresh_token",
+    }.intersection(persisted_fields)
+
+
+def test_security_notification_worker_sends_non_actionable_password_reset_notice(client) -> None:
+    from new_mud.apps.identity.security_notifications import (
+        SecurityNotificationOutcome,
+        deliver_one_security_notification,
+    )
+
+    destination = "password-reset-notice-delivery@example.com"
+    username = "password_reset_notice_delivery"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-notice-delivery-registration",
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-register",
+            {
+                "username": username,
+                "password": "safe-notice-passphrase-42",
+                "verification": {
+                    "channel": "email",
+                    "destination": destination,
+                    "code": registration_code,
+                },
+            },
+        ).status_code
+        == 201
+    )
+    reset_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-notice-delivery-request",
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-password-reset-confirm",
+            {
+                "channel": "email",
+                "destination": destination,
+                "code": reset_code,
+                "new_password": "safe-notice-replacement-84",
+            },
+        ).status_code
+        == 204
+    )
+
+    outcome = deliver_one_security_notification(worker_id="security-notice-worker")
+
+    assert outcome == SecurityNotificationOutcome.DELIVERED
+    notice = mail.outbox[-1]
+    assert notice.to == [destination]
+    assert notice.subject == "[New_Mud] 密码已重置"
+    assert "密码已成功重置" in notice.body
+    assert "验证码" not in notice.body
+    assert "http://" not in notice.body
+    assert "https://" not in notice.body
+    assert username not in notice.body
+    notification_model = apps.get_model("identity", "SecurityNotificationOutbox")
+    notification = notification_model.objects.get()
+    assert notification.state == "delivered"
+    assert notification.delivered_at is not None
+    assert notification.terminal_at is not None
+
+
+def test_security_notification_provider_failure_does_not_roll_back_password_reset(
+    client,
+    caplog,
+) -> None:
+    from new_mud.apps.identity.security_notifications import (
+        SecurityNotificationOutcome,
+        SecurityNotificationPermanentError,
+        deliver_one_security_notification,
+    )
+
+    class PermanentlyFailingSecurityNotificationSender:
+        def send(self, message) -> None:
+            raise SecurityNotificationPermanentError
+
+    destination = "password-reset-notice-failure@example.com"
+    username = "password_reset_notice_failure"
+    old_password = "safe-notice-failure-passphrase-42"
+    new_password = "safe-notice-failure-replacement-84"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-notice-failure-registration",
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-register",
+            {
+                "username": username,
+                "password": old_password,
+                "verification": {
+                    "channel": "email",
+                    "destination": destination,
+                    "code": registration_code,
+                },
+            },
+        ).status_code
+        == 201
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-login",
+            {"username": username, "password": old_password},
+        ).status_code
+        == 200
+    )
+    reset_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-notice-failure-code",
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-password-reset-confirm",
+            {
+                "channel": "email",
+                "destination": destination,
+                "code": reset_code,
+                "new_password": new_password,
+            },
+        ).status_code
+        == 204
+    )
+
+    outcome = deliver_one_security_notification(
+        worker_id="security-notice-failure-worker",
+        sender=PermanentlyFailingSecurityNotificationSender(),
+    )
+
+    assert outcome == SecurityNotificationOutcome.DELIVERY_FAILED
+    user = get_user_model().objects.get(username=username)
+    assert user.check_password(new_password)
+    assert not user.check_password(old_password)
+    assert set(AuthSession.objects.values_list("state", flat=True)) == {AuthSession.State.REVOKED}
+    notification = SecurityNotificationOutbox.objects.get()
+    assert notification.state == SecurityNotificationOutbox.State.DELIVERY_FAILED
+    assert notification.provider_category == "permanent_failure"
+    assert SecurityAuditEvent.objects.filter(
+        event_type="auth.security_notification.delivery_failed",
+        reason_code="permanent_failure",
+    ).exists()
+    assert "security notification delivery failed" in caplog.text
+
+
+def test_password_reset_code_locks_after_five_failures_with_one_stable_error(client) -> None:
+    destination = "password-reset-attempts@example.com"
+    old_password = "safe-reset-attempt-passphrase-42"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-attempt-registration",
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-register",
+            {
+                "username": "password_reset_attempts",
+                "password": old_password,
+                "verification": {
+                    "channel": "email",
+                    "destination": destination,
+                    "code": registration_code,
+                },
+            },
+        ).status_code
+        == 201
+    )
+    delivered_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-attempt-code",
+    )
+    incorrect_code = "999999" if delivered_code != "999999" else "000000"
+    payload = {
+        "channel": "email",
+        "destination": destination,
+        "code": incorrect_code,
+        "new_password": "safe-reset-attempt-replacement-84",
+    }
+
+    failures = [auth_post(client, "auth-password-reset-confirm", payload) for _ in range(5)]
+    after_lock = auth_post(
+        client,
+        "auth-password-reset-confirm",
+        {**payload, "code": delivered_code},
+    )
+
+    for response in (*failures, after_lock):
+        assert response.status_code == 400
+        assert response.json() == {"error": {"code": "VERIFICATION_CODE_INVALID"}}
+        assert response.headers["Cache-Control"] == "no-store"
+    challenge = VerificationChallenge.objects.get(
+        purpose=VerificationChallenge.Purpose.PASSWORD_RESET
+    )
+    assert challenge.state == VerificationChallenge.State.LOCKED
+    assert challenge.attempt_count == 5
+    assert (
+        get_user_model()
+        .objects.get(username="password_reset_attempts")
+        .check_password(old_password)
+    )
+    assert SecurityNotificationOutbox.objects.count() == 0
+
+
+def test_weak_password_does_not_consume_reset_or_revoke_authentication(client) -> None:
+    destination = "password-reset-weak@example.com"
+    old_password = "safe-reset-weak-passphrase-42"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-weak-registration",
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-register",
+            {
+                "username": "password_reset_weak",
+                "password": old_password,
+                "verification": {
+                    "channel": "email",
+                    "destination": destination,
+                    "code": registration_code,
+                },
+            },
+        ).status_code
+        == 201
+    )
+    assert (
+        auth_post(
+            client,
+            "auth-login",
+            {"username": "password_reset_weak", "password": old_password},
+        ).status_code
+        == 200
+    )
+    reset_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-weak-code",
+    )
+
+    response = auth_post(
+        client,
+        "auth-password-reset-confirm",
+        {
+            "channel": "email",
+            "destination": destination,
+            "code": reset_code,
+            "new_password": "short",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"error": {"code": "PASSWORD_RESET_UNAVAILABLE"}}
+    user = get_user_model().objects.get(username="password_reset_weak")
+    assert user.check_password(old_password)
+    challenge = VerificationChallenge.objects.get(
+        purpose=VerificationChallenge.Purpose.PASSWORD_RESET
+    )
+    assert challenge.state == VerificationChallenge.State.ACTIVE
+    assert challenge.consumed_at is None
+    assert set(AuthSession.objects.values_list("state", flat=True)) == {AuthSession.State.ACTIVE}
+    assert set(RefreshTokenFamily.objects.values_list("state", flat=True)) == {
+        RefreshTokenFamily.State.ACTIVE
+    }
+    assert set(RefreshTokenCredential.objects.values_list("state", flat=True)) == {
+        RefreshTokenCredential.State.ACTIVE
+    }
+    assert SecurityNotificationOutbox.objects.count() == 0
+
+
+def test_password_reset_preserves_cooling_off_lifecycle_and_requires_login(client) -> None:
+    destination = "password-reset-cooling-off@example.com"
+    old_password = "safe-reset-cooling-passphrase-42"
+    new_password = "safe-reset-cooling-replacement-84"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-cooling-registration",
+    )
+    registration = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "password_reset_cooling",
+            "password": old_password,
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": registration_code,
+            },
+        },
+    )
+    assert registration.status_code == 201
+    account = GameAccount.objects.get(pk=registration.json()["game_account_id"])
+    account.lifecycle = GameAccount.Lifecycle.COOLING_OFF
+    account.lifecycle_version += 1
+    account.save(update_fields=("lifecycle", "lifecycle_version"))
+    reset_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key="password-reset-cooling-code",
+    )
+
+    response = auth_post(
+        client,
+        "auth-password-reset-confirm",
+        {
+            "channel": "email",
+            "destination": destination,
+            "code": reset_code,
+            "new_password": new_password,
+        },
+    )
+
+    assert response.status_code == 204
+    assert "new_mud_refresh" not in response.cookies
+    account.refresh_from_db()
+    assert account.lifecycle == GameAccount.Lifecycle.COOLING_OFF
+    assert AuthSession.objects.count() == 0
+    assert RefreshTokenFamily.objects.count() == 0
+    assert RefreshTokenCredential.objects.count() == 0
+    user = get_user_model().objects.get(username="password_reset_cooling")
+    assert user.check_password(new_password)
+    login_response = auth_post(
+        client,
+        "auth-login",
+        {"username": "password_reset_cooling", "password": new_password},
+    )
+    assert login_response.status_code == 401
+
+
+@pytest.mark.parametrize("identity_change", ["disabled", "retired"])
+def test_password_reset_does_not_restore_disabled_or_retired_identity(
+    client,
+    identity_change: str,
+) -> None:
+    destination = f"password-reset-{identity_change}-confirm@example.com"
+    username = f"password_reset_{identity_change}_confirm"
+    old_password = "safe-reset-ineligible-passphrase-42"
+    registration_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key=f"password-reset-{identity_change}-registration",
+    )
+    registration = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": username,
+            "password": old_password,
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": registration_code,
+            },
+        },
+    )
+    assert registration.status_code == 201
+    reset_code = request_delivered_password_reset_code(
+        client,
+        destination=destination,
+        idempotency_key=f"password-reset-{identity_change}-code",
+    )
+    user = get_user_model().objects.get(username=username)
+    account = GameAccount.objects.get(pk=registration.json()["game_account_id"])
+    if identity_change == "disabled":
+        user.is_active = False
+        user.save(update_fields=("is_active",))
+    else:
+        account.lifecycle = GameAccount.Lifecycle.RETIRED
+        account.lifecycle_version += 1
+        account.save(update_fields=("lifecycle", "lifecycle_version"))
+
+    response = auth_post(
+        client,
+        "auth-password-reset-confirm",
+        {
+            "channel": "email",
+            "destination": destination,
+            "code": reset_code,
+            "new_password": "safe-reset-ineligible-replacement-84",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"error": {"code": "VERIFICATION_CODE_INVALID"}}
+    user.refresh_from_db()
+    account.refresh_from_db()
+    assert user.check_password(old_password)
+    assert user.is_active is (identity_change != "disabled")
+    assert account.lifecycle == (
+        GameAccount.Lifecycle.RETIRED
+        if identity_change == "retired"
+        else GameAccount.Lifecycle.ACTIVE
+    )
+    assert (
+        VerificationChallenge.objects.get(
+            purpose=VerificationChallenge.Purpose.PASSWORD_RESET
+        ).state
+        == VerificationChallenge.State.ACTIVE
+    )
+    assert SecurityNotificationOutbox.objects.count() == 0
 
 
 def test_registration_code_locks_after_five_failures_with_one_stable_error(

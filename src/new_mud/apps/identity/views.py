@@ -9,9 +9,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from .models import VerificationChallenge
 from .rate_limits import RateLimitSubject, consume_rate_limit
 from .services import (
     AuthenticationFailed,
+    PasswordResetUnavailable,
     RecoveryFailed,
     RefreshFailed,
     RegistrationInvalid,
@@ -22,6 +24,7 @@ from .services import (
     recover_password_with_code,
     refresh,
     register,
+    reset_password_with_verification,
     rotate_recovery_code,
 )
 from .verification import ContactInvalid
@@ -30,6 +33,7 @@ from .verification_requests import (
     ContactChannelUnavailable,
     VerificationRequestConflict,
     VerificationRequestInvalid,
+    request_password_reset_verification,
     request_registration_verification,
 )
 
@@ -153,6 +157,67 @@ def registration_verification_request_view(request):
     except VerificationServiceUnavailable:
         response = _error("VERIFICATION_SERVICE_UNAVAILABLE", status=503)
     _set_verification_device_cookie(response, device_id)
+    return response
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def password_reset_request_view(request):
+    if not _origin_allowed(request):
+        return _error("CONTACT_INVALID", status=403)
+    device_id = _verification_device_id(request)
+    if request.headers.get("Authorization"):
+        response = _error("CONTACT_INVALID", status=400)
+        _set_verification_device_cookie(response, device_id)
+        return response
+    try:
+        result = request_password_reset_verification(
+            channel=request.data.get("channel"),
+            destination=request.data.get("destination"),
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            client_ip=_client_ip(request),
+            device_id=device_id,
+        )
+        response = _response(result.payload, status=result.status)
+    except ContactChannelUnavailable:
+        response = _error("CONTACT_CHANNEL_UNAVAILABLE", status=400)
+    except ContactInvalid, VerificationRequestInvalid:
+        response = _error("CONTACT_INVALID", status=400)
+    except VerificationRequestConflict:
+        response = _error("CONTACT_INVALID", status=409)
+    except VerificationServiceUnavailable:
+        response = _error("VERIFICATION_SERVICE_UNAVAILABLE", status=503)
+    _set_verification_device_cookie(response, device_id)
+    return response
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def password_reset_confirm_view(request):
+    if not _origin_allowed(request):
+        return _error("PASSWORD_RESET_UNAVAILABLE", status=403)
+    if request.headers.get("Authorization"):
+        return _error("PASSWORD_RESET_UNAVAILABLE", status=400)
+    channel = request.data.get("channel")
+    if channel != VerificationChallenge.Channel.EMAIL:
+        return _error("CONTACT_CHANNEL_UNAVAILABLE", status=400)
+    try:
+        reset_password_with_verification(
+            channel=channel,
+            destination=request.data.get("destination"),
+            code=request.data.get("code"),
+            new_password=request.data.get("new_password"),
+        )
+    except ContactInvalid:
+        return _error("CONTACT_INVALID", status=400)
+    except VerificationCodeInvalid:
+        return _error("VERIFICATION_CODE_INVALID", status=400)
+    except PasswordResetUnavailable:
+        return _error("PASSWORD_RESET_UNAVAILABLE", status=400)
+    except VerificationServiceUnavailable:
+        return _error("VERIFICATION_SERVICE_UNAVAILABLE", status=503)
+    response = Response(status=204)
+    response["Cache-Control"] = "no-store"
     return response
 
 

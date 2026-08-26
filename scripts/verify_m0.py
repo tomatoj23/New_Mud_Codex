@@ -263,7 +263,7 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "`RECOVERY_CODE_RETIRED`",
     },
     "docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md": {
-        "| `AUTH-005` | `specified` |",
+        "| `AUTH-005` | `implemented` |",
         "Issue #10",
         "Issue #11",
     },

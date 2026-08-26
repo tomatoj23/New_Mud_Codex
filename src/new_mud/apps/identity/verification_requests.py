@@ -13,16 +13,27 @@ from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from .models import (
+    GameAccount,
     VerificationChallenge,
     VerificationDeliveryOutbox,
     VerificationRequestRecord,
+    VerifiedContactMethod,
 )
 from .verification import normalize_email
 from .verification_config import (
     VerificationServiceUnavailable,
     require_verification_service,
 )
-from .verification_crypto import encrypt_value, keyed_digest, verification_code_digest
+from .verification_crypto import (
+    CiphertextInvalid,
+    EncryptedValue,
+    KeyUnavailable,
+    decrypt_value,
+    encrypt_value,
+    keyed_digest,
+    keyed_digest_candidates,
+    verification_code_digest,
+)
 from .verification_limits import (
     PersistentLimit,
     advisory_transaction_lock,
@@ -227,4 +238,159 @@ def request_registration_verification(
             )
         return VerificationRequestResult(202, ACCEPTED_PAYLOAD)
     except DatabaseError as error:
+        raise VerificationServiceUnavailable from error
+
+
+def request_password_reset_verification(
+    *,
+    channel: object,
+    destination: object,
+    idempotency_key: object,
+    client_ip: str,
+    device_id: str,
+) -> VerificationRequestResult:
+    if channel != VerificationChallenge.Channel.EMAIL:
+        raise ContactChannelUnavailable
+    if not isinstance(idempotency_key, str) or not IDEMPOTENCY_KEY_PATTERN.fullmatch(
+        idempotency_key
+    ):
+        raise VerificationRequestInvalid
+    normalized = normalize_email(destination)
+    keyrings = require_verification_service()
+    request_hash = _request_hash(
+        purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+        channel=VerificationChallenge.Channel.EMAIL,
+        comparison=normalized.comparison,
+    )
+    now = timezone.now()
+    try:
+        with transaction.atomic():
+            advisory_transaction_lock("verification-request:password-reset:" + idempotency_key)
+            replay = _replay_or_conflict(
+                purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+            )
+            if replay is not None:
+                return replay
+
+            decision = consume_persistent_limits(
+                namespace="password-reset-verification",
+                limits=_rate_limits(
+                    contact=normalized.comparison,
+                    ip=client_ip,
+                    device=device_id,
+                    lookup_keyring=keyrings.contact_lookup,
+                ),
+                now=now,
+            )
+            if not decision.allowed:
+                payload: dict[str, object] = {
+                    "error": {"code": "VERIFICATION_RATE_LIMITED"},
+                    "retry_after": decision.retry_after,
+                }
+                VerificationRequestRecord.objects.create(
+                    purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+                    idempotency_key=idempotency_key,
+                    canonical_request_hash=request_hash,
+                    response_status=429,
+                    response_json=payload,
+                    created_at=now,
+                    expires_at=now
+                    + timedelta(seconds=settings.AUTH_VERIFICATION_IDEMPOTENCY_RETENTION_SECONDS),
+                )
+                return VerificationRequestResult(429, payload)
+
+            lookup_candidates = keyed_digest_candidates(
+                normalized.comparison,
+                keyring=keyrings.contact_lookup,
+                context="contact:email",
+            )
+            contact = (
+                VerifiedContactMethod.objects.select_related("user")
+                .filter(
+                    channel=VerifiedContactMethod.Channel.EMAIL,
+                    state=VerifiedContactMethod.State.ACTIVE,
+                    lookup_digest__in=tuple(item.digest for item in lookup_candidates),
+                    user__is_active=True,
+                )
+                .order_by("contact_method_id")
+                .first()
+            )
+            eligible = (
+                contact is not None
+                and GameAccount.objects.filter(
+                    user_id=contact.user_id,
+                    lifecycle__in=(
+                        GameAccount.Lifecycle.ACTIVE,
+                        GameAccount.Lifecycle.COOLING_OFF,
+                    ),
+                ).exists()
+            )
+            if eligible and contact is not None:
+                delivery_destination = decrypt_value(
+                    EncryptedValue(
+                        contact.destination_ciphertext,
+                        contact.encryption_key_id,
+                    ),
+                    keyring=keyrings.contact_encryption,
+                    context="contact:email",
+                )
+                code = f"{secrets.randbelow(1_000_000):06d}"
+                code_digest = verification_code_digest(
+                    code,
+                    keyring=keyrings.code_pepper,
+                    purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+                    channel=VerificationChallenge.Channel.EMAIL,
+                    destination_lookup_digest=contact.lookup_digest,
+                    user_id=str(contact.user_id),
+                )
+                challenge_id = uuid.uuid4()
+                challenge = VerificationChallenge.objects.create(
+                    challenge_id=challenge_id,
+                    purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+                    channel=VerificationChallenge.Channel.EMAIL,
+                    destination_lookup_digest=contact.lookup_digest,
+                    destination_lookup_key_id=contact.lookup_key_id,
+                    user_id=contact.user_id,
+                    code_digest=code_digest.digest,
+                    pepper_key_id=code_digest.key_id,
+                    issued_at=now,
+                )
+                delivery_payload = json.dumps(
+                    {
+                        "channel": "email",
+                        "code": code,
+                        "destination": delivery_destination,
+                        "purpose": "password_reset",
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                encrypted_payload = encrypt_value(
+                    delivery_payload,
+                    keyring=keyrings.delivery_payload,
+                    context=f"verification-delivery:{challenge_id}",
+                )
+                VerificationDeliveryOutbox.objects.create(
+                    challenge=challenge,
+                    template_key="password_reset_verification",
+                    payload_ciphertext=encrypted_payload.ciphertext,
+                    payload_key_id=encrypted_payload.key_id,
+                    next_attempt_at=now,
+                )
+
+            VerificationRequestRecord.objects.create(
+                purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+                idempotency_key=idempotency_key,
+                canonical_request_hash=request_hash,
+                response_status=202,
+                response_json=ACCEPTED_PAYLOAD,
+                created_at=now,
+                expires_at=now
+                + timedelta(seconds=settings.AUTH_VERIFICATION_IDEMPOTENCY_RETENTION_SECONDS),
+            )
+        return VerificationRequestResult(202, ACCEPTED_PAYLOAD)
+    except (DatabaseError, CiphertextInvalid, KeyUnavailable) as error:
         raise VerificationServiceUnavailable from error

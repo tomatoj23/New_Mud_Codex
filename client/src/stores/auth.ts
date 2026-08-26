@@ -16,6 +16,13 @@ export function createAuthStore(api: AuthApi = authApi) {
       requestRegistrationVerification(destination: string, idempotencyKey: string) {
         return api.requestRegistrationVerification(destination, idempotencyKey);
       },
+      requestPasswordReset(destination: string, idempotencyKey: string) {
+        return api.requestPasswordReset(destination, idempotencyKey);
+      },
+      async confirmPasswordReset(destination: string, code: string, newPassword: string) {
+        await api.confirmPasswordReset(destination, code, newPassword);
+        this.clearAuthentication();
+      },
       register(username: string, password: string, verification: EmailVerification) {
         this.clearAuthentication();
         return api.register(username, password, verification);

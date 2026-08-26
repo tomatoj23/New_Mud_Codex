@@ -211,6 +211,19 @@ input::placeholder {
   color: #747d78;
 }
 
+.text-action {
+  justify-self: end;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  color: #d9a95c;
+  background: transparent;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.88rem;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 .primary-action {
   min-height: 52px;
   margin-top: 20px;

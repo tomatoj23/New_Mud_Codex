@@ -6,6 +6,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   VERIFICATION_SERVICE_UNAVAILABLE: "邮箱验证暂时不可用，请稍后再试。",
   REGISTRATION_INVALID: "账号名或密码不符合要求。账号名须为 3–32 位字母、数字或下划线。",
   REGISTRATION_UNAVAILABLE: "暂时无法完成注册，请稍后再试。",
+  PASSWORD_RESET_UNAVAILABLE: "暂时无法重置密码，请重新获取验证码后再试。",
   AUTH_CREDENTIALS_INVALID: "账号名或密码不正确。",
   REFRESH_IDEMPOTENCY_KEY_INVALID: "会话刷新请求无效，请重新登录。",
   REFRESH_IDEMPOTENCY_CONFLICT: "无法确认会话刷新结果，已安全退出。",

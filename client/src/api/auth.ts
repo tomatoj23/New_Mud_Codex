@@ -27,6 +27,15 @@ export interface AuthApi {
     destination: string,
     idempotencyKey: string,
   ): Promise<VerificationRequestResult>;
+  requestPasswordReset(
+    destination: string,
+    idempotencyKey: string,
+  ): Promise<VerificationRequestResult>;
+  confirmPasswordReset(
+    destination: string,
+    code: string,
+    newPassword: string,
+  ): Promise<void>;
   register(
     username: string,
     password: string,
@@ -113,6 +122,22 @@ export const authApi: AuthApi = {
         body: JSON.stringify({ channel: "email", destination }),
       },
     );
+  },
+  requestPasswordReset(destination, idempotencyKey) {
+    return jsonRequest<VerificationRequestResult>("/api/v1/auth/password-reset/request", {
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ channel: "email", destination }),
+    });
+  },
+  confirmPasswordReset(destination, code, newPassword) {
+    return jsonRequest<void>("/api/v1/auth/password-reset/confirm", {
+      body: JSON.stringify({
+        channel: "email",
+        destination,
+        code,
+        new_password: newPassword,
+      }),
+    });
   },
   register(username, password, verification) {
     return jsonRequest<RegistrationResult>("/api/v1/auth/register", {

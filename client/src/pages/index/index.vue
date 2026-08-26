@@ -5,7 +5,7 @@ import { AuthApiError } from "../../api/auth";
 import { errorMessage } from "../../features/auth/messages";
 import { useAuthStore } from "../../stores/auth";
 
-type Mode = "register" | "login";
+type Mode = "register" | "login" | "password-reset";
 
 const auth = useAuthStore();
 const mode = ref<Mode>("register");
@@ -21,13 +21,21 @@ const errorCode = ref<string | null>(null);
 const announcement = ref("尚未登录");
 let resendTimer: ReturnType<typeof setInterval> | null = null;
 
-const title = computed(() => (mode.value === "register" ? "创建江湖账号" : "登录江湖"));
-const submitLabel = computed(() => (mode.value === "register" ? "注册账号" : "登录"));
+const title = computed(() => {
+  if (mode.value === "register") return "创建江湖账号";
+  if (mode.value === "password-reset") return "找回账号密码";
+  return "登录江湖";
+});
+const submitLabel = computed(() => {
+  if (mode.value === "register") return "注册账号";
+  if (mode.value === "password-reset") return "重置密码";
+  return "登录";
+});
 const visibleError = computed(() => (errorCode.value ? errorMessage(errorCode.value) : null));
 const currentEmailWasSent = computed(
   () => sentDestination.value !== null && sentDestination.value === email.value.trim(),
 );
-const registrationVerificationReady = computed(
+const verificationReady = computed(
   () => currentEmailWasSent.value && /^\d{6}$/.test(verificationCode.value),
 );
 const verificationButtonLabel = computed(() => {
@@ -53,8 +61,21 @@ function startCountdown(seconds: number) {
 }
 
 function chooseMode(nextMode: Mode) {
+  if (mode.value === "password-reset" || nextMode === "password-reset") {
+    email.value = "";
+    verificationCode.value = "";
+    sentDestination.value = null;
+    resendRemaining.value = 0;
+    password.value = "";
+    stopCountdown();
+  }
   mode.value = nextMode;
   errorCode.value = null;
+}
+
+function choosePasswordReset() {
+  chooseMode("password-reset");
+  announcement.value = "请输入已验证邮箱以获取密码重置验证码。";
 }
 
 function captureError(error: unknown) {
@@ -67,14 +88,23 @@ async function requestVerificationCode() {
   errorCode.value = null;
   try {
     const destination = email.value.trim();
-    const result = await auth.requestRegistrationVerification(
-      destination,
-      `registration-${crypto.randomUUID()}`,
-    );
+    const result =
+      mode.value === "password-reset"
+        ? await auth.requestPasswordReset(
+            destination,
+            `password-reset-${crypto.randomUUID()}`,
+          )
+        : await auth.requestRegistrationVerification(
+            destination,
+            `registration-${crypto.randomUUID()}`,
+          );
     sentDestination.value = destination;
     verificationCode.value = "";
     startCountdown(result.retry_after);
-    announcement.value = "验证码请求已受理，请查看邮箱。未收到时可在倒计时结束后手动重发。";
+    announcement.value =
+      mode.value === "password-reset"
+        ? "密码重置请求已受理，请查看邮箱。未收到时可在倒计时结束后手动重发。"
+        : "验证码请求已受理，请查看邮箱。未收到时可在倒计时结束后手动重发。";
   } catch (error) {
     captureError(error);
   } finally {
@@ -87,7 +117,7 @@ async function submit() {
   errorCode.value = null;
   try {
     if (mode.value === "register") {
-      if (!registrationVerificationReady.value || sentDestination.value === null) {
+      if (!verificationReady.value || sentDestination.value === null) {
         errorCode.value = "VERIFICATION_CODE_INVALID";
         announcement.value = errorMessage(errorCode.value);
         return;
@@ -104,6 +134,24 @@ async function submit() {
       resendRemaining.value = 0;
       stopCountdown();
       announcement.value = "注册成功，请登录。";
+    } else if (mode.value === "password-reset") {
+      if (!verificationReady.value || sentDestination.value === null) {
+        errorCode.value = "VERIFICATION_CODE_INVALID";
+        announcement.value = errorMessage(errorCode.value);
+        return;
+      }
+      await auth.confirmPasswordReset(
+        sentDestination.value,
+        verificationCode.value,
+        password.value,
+      );
+      mode.value = "login";
+      email.value = "";
+      verificationCode.value = "";
+      sentDestination.value = null;
+      resendRemaining.value = 0;
+      stopCountdown();
+      announcement.value = "密码已重置，请使用新密码登录。";
     } else {
       await auth.login(username.value, password.value);
       announcement.value = "登录成功。认证会话已建立。";
@@ -201,36 +249,48 @@ onBeforeUnmount(stopCountdown);
       </div>
 
       <form v-if="!auth.isAuthenticated" @submit.prevent="submit">
-        <template v-if="mode === 'register'">
-          <label for="email">邮箱</label>
+        <template v-if="mode === 'register' || mode === 'password-reset'">
+          <label :for="mode === 'password-reset' ? 'reset-email' : 'email'">邮箱</label>
           <div class="verification-request-row">
             <input
-              id="email"
+              :id="mode === 'password-reset' ? 'reset-email' : 'email'"
               v-model="email"
               name="email"
               type="email"
               autocomplete="email"
-              placeholder="用于接收注册验证码"
-              data-testid="email"
+              :placeholder="
+                mode === 'password-reset' ? '已验证的账号邮箱' : '用于接收注册验证码'
+              "
+              :data-testid="mode === 'password-reset' ? 'reset-email' : 'email'"
               required
             />
             <button
               class="verification-action"
               type="button"
               :disabled="verificationBusy || resendRemaining > 0 || email.trim().length === 0"
-              data-testid="request-verification"
+              :data-testid="
+                mode === 'password-reset' ? 'request-password-reset' : 'request-verification'
+              "
               @click="requestVerificationCode"
             >
               {{ verificationButtonLabel }}
             </button>
           </div>
-          <p v-if="currentEmailWasSent" class="verification-hint" data-testid="verification-hint">
+          <p
+            v-if="currentEmailWasSent"
+            class="verification-hint"
+            :data-testid="
+              mode === 'password-reset' ? 'password-reset-hint' : 'verification-hint'
+            "
+          >
             请求已受理。请输入邮件中的六位验证码。
           </p>
 
-          <label for="verification-code">邮箱验证码</label>
+          <label :for="mode === 'password-reset' ? 'password-reset-code' : 'verification-code'">
+            邮箱验证码
+          </label>
           <input
-            id="verification-code"
+            :id="mode === 'password-reset' ? 'password-reset-code' : 'verification-code'"
             v-model.trim="verificationCode"
             name="verification-code"
             autocomplete="one-time-code"
@@ -238,41 +298,67 @@ onBeforeUnmount(stopCountdown);
             maxlength="6"
             pattern="[0-9]{6}"
             placeholder="六位数字"
-            data-testid="verification-code"
+            :data-testid="
+              mode === 'password-reset' ? 'password-reset-code' : 'verification-code'
+            "
             required
           />
         </template>
 
-        <label for="username">账号名</label>
-        <input
-          id="username"
-          v-model.trim="username"
-          name="username"
-          autocomplete="username"
-          autocapitalize="none"
-          spellcheck="false"
-          placeholder="3–32 位字母、数字或下划线"
-          data-testid="username"
-          required
-        />
+        <template v-if="mode !== 'password-reset'">
+          <label for="username">账号名</label>
+          <input
+            id="username"
+            v-model.trim="username"
+            name="username"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            placeholder="3–32 位字母、数字或下划线"
+            data-testid="username"
+            required
+          />
+        </template>
 
-        <label for="password">密码</label>
+        <label :for="mode === 'password-reset' ? 'new-password' : 'password'">
+          {{ mode === "password-reset" ? "新密码" : "密码" }}
+        </label>
         <input
-          id="password"
+          :id="mode === 'password-reset' ? 'new-password' : 'password'"
           v-model="password"
           name="password"
           type="password"
-          :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
+          :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
           placeholder="使用足够长且独立的密码"
-          data-testid="password"
+          :data-testid="mode === 'password-reset' ? 'new-password' : 'password'"
           required
         />
 
         <button
+          v-if="mode === 'login'"
+          class="text-action"
+          type="button"
+          data-testid="forgot-password"
+          @click="choosePasswordReset"
+        >
+          忘记密码
+        </button>
+
+        <button
+          v-if="mode === 'password-reset'"
+          class="text-action"
+          type="button"
+          data-testid="back-to-login"
+          @click="chooseMode('login')"
+        >
+          返回账号登录
+        </button>
+
+        <button
           class="primary-action"
           type="button"
-          :disabled="busy || (mode === 'register' && !registrationVerificationReady)"
-          data-testid="submit"
+          :disabled="busy || (mode !== 'login' && !verificationReady)"
+          :data-testid="mode === 'password-reset' ? 'submit-password-reset' : 'submit'"
           @click="submit"
         >
           {{ busy ? "处理中…" : submitLabel }}

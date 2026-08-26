@@ -566,3 +566,85 @@ class SecurityAuditEvent(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=("event_type", "created_at"))]
+
+
+class SecurityNotificationOutbox(models.Model):
+    class TemplateKey(models.TextChoices):
+        PASSWORD_RESET_SUCCEEDED = "password_reset_succeeded"
+
+    class State(models.TextChoices):
+        PENDING = "pending"
+        LEASED = "leased"
+        DELIVERED = "delivered"
+        DELIVERY_FAILED = "delivery_failed"
+
+    security_notification_id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="security_notification_outbox",
+    )
+    contact_method = models.ForeignKey(
+        VerifiedContactMethod,
+        on_delete=models.PROTECT,
+        related_name="security_notification_outbox",
+    )
+    source_event = models.OneToOneField(
+        SecurityAuditEvent,
+        on_delete=models.PROTECT,
+        related_name="security_notification_outbox",
+    )
+    template_key = models.CharField(max_length=64, choices=TemplateKey.choices)
+    state = models.CharField(max_length=24, choices=State.choices, default=State.PENDING)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    lease_owner = models.CharField(max_length=128, null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    next_attempt_at = models.DateTimeField()
+    provider_category = models.CharField(max_length=64, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    terminal_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveBigIntegerField(default=1)
+
+    class Meta:
+        indexes = [models.Index(fields=("state", "next_attempt_at"))]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(version__gte=1),
+                name="identity_security_notice_version_gte_1",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(state="leased")
+                    | (
+                        models.Q(lease_owner__isnull=False)
+                        & models.Q(lease_expires_at__isnull=False)
+                    )
+                ),
+                name="identity_security_notice_lease_complete",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        state__in=("pending", "leased"),
+                        delivered_at__isnull=True,
+                        terminal_at__isnull=True,
+                    )
+                    | models.Q(
+                        state="delivered",
+                        delivered_at__isnull=False,
+                        terminal_at__isnull=False,
+                    )
+                    | models.Q(
+                        state="delivery_failed",
+                        delivered_at__isnull=True,
+                        terminal_at__isnull=False,
+                    )
+                ),
+                name="identity_security_notice_state_times",
+            ),
+        ]

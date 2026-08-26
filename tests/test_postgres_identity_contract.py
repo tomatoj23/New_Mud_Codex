@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -29,6 +30,8 @@ from new_mud.apps.identity.models import (
     RefreshRequestTerminalRecord,
     RefreshTokenCredential,
     RefreshTokenFamily,
+    SecurityAuditEvent,
+    SecurityNotificationOutbox,
     VerificationChallenge,
     VerificationDeliveryOutbox,
     VerificationRateLimitBucket,
@@ -37,12 +40,14 @@ from new_mud.apps.identity.models import (
 )
 from new_mud.apps.identity.services import (
     AuthenticationFailed,
+    PasswordResetUnavailable,
     RefreshFailed,
     RegistrationUnavailable,
     VerificationCodeInvalid,
     login,
     refresh,
     register,
+    reset_password_with_verification,
 )
 from new_mud.apps.identity.verification_delivery import (
     DeliveryOutcome,
@@ -63,6 +68,12 @@ pytestmark = [
 def force_deferred_constraints() -> None:
     with connection.cursor() as cursor:
         cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+
+def extract_email_code(body: str) -> str:
+    match = re.search(r"(?<!\d)\d{6}(?!\d)", body)
+    assert match is not None
+    return match.group()
 
 
 def request_registration_verification_from_thread(
@@ -89,6 +100,75 @@ def request_registration_verification_from_thread(
         return response.status_code, response.json()
     finally:
         close_old_connections()
+
+
+def request_password_reset_from_thread(
+    *,
+    destination: str,
+    idempotency_key: str,
+    device_id: str,
+) -> tuple[int, dict[str, object]]:
+    close_old_connections()
+    try:
+        client = Client()
+        client.cookies["new_mud_verification_device"] = device_id
+        response = client.post(
+            reverse("auth-password-reset-request"),
+            {"channel": "email", "destination": destination},
+            content_type="application/json",
+            secure=True,
+            REMOTE_ADDR="192.0.2.10",
+            headers={
+                "origin": "https://testserver",
+                "idempotency-key": idempotency_key,
+            },
+        )
+        return response.status_code, response.json()
+    finally:
+        close_old_connections()
+
+
+def prepare_password_reset(*, username: str, password: str) -> tuple[str, str]:
+    suffix = uuid.uuid4().hex[:12]
+    destination = f"{username[:32]}-{suffix}@example.com"
+    assert request_registration_verification_from_thread(
+        destination=destination,
+        idempotency_key=f"reset-registration-{suffix}",
+        device_id=f"reset-registration-device-{suffix}",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    registration_sender = RecordingEmailSender()
+    assert (
+        deliver_one_verification(
+            worker_id=f"reset-registration-worker-{suffix}",
+            sender=registration_sender,
+        )
+        == DeliveryOutcome.DELIVERED
+    )
+    registration_code = extract_email_code(registration_sender.messages[0].body)
+    register(
+        username=username,
+        password=password,
+        verification={
+            "channel": "email",
+            "destination": destination,
+            "code": registration_code,
+        },
+    )
+    assert request_password_reset_from_thread(
+        destination=destination,
+        idempotency_key=f"reset-request-{suffix}",
+        device_id=f"reset-request-device-{suffix}",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    reset_sender = RecordingEmailSender()
+    assert (
+        deliver_one_verification(
+            worker_id=f"reset-request-worker-{suffix}",
+            sender=reset_sender,
+        )
+        == DeliveryOutcome.DELIVERED
+    )
+    reset_code = extract_email_code(reset_sender.messages[0].body)
+    return destination, reset_code
 
 
 def register_verified(*, username: str, password: str):
@@ -504,6 +584,178 @@ def test_concurrent_registration_consumes_one_challenge_into_one_complete_identi
     assert RecoveryCodeCredential.objects.count() == 0
     assert AuthSession.objects.count() == 0
     assert VerificationChallenge.objects.get().state == VerificationChallenge.State.CONSUMED
+
+
+def test_concurrent_password_reset_consumes_code_at_most_once() -> None:
+    old_password = "safe-concurrent-reset-passphrase-42"
+    destination, reset_code = prepare_password_reset(
+        username="concurrent_password_reset",
+        password=old_password,
+    )
+    start = Event()
+
+    def finish_reset(new_password: str) -> tuple[str, str]:
+        close_old_connections()
+        try:
+            assert start.wait(timeout=5)
+            reset_password_with_verification(
+                channel="email",
+                destination=destination,
+                code=reset_code,
+                new_password=new_password,
+            )
+            return "reset", new_password
+        except VerificationCodeInvalid:
+            return "invalid", new_password
+        finally:
+            close_old_connections()
+
+    candidates = (
+        "safe-concurrent-reset-winner-a-84",
+        "safe-concurrent-reset-winner-b-96",
+    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(finish_reset, password) for password in candidates]
+        start.set()
+        outcomes = [future.result(timeout=10) for future in futures]
+
+    assert sorted(outcome for outcome, _ in outcomes) == ["invalid", "reset"]
+    winning_password = next(password for outcome, password in outcomes if outcome == "reset")
+    user = get_user_model().objects.get(username="concurrent_password_reset")
+    assert user.check_password(winning_password)
+    assert not user.check_password(old_password)
+    assert (
+        VerificationChallenge.objects.get(
+            purpose=VerificationChallenge.Purpose.PASSWORD_RESET
+        ).state
+        == VerificationChallenge.State.CONSUMED
+    )
+    assert SecurityNotificationOutbox.objects.count() == 1
+
+
+def test_concurrent_login_and_password_reset_leave_no_active_authentication() -> None:
+    old_password = "safe-login-reset-race-passphrase-42"
+    new_password = "safe-login-reset-race-replacement-84"
+    destination, reset_code = prepare_password_reset(
+        username="login_password_reset_race",
+        password=old_password,
+    )
+    start = Event()
+
+    def finish_reset() -> str:
+        close_old_connections()
+        try:
+            assert start.wait(timeout=5)
+            reset_password_with_verification(
+                channel="email",
+                destination=destination,
+                code=reset_code,
+                new_password=new_password,
+            )
+            return "reset"
+        finally:
+            close_old_connections()
+
+    def attempt_login() -> str:
+        close_old_connections()
+        try:
+            assert start.wait(timeout=5)
+            login(
+                username="login_password_reset_race",
+                password=old_password,
+            )
+            return "authenticated"
+        except AuthenticationFailed:
+            return "rejected"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        reset_future = executor.submit(finish_reset)
+        login_future = executor.submit(attempt_login)
+        start.set()
+        assert reset_future.result(timeout=10) == "reset"
+        assert login_future.result(timeout=10) in {"authenticated", "rejected"}
+
+    user = get_user_model().objects.get(username="login_password_reset_race")
+    assert user.check_password(new_password)
+    assert not AuthSession.objects.filter(state=AuthSession.State.ACTIVE).exists()
+    assert not RefreshTokenFamily.objects.filter(state=RefreshTokenFamily.State.ACTIVE).exists()
+    assert not RefreshTokenCredential.objects.filter(
+        state=RefreshTokenCredential.State.ACTIVE
+    ).exists()
+
+
+def test_security_notification_insert_failure_rolls_back_password_reset() -> None:
+    old_password = "safe-notice-insert-rollback-passphrase-42"
+    destination, reset_code = prepare_password_reset(
+        username="notice_insert_rollback",
+        password=old_password,
+    )
+    login(
+        username="notice_insert_rollback",
+        password=old_password,
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE FUNCTION identity_test_fail_security_notification_insert()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'test security notification insert failure'
+                    USING ERRCODE = '58000';
+            END;
+            $$
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TRIGGER identity_test_fail_security_notification_insert_trigger
+            BEFORE INSERT ON identity_securitynotificationoutbox
+            FOR EACH ROW EXECUTE FUNCTION identity_test_fail_security_notification_insert()
+            """
+        )
+
+    try:
+        with pytest.raises(PasswordResetUnavailable):
+            reset_password_with_verification(
+                channel="email",
+                destination=destination,
+                code=reset_code,
+                new_password="safe-notice-insert-rollback-replacement-84",
+            )
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DROP TRIGGER IF EXISTS "
+                "identity_test_fail_security_notification_insert_trigger "
+                "ON identity_securitynotificationoutbox"
+            )
+            cursor.execute(
+                "DROP FUNCTION IF EXISTS identity_test_fail_security_notification_insert()"
+            )
+
+    user = get_user_model().objects.get(username="notice_insert_rollback")
+    assert user.check_password(old_password)
+    assert (
+        VerificationChallenge.objects.get(
+            purpose=VerificationChallenge.Purpose.PASSWORD_RESET
+        ).state
+        == VerificationChallenge.State.ACTIVE
+    )
+    assert set(AuthSession.objects.values_list("state", flat=True)) == {AuthSession.State.ACTIVE}
+    assert set(RefreshTokenFamily.objects.values_list("state", flat=True)) == {
+        RefreshTokenFamily.State.ACTIVE
+    }
+    assert set(RefreshTokenCredential.objects.values_list("state", flat=True)) == {
+        RefreshTokenCredential.State.ACTIVE
+    }
+    assert SecurityNotificationOutbox.objects.count() == 0
+    assert not SecurityAuditEvent.objects.filter(
+        event_type="auth.password_reset.succeeded"
+    ).exists()
 
 
 def test_rotated_lookup_key_cannot_revive_a_superseded_registration_code() -> None:

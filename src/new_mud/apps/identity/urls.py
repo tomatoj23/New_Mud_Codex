@@ -3,6 +3,8 @@ from django.urls import path
 from .views import (
     login_view,
     logout_view,
+    password_reset_confirm_view,
+    password_reset_request_view,
     recover_view,
     recovery_code_rotate_view,
     refresh_view,
@@ -20,6 +22,16 @@ urlpatterns = [
     path("login", login_view, name="auth-login"),
     path("refresh", refresh_view, name="auth-refresh"),
     path("logout", logout_view, name="auth-logout"),
+    path(
+        "password-reset/request",
+        password_reset_request_view,
+        name="auth-password-reset-request",
+    ),
+    path(
+        "password-reset/confirm",
+        password_reset_confirm_view,
+        name="auth-password-reset-confirm",
+    ),
     path("recover", recover_view, name="auth-recover"),
     path(
         "recovery-code/rotate",

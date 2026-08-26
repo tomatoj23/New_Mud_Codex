@@ -15,9 +15,9 @@ from django.utils import timezone
 
 from .models import VerificationChallenge, VerificationDeliveryOutbox
 from .verification import (
-    lock_registration_email_scope,
+    email_contact_scope,
+    lock_email_contact_scope,
     normalize_email,
-    registration_email_scope,
 )
 from .verification_config import require_verification_service
 from .verification_crypto import EncryptedValue, decrypt_value
@@ -150,11 +150,24 @@ def _terminalize_one_exhausted_lease(*, now) -> bool:
 def _message_from_payload(payload: dict[str, str]) -> VerificationEmail:
     if set(payload) != {"channel", "code", "destination", "purpose"}:
         raise DeliveryPermanentError
-    if payload["channel"] != "email" or payload["purpose"] != "registration":
+    if payload["channel"] != "email" or payload["purpose"] not in {
+        VerificationChallenge.Purpose.REGISTRATION,
+        VerificationChallenge.Purpose.PASSWORD_RESET,
+    }:
         raise DeliveryPermanentError
     code = payload["code"]
     if len(code) != 6 or not code.isascii() or not code.isdigit():
         raise DeliveryPermanentError
+    if payload["purpose"] == VerificationChallenge.Purpose.PASSWORD_RESET:
+        return VerificationEmail(
+            destination=payload["destination"],
+            subject="[New_Mud] 密码重置验证码",
+            body=(
+                f"你的 New_Mud 密码重置验证码是：{code}\n\n"
+                "验证码在 10 分钟内有效。如果你没有请求重置密码，请忽略本邮件。\n"
+                "工作人员不会索要验证码。"
+            ),
+        )
     return VerificationEmail(
         destination=payload["destination"],
         subject="[New_Mud] 注册验证码",
@@ -228,9 +241,9 @@ def _claim_delivery(*, worker_id: str, now) -> ClaimedDelivery | None:
 def _finish_delivery(claim: ClaimedDelivery, *, now) -> DeliveryOutcome:
     normalized = normalize_email(claim.payload["destination"])
     keyrings = require_verification_service()
-    email_scope = registration_email_scope(normalized, lookup_keyring=keyrings.contact_lookup)
+    email_scope = email_contact_scope(normalized, lookup_keyring=keyrings.contact_lookup)
     with transaction.atomic():
-        lock_registration_email_scope(email_scope)
+        lock_email_contact_scope(email_scope)
         outbox = VerificationDeliveryOutbox.objects.select_for_update().get(pk=claim.outbox_id)
         if (
             outbox.state != VerificationDeliveryOutbox.State.LEASED

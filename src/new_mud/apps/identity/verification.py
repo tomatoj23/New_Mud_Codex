@@ -24,7 +24,7 @@ class NormalizedEmail:
 
 
 @dataclass(frozen=True)
-class RegistrationEmailScope:
+class EmailContactScope:
     email: NormalizedEmail
     current_lookup: DigestedValue
     lookup_candidates: tuple[DigestedValue, ...]
@@ -58,11 +58,11 @@ def normalize_email(destination: object) -> NormalizedEmail:
     return NormalizedEmail(delivery=delivery, comparison=delivery.casefold())
 
 
-def registration_email_scope(
+def email_contact_scope(
     email: NormalizedEmail,
     *,
     lookup_keyring: KeyRing,
-) -> RegistrationEmailScope:
+) -> EmailContactScope:
     candidates = keyed_digest_candidates(
         email.comparison,
         keyring=lookup_keyring,
@@ -71,12 +71,12 @@ def registration_email_scope(
     current_lookup = next(
         candidate for candidate in candidates if candidate.key_id == lookup_keyring.current_key_id
     )
-    return RegistrationEmailScope(
+    return EmailContactScope(
         email=email,
         current_lookup=current_lookup,
         lookup_candidates=candidates,
     )
 
 
-def lock_registration_email_scope(scope: RegistrationEmailScope) -> None:
+def lock_email_contact_scope(scope: EmailContactScope) -> None:
     advisory_transaction_lock(f"registration:email:{scope.email.comparison}")

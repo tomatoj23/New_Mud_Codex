@@ -49,7 +49,11 @@ function decodeMessageBody(rawMessage: string): string {
   return Buffer.from(bodyLines.join(""), "base64").toString("utf8");
 }
 
-export async function deliverRegistrationCode(destination: string): Promise<string> {
+async function deliverVerificationCode(
+  destination: string,
+  codePattern: RegExp,
+  purposeLabel: string,
+): Promise<string> {
   await mkdir(emailOutboxDirectory, { recursive: true });
   const before = new Set(await readdir(emailOutboxDirectory));
   const python =
@@ -74,11 +78,21 @@ export async function deliverRegistrationCode(destination: string): Promise<stri
     const rawMessage = await readFile(filePath, "utf8");
     await unlink(filePath);
     if (!rawMessage.includes(`To: ${destination}`)) continue;
-    const match = decodeMessageBody(rawMessage).match(/注册验证码是：(\d{6})/u);
+    const match = decodeMessageBody(rawMessage).match(codePattern);
     if (match) deliveredCode = match[1];
   }
   if (deliveredCode === null) {
-    throw new Error(`Fake email provider did not receive a code for ${destination}`);
+    throw new Error(
+      `Fake email provider did not receive a ${purposeLabel} code for ${destination}`,
+    );
   }
   return deliveredCode;
+}
+
+export function deliverRegistrationCode(destination: string): Promise<string> {
+  return deliverVerificationCode(destination, /注册验证码是：(\d{6})/u, "registration");
+}
+
+export function deliverPasswordResetCode(destination: string): Promise<string> {
+  return deliverVerificationCode(destination, /密码重置验证码是：(\d{6})/u, "password reset");
 }

@@ -16,6 +16,8 @@ describe("authStore", () => {
         status: "accepted",
         retry_after: 60,
       }),
+      requestPasswordReset: vi.fn(),
+      confirmPasswordReset: vi.fn(),
       register: vi.fn().mockResolvedValue({
         user_id: 7,
         game_account_id: "account-7",
@@ -55,6 +57,8 @@ describe("authStore", () => {
   it("keeps the access token in memory and clears it after logout", async () => {
     const api: AuthApi = {
       requestRegistrationVerification: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      confirmPasswordReset: vi.fn(),
       register: vi.fn(),
       login: vi.fn().mockResolvedValue({
         access_token: "access-secret",
@@ -79,6 +83,53 @@ describe("authStore", () => {
     expect(store.isAuthenticated).toBe(false);
   });
 
+  it("resets a password without retaining recovery inputs and clears authentication", async () => {
+    const api = {
+      requestRegistrationVerification: vi.fn(),
+      requestPasswordReset: vi.fn().mockResolvedValue({
+        status: "accepted",
+        retry_after: 60,
+      }),
+      confirmPasswordReset: vi.fn().mockResolvedValue(undefined),
+      register: vi.fn(),
+      login: vi.fn(),
+      refresh: vi.fn(),
+      retryPendingRefresh: vi.fn(),
+      logout: vi.fn(),
+    } as unknown as AuthApi;
+    const store = createAuthStore(api)();
+    store.acceptAuthentication({
+      access_token: "old-access-secret",
+      auth_session_id: "old-session",
+      game_account_id: "old-account",
+    });
+
+    await expect(
+      store.requestPasswordReset("owner@example.com", "password-reset-1"),
+    ).resolves.toEqual({ status: "accepted", retry_after: 60 });
+    await store.confirmPasswordReset(
+      "owner@example.com",
+      "123456",
+      "safe-reset-passphrase-84",
+    );
+
+    expect(api.requestPasswordReset).toHaveBeenCalledWith(
+      "owner@example.com",
+      "password-reset-1",
+    );
+    expect(api.confirmPasswordReset).toHaveBeenCalledWith(
+      "owner@example.com",
+      "123456",
+      "safe-reset-passphrase-84",
+    );
+    expect(store.accessToken).toBeNull();
+    expect(store.authSessionId).toBeNull();
+    expect(store.gameAccountId).toBeNull();
+    expect(JSON.stringify(store.$state)).not.toContain("owner@example.com");
+    expect(JSON.stringify(store.$state)).not.toContain("123456");
+    expect(JSON.stringify(store.$state)).not.toContain("safe-reset-passphrase-84");
+  });
+
   it("accepts a persisted pending refresh result back into memory", async () => {
     const recovered = {
       access_token: "recovered-access-secret",
@@ -89,6 +140,8 @@ describe("authStore", () => {
     };
     const api: AuthApi = {
       requestRegistrationVerification: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      confirmPasswordReset: vi.fn(),
       register: vi.fn(),
       login: vi.fn(),
       refresh: vi.fn(),

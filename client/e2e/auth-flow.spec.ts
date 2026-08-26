@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
-import { deliverRegistrationCode } from "./verification-test-support";
+import {
+  deliverPasswordResetCode,
+  deliverRegistrationCode,
+} from "./verification-test-support";
 
 const nativeInput = (page: Page, testId: string) =>
   page.getByTestId(testId).locator("input");
@@ -20,9 +23,12 @@ async function registerAndLogin(page: Page, username: string, password: string) 
   await page.getByTestId("submit").click();
   await expect(page.getByTestId("announcement")).toContainText("注册成功，请登录");
   await nativeInput(page, "password").fill(password);
+  const loginResponse = page.waitForResponse("**/api/v1/auth/login");
   await page.getByTestId("submit").click();
   await expect(page.getByTestId("session-panel")).toBeVisible();
-  return { code, email };
+  const accessToken = ((await (await loginResponse).json()) as { access_token: string })
+    .access_token;
+  return { accessToken, code, email };
 }
 
 async function login(page: Page, username: string, password: string) {
@@ -150,6 +156,111 @@ test("registration stays separate, then login refresh and logout complete", asyn
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflow).toBe(false);
+});
+
+test("forgot password resets through email and invalidates the old browser session", async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const username = `e1_reset_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const oldPassword = "safe-e2e-reset-passphrase-42";
+  const newPassword = "safe-e2e-reset-replacement-84";
+  const { accessToken, email } = await registerAndLogin(page, username, oldPassword);
+  const resetPage = await context.newPage();
+  const consoleMessages: string[] = [];
+  const resetResponseBodies: string[] = [];
+  resetPage.on("console", (message) => consoleMessages.push(message.text()));
+
+  await resetPage.goto("/");
+  await resetPage.getByTestId("login-tab").click();
+  await resetPage.getByTestId("forgot-password").click();
+  await expect(resetPage.getByRole("heading", { name: "找回账号密码" })).toBeVisible();
+  await resetPage.route(
+    "**/api/v1/auth/password-reset/request",
+    async (route) => {
+      const response = await route.fetch();
+      const payload = (await response.json()) as { status: string; retry_after: number };
+      resetResponseBodies.push(JSON.stringify(payload));
+      await route.fulfill({ response, json: { ...payload, retry_after: 1 } });
+    },
+    { times: 1 },
+  );
+  await nativeInput(resetPage, "reset-email").fill(email);
+  await resetPage.getByTestId("request-password-reset").click();
+  await expect(resetPage.getByTestId("password-reset-hint")).toBeVisible();
+  const code = await deliverPasswordResetCode(email);
+  const resend = resetPage.getByTestId("request-password-reset");
+  await expect(resend).toContainText("重新发送验证码");
+  await resetPage.route(
+    "**/api/v1/auth/password-reset/request",
+    async (route) => {
+      resetResponseBodies.push(JSON.stringify({ status: "accepted", retry_after: 60 }));
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "accepted", retry_after: 60 }),
+      });
+    },
+    { times: 1 },
+  );
+  await resend.click();
+  await expect(resend).toContainText("60 秒后可重发");
+  await nativeInput(resetPage, "password-reset-code").fill(code);
+  await nativeInput(resetPage, "new-password").fill(newPassword);
+  await resetPage.route(
+    "**/api/v1/auth/password-reset/confirm",
+    async (route) => {
+      const response = await route.fetch();
+      resetResponseBodies.push(await response.text());
+      await route.fulfill({ response, body: "" });
+    },
+    { times: 1 },
+  );
+  await resetPage.getByTestId("submit-password-reset").click();
+
+  await expect(resetPage.getByRole("heading", { name: "登录江湖" })).toBeVisible();
+  await expect(resetPage.getByTestId("announcement")).toContainText(
+    "密码已重置，请使用新密码登录",
+  );
+  await expect(resetPage.locator("body")).not.toContainText("独立登录");
+  await expect(resetPage.locator("body")).not.toContainText("恢复码");
+
+  const protectedResult = await page.evaluate(async (token) => {
+    const response = await fetch("/api/v1/auth/recovery-code/rotate", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+    return { status: response.status, payload: await response.json() };
+  }, accessToken);
+  expect(protectedResult).toEqual({
+    status: 401,
+    payload: { error: { code: "SESSION_REVOKED" } },
+  });
+  await page.getByTestId("refresh").click();
+  await expect(page.getByTestId("session-panel")).toHaveCount(0);
+  await expect(page.getByTestId("error")).toContainText("SESSION_REVOKED");
+
+  const persistence = JSON.stringify(await browserPersistence(resetPage));
+  expect(persistence).not.toContain(email);
+  expect(persistence).not.toContain(code);
+  expect(persistence).not.toContain(newPassword);
+  expect(JSON.stringify(consoleMessages)).not.toContain(email);
+  expect(JSON.stringify(consoleMessages)).not.toContain(code);
+  expect(JSON.stringify(consoleMessages)).not.toContain(newPassword);
+  const httpResponseBodies = JSON.stringify(resetResponseBodies);
+  expect(httpResponseBodies).not.toContain(email);
+  expect(httpResponseBodies).not.toContain(code);
+  expect(httpResponseBodies).not.toContain(newPassword);
+
+  await nativeInput(resetPage, "username").fill(username);
+  await nativeInput(resetPage, "password").fill(newPassword);
+  await resetPage.getByTestId("submit").click();
+  await expect(resetPage.getByTestId("session-panel")).toBeVisible();
 });
 
 test("stable machine errors become explicit user-facing states", async ({ page }) => {

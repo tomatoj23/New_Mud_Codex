@@ -7,6 +7,8 @@ from rest_framework.views import exception_handler as default_exception_handler
 
 AUTH_ENDPOINT_ERROR_CODES = {
     "/api/v1/auth/registration-verification/request": "CONTACT_INVALID",
+    "/api/v1/auth/password-reset/request": "CONTACT_INVALID",
+    "/api/v1/auth/password-reset/confirm": "PASSWORD_RESET_UNAVAILABLE",
     "/api/v1/auth/register": "REGISTRATION_INVALID",
     "/api/v1/auth/login": "AUTH_CREDENTIALS_INVALID",
     "/api/v1/auth/refresh": "REFRESH_UNAVAILABLE",

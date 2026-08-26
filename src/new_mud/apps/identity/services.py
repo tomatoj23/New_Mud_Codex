@@ -24,7 +24,9 @@ from .models import (
     RefreshTokenCredential,
     RefreshTokenFamily,
     SecurityAuditEvent,
+    SecurityNotificationOutbox,
     VerificationChallenge,
+    VerificationDeliveryOutbox,
     VerifiedContactMethod,
 )
 from .tokens import (
@@ -36,9 +38,9 @@ from .tokens import (
 )
 from .verification import (
     ContactInvalid,
-    lock_registration_email_scope,
+    email_contact_scope,
+    lock_email_contact_scope,
     normalize_email,
-    registration_email_scope,
 )
 from .verification_config import (
     VerificationServiceUnavailable,
@@ -64,6 +66,10 @@ class RegistrationUnavailable(Exception):
 
 
 class VerificationCodeInvalid(Exception):
+    pass
+
+
+class PasswordResetUnavailable(Exception):
     pass
 
 
@@ -123,7 +129,7 @@ def register(
         raise VerificationCodeInvalid from error
 
     keyrings = require_verification_service()
-    email_scope = registration_email_scope(
+    email_scope = email_contact_scope(
         normalized_email,
         lookup_keyring=keyrings.contact_lookup,
     )
@@ -132,7 +138,7 @@ def register(
     try:
         with transaction.atomic():
             advisory_transaction_lock(f"registration:username:{normalized_username}")
-            lock_registration_email_scope(email_scope)
+            lock_email_contact_scope(email_scope)
             now = timezone.now()
             challenge = (
                 VerificationChallenge.objects.select_for_update()
@@ -238,6 +244,232 @@ def register(
         user_id=user.pk,
         game_account_id=str(account.pk),
     )
+
+
+def _reset_password_with_verification(
+    *,
+    channel: object,
+    destination: object,
+    code: object,
+    new_password: object,
+) -> None:
+    if channel != VerificationChallenge.Channel.EMAIL:
+        raise ContactInvalid
+    if not isinstance(code, str) or len(code) != 6 or not code.isascii() or not code.isdigit():
+        raise VerificationCodeInvalid
+    if not isinstance(new_password, str):
+        raise PasswordResetUnavailable
+    normalized_email = normalize_email(destination)
+    keyrings = require_verification_service()
+    email_scope = email_contact_scope(
+        normalized_email,
+        lookup_keyring=keyrings.contact_lookup,
+    )
+    contact_locator = (
+        VerifiedContactMethod.objects.filter(
+            channel=VerifiedContactMethod.Channel.EMAIL,
+            state=VerifiedContactMethod.State.ACTIVE,
+            lookup_digest__in=email_scope.lookup_digests,
+            user__is_active=True,
+        )
+        .only("contact_method_id", "user_id")
+        .first()
+    )
+    if contact_locator is None:
+        raise VerificationCodeInvalid
+
+    invalid_code = False
+    user_model = get_user_model()
+    with transaction.atomic():
+        lock_email_contact_scope(email_scope)
+        user = user_model.objects.select_for_update().get(pk=contact_locator.user_id)
+        contact = VerifiedContactMethod.objects.select_for_update().get(pk=contact_locator.pk)
+        challenge = (
+            VerificationChallenge.objects.select_for_update()
+            .filter(
+                purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+                channel=VerificationChallenge.Channel.EMAIL,
+                destination_lookup_digest__in=email_scope.lookup_digests,
+                user=user,
+                state=VerificationChallenge.State.ACTIVE,
+            )
+            .order_by("-activated_at", "challenge_id")
+            .first()
+        )
+        accounts = _lock_user_accounts(user_id=user.pk)
+        now = timezone.now()
+        if (
+            not user.is_active
+            or contact.state != VerifiedContactMethod.State.ACTIVE
+            or contact.user_id != user.pk
+            or not any(
+                account.lifecycle
+                in (GameAccount.Lifecycle.ACTIVE, GameAccount.Lifecycle.COOLING_OFF)
+                for account in accounts
+            )
+            or challenge is None
+        ):
+            invalid_code = True
+        elif challenge.expires_at is None or challenge.expires_at <= now:
+            challenge.state = VerificationChallenge.State.EXPIRED
+            challenge.terminal_at = now
+            challenge.version += 1
+            challenge.save(update_fields=("state", "terminal_at", "version"))
+            invalid_code = True
+        else:
+            try:
+                submitted_digest = verification_code_digest(
+                    code,
+                    keyring=keyrings.code_pepper,
+                    purpose=challenge.purpose,
+                    channel=challenge.channel,
+                    destination_lookup_digest=challenge.destination_lookup_digest,
+                    user_id=str(user.pk),
+                    key_id=challenge.pepper_key_id,
+                ).digest
+            except KeyUnavailable as error:
+                raise VerificationServiceUnavailable from error
+            if not hmac.compare_digest(challenge.code_digest, submitted_digest):
+                challenge.attempt_count += 1
+                update_fields = ["attempt_count", "version"]
+                if challenge.attempt_count >= 5:
+                    challenge.state = VerificationChallenge.State.LOCKED
+                    challenge.terminal_at = now
+                    update_fields.extend(("state", "terminal_at"))
+                challenge.version += 1
+                challenge.save(update_fields=update_fields)
+                invalid_code = True
+
+        if not invalid_code:
+            assert challenge is not None
+            try:
+                validate_password(new_password, user=user)
+            except ValidationError as error:
+                raise PasswordResetUnavailable from error
+            sessions = _lock_user_sessions(user_id=user.pk)
+            families = list(
+                RefreshTokenFamily.objects.select_for_update()
+                .filter(auth_session__user_id=user.pk)
+                .order_by("family_id")
+            )
+            credentials = list(
+                RefreshTokenCredential.objects.select_for_update()
+                .filter(family__in=families)
+                .order_by("credential_id")
+            )
+            unfinished_challenges = list(
+                VerificationChallenge.objects.select_for_update()
+                .filter(
+                    purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
+                    user=user,
+                    state__in=(
+                        VerificationChallenge.State.PENDING_DELIVERY,
+                        VerificationChallenge.State.ACTIVE,
+                    ),
+                )
+                .exclude(pk=challenge.pk)
+                .order_by("challenge_id")
+            )
+            unfinished_outboxes = list(
+                VerificationDeliveryOutbox.objects.select_for_update()
+                .filter(
+                    challenge__in=unfinished_challenges,
+                    state__in=(
+                        VerificationDeliveryOutbox.State.PENDING,
+                        VerificationDeliveryOutbox.State.LEASED,
+                    ),
+                )
+                .order_by("outbox_id")
+            )
+            revoked_session_count = 0
+            for credential in credentials:
+                if credential.state == RefreshTokenCredential.State.ACTIVE:
+                    credential.state = RefreshTokenCredential.State.REVOKED
+                    credential.version += 1
+                    credential.save(update_fields=("state", "version"))
+            for family in families:
+                if family.state == RefreshTokenFamily.State.ACTIVE:
+                    family.state = RefreshTokenFamily.State.REVOKED
+                    family.revoked_at = now
+                    family.revoke_reason = "PASSWORD_RESET"
+                    family.version += 1
+                    family.save(update_fields=("state", "revoked_at", "revoke_reason", "version"))
+            for session in sessions:
+                if session.state == AuthSession.State.ACTIVE:
+                    session.state = AuthSession.State.REVOKED
+                    session.revoked_at = now
+                    session.revoke_reason = "PASSWORD_RESET"
+                    session.version += 1
+                    session.save(update_fields=("state", "revoked_at", "revoke_reason", "version"))
+                    revoked_session_count += 1
+            for pending_challenge in unfinished_challenges:
+                pending_challenge.state = VerificationChallenge.State.SUPERSEDED
+                pending_challenge.superseded_at = now
+                pending_challenge.terminal_at = now
+                pending_challenge.version += 1
+                pending_challenge.save(
+                    update_fields=("state", "superseded_at", "terminal_at", "version")
+                )
+            for pending_outbox in unfinished_outboxes:
+                pending_outbox.state = VerificationDeliveryOutbox.State.DELIVERY_FAILED
+                pending_outbox.payload_ciphertext = None
+                pending_outbox.lease_owner = None
+                pending_outbox.lease_expires_at = None
+                pending_outbox.provider_category = "canceled_by_password_reset"
+                pending_outbox.terminal_at = now
+                pending_outbox.version += 1
+                pending_outbox.save(
+                    update_fields=(
+                        "state",
+                        "payload_ciphertext",
+                        "lease_owner",
+                        "lease_expires_at",
+                        "provider_category",
+                        "terminal_at",
+                        "version",
+                    )
+                )
+            user.set_password(new_password)
+            user.save(update_fields=("password",))
+            challenge.state = VerificationChallenge.State.CONSUMED
+            challenge.consumed_at = now
+            challenge.terminal_at = now
+            challenge.version += 1
+            challenge.save(update_fields=("state", "consumed_at", "terminal_at", "version"))
+            security_event = SecurityAuditEvent.objects.create(
+                event_type="auth.password_reset.succeeded",
+                user_id_snapshot=str(user.pk),
+                reason_code="PASSWORD_RESET",
+                metadata_json={"revoked_session_count": revoked_session_count},
+            )
+            SecurityNotificationOutbox.objects.create(
+                user=user,
+                contact_method=contact,
+                source_event=security_event,
+                template_key=SecurityNotificationOutbox.TemplateKey.PASSWORD_RESET_SUCCEEDED,
+                next_attempt_at=now,
+            )
+
+    if invalid_code:
+        raise VerificationCodeInvalid
+
+
+def reset_password_with_verification(
+    *,
+    channel: object,
+    destination: object,
+    code: object,
+    new_password: object,
+) -> None:
+    try:
+        _reset_password_with_verification(
+            channel=channel,
+            destination=destination,
+            code=code,
+            new_password=new_password,
+        )
+    except DatabaseError as error:
+        raise PasswordResetUnavailable from error
 
 
 def _access_claims(session: AuthSession, *, issued_at) -> dict[str, object]:
