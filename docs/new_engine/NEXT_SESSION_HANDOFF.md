@@ -1,4 +1,4 @@
-# 下一会话交接：E0 已关闭，E1 待独立启动
+# 下一会话交接：E1 / Slice 1 已关闭，下一步 Slice 2
 
 > 快照日期：2026-08-26。
 >
@@ -20,8 +20,8 @@ git log -8 --decorate --oneline
 期望结果：
 
 - 分支是 `main`，工作树为空，`HEAD` 与 `origin/main` 相同，ahead/behind 为 `0 0`。
-- 历史包含 `bb6deec`（Issue #7：V6 与现行文档一致性审计）以及 Issue #8 的 E0 交接归档检查点。
-- GitHub Issues #1–#8 均已关闭。使用仓库内可用的 `gh` CLI 复核 Issue #8 的关闭评论和对应提交；不要只凭本文缓存的状态开始修改。
+- 历史包含 `bb6deec`（Issue #7：V6 与现行文档一致性审计）、Issue #8 的 E0 交接归档检查点，以及 Issue #9 的 E1 / Slice 1 提交。
+- GitHub Issues #1–#9 均已关闭。使用仓库内可用的 `gh` CLI 复核 Issue #9 的关闭评论和对应提交；不要只凭本文缓存的状态开始修改。
 
 若工作树不干净，先辨认并保留已有修改；若 `HEAD` 与 `origin/main` 不一致，先确认差异来源。完成这两个检查以前，不创建 ticket、不改文档、不写代码。
 
@@ -33,6 +33,7 @@ git log -8 --decorate --oneline
 
 - 产品里程碑 M0 已 `complete`；追踪记录 `MILESTONE-001` 已 `verified`。
 - `ENGINE-001 / Engine Stage E0` 已 `verified`，E0 的两个切片均已关闭。
+- Engine Stage E1 / Slice 1 已 `verified`：注册、独立 login、refresh/logout、RecoveryCode 与 H5 single-flight 已完成，严格未实现 Character、ConnectionSession、Presence、PresenceSnapshot、恢复控角或 takeover。
 - E0 / Slice 2 已实现并验收：Registry 与 Blueprint 两类 exact dependency、冻结 seed artifact、受审计 bootstrap、active/pinned resolver、服务器启动生命周期、只读 readiness、并发收敛、事务回滚和失败审计。
 - 2026-08-26 已完成 V6、领域词汇、工程术语索引、冻结合同、计划和全部非历史项目文档的一致性审计。
 - E0 工作日志与旧交接入口已原样归档到 `archive/handoffs/2026-08-26-e0-closeout/`；只有回查历史过程时才读取，归档文本不再维护。
@@ -49,6 +50,7 @@ git log -8 --decorate --oneline
 | #6 | `4d2fe6b`、`c588c69` | `CONTEXT.md` 与工程术语索引分权及领域词项整理 |
 | #7 | `bb6deec` | V6 与全部非历史项目文档一致性审计 |
 | #8 | 以 Issue 关闭评论为准 | 归档 E0 交接材料并重建本入口 |
+| #9 | 以 Issue 关闭评论为准 | E1 / Slice 1 注册与独立登录闭环、分层证据和状态同步 |
 
 V6、冻结合同和机器制品的审计前置基线是 `d14ce67`。上表用于定位检查点，不代替 `git log`、Issue 关闭证据或现行状态账本。
 
@@ -61,7 +63,9 @@ V6、冻结合同和机器制品的审计前置基线是 `d14ce67`。上表用�
 | `ENGINE-001` / E0 | `verified` | Engine Stage E0 实现与验收已关闭 |
 | `CONTENT-001` | `implemented` | E0 内容启动闭环已实现；M1 完整后台发布服务未实现 |
 | `WORLD-001` | `specified` | 世界物化、移动、战斗和战利品 E2E 尚未实现 |
-| `AUTH-001`–`AUTH-003` | `specified` | E1 的注册、认证、角色与 Presence 租约合同已有定义，尚无实现验收 |
+| `AUTH-001`、`AUTH-002` | `verified` | Issue #9 已完成注册、独立登录、refresh/replay、logout 与 H5 Slice 1 验收 |
+| `AUTH-003` | `specified` | Character、ConnectionSession 与 Presence 租约尚未实现 |
+| `AUTH-004` | `implemented` | RecoveryCode 的哈希、轮换、合并限流和 User 全会话撤销已实现；PresenceRecovery、后台修复及 close/reopen 尚未实现 |
 | `MILESTONE-002` | `specified` | M1-A/M1-B 门禁已有定义，不能从 E0 推断完成 |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 浏览器、容量/soak 与发布级恢复证据未完成 |
 | `RELEASE-001` / `PublicV1Gate` | `blocked` | 尚不具备公开接纳真实玩家的发布证据 |
@@ -79,6 +83,16 @@ V6、冻结合同和机器制品的审计前置基线是 `d14ce67`。上表用�
 - `requirements_v5.md` 是不再维护的历史基线。现行工作以 V6 为产品权威，不向 V5 回写。
 
 ## 5. 最近一次可复核验证
+
+Issue #9 的 2026-08-26 E1 / Slice 1 验收证据：
+
+- `RUN_POSTGRES_TESTS=1` 全量 pytest：`134 passed`；仅有已记录的 Daphne / Python 3.16 asyncio policy 弃用警告。
+- Auth API 与迁移结构：`49 passed`；身份专项（含 PostgreSQL 合同）：`61 passed`；RecoveryCode 跨实例撤销、登录/账号生命周期并发、refresh terminal 保留与 family/credential 不可变触发器均由测试覆盖。
+- Ruff lint 通过、69 files formatted；mypy 69 source files 通过；Django check 0 issues；无 migration drift；identity `0003 -> 0002 -> 0003` 往返通过；`pip check` 通过。
+- `verify_m0.py`：57,053 checks，READY；Vue typecheck、Vitest 11 passed、H5 build 通过。
+- Playwright：10 passed、8 个按项目适用性跳过；三种主视口（1280×720、412×915 CSS / DPR 3、915×412 CSS / DPR 3）均完成注册/独立登录/refresh/logout/机器错误流程；桌面额外覆盖响应丢失重载复用 key、双标签 single-flight 和持久存储泄漏扫描。360×640 只作无横向溢出守卫。
+- npm audit critical 门禁通过；仍有 9 low、9 moderate、1 high，唯一 high 位于 uni-app 约束的 Vite 5 工具链，强制修复需跨到 Vite 8.2.2。
+- 当前环境没有可供 in-app Browser 使用的浏览器，未完成额外人工可见检查；不据此填充发布级 `tested_versions`。
 
 Issue #8 的 2026-08-26 交接重建证据：
 
@@ -105,23 +119,23 @@ Issue #7 的 2026-08-26 文档审计证据：
 
 ## 6. 仍未完成的事实
 
-- Engine Stage E1 尚未开始。`plans/m0-e1-tracer-bullets.md` 的三个 E1 切片共有 24 项验收条件，当前全部未勾选：Slice 1 为 8 项、Slice 2 为 9 项、Slice 3 为 7 项。
-- 浏览器 profile 已批准，但 `contracts/v1/profiles/browser-matrix.json` 中所有 `tested_versions` 都为空；PC/移动 H5 浏览器 E2E 未形成证据。
+- Engine Stage E1 / Slice 1 的 8 项已完成；Slice 2 的 9 项与 Slice 3 的 7 项仍全部未勾选。Character、ConnectionSession、Presence、PresenceSnapshot、enter/resume/PresenceRecovery 与 takeover 均未实现。
+- 浏览器 profile 已批准，Slice 1 已有 PC/现代移动自动 H5 E2E，但 `contracts/v1/profiles/browser-matrix.json` 中所有 `tested_versions` 仍为空，完整中文输入、无障碍和发布浏览器矩阵尚未形成证据。
 - capacity profile 已批准，但容量报告和两小时 soak 报告不存在。
 - `contracts/v1/reports/m0-recovery-latest.json` 只证明 M0 基础设施恢复，`release_gate_eligible=false`；accounts、characters、world_topology、content_batches、audit_chain 五个发布级业务范围均为 `not_implemented`。
 - 尚无合格的 `ReleaseManifest`、7 天封闭试运行、至少 5 名非管理员测试者、至少 20 次核心循环及完整公开资料证据。
 - 完整内容后台发布服务、固定小巷世界物化和玩法 E2E 仍属于后续 M1 工作，不能从 E0 seed/startup 推断完成。
 
-## 7. E1 的唯一合法启动顺序
+## 7. E1 / Slice 2 的唯一合法启动顺序
 
-本交接检查点不启动 E1，也不创建 E1 工作日志。下一会话只有在用户明确要求继续开发时才执行以下顺序：
+本交接检查点不启动 Slice 2，也不创建其工作日志。下一会话只有在用户明确要求继续开发时才执行以下顺序：
 
 1. 完成第 1 节仓库和 Issue 检查，确认不需要恢复未提交工作。
-2. 阅读 `plans/m0-e1-tracer-bullets.md` 的 E1 / Slice 1，以及 `docs/new_engine/08_PERMISSIONS_ADMIN_API.md`、`11_PROTOCOL_CATALOG.md`、`13_SESSION_AUTH_STATE_MACHINE.md`、`15_FRONTEND_H5_CONTRACT.md`、`16_OPERATIONS_TESTING_CONTRACT.md` 的注册、认证、Cookie、refresh、logout、浏览器和测试边界。
+2. 阅读 `plans/m0-e1-tracer-bullets.md` 的 E1 / Slice 2，以及 `docs/new_engine/04_WORLD_MODEL.md`、`08_PERMISSIONS_ADMIN_API.md`、`11_PROTOCOL_CATALOG.md`、`12_REGISTRY_BLUEPRINT_CONTRACT.md`、`13_SESSION_AUTH_STATE_MACHINE.md`、`15_FRONTEND_H5_CONTRACT.md`、`16_OPERATIONS_TESTING_CONTRACT.md` 的 Character、连接、进入、resume 与 PresenceRecovery 边界。
 3. 同时读取 `CONTEXT.md`、`requirements_v6.md` 第八章、`17_REQUIREMENTS_TRACEABILITY.md` 与 `18_IMPLEMENTATION_STATUS.md`，确认术语和状态没有被后来提交改变。
-4. 用 `gh issue list` 搜索是否已有 E1 / Slice 1 ticket；没有时创建一个只覆盖“注册与独立登录闭环”的独立 Issue，并在写代码前认领。
-5. 在该 ticket 内 test-first 实现 Slice 1；验收范围是计划中的 8 项，不提前混入 Slice 2 的 Character/Presence 或 Slice 3 的 takeover。
-6. 只有 ticket 的测试、分层门禁、双轴审查、状态同步和提交证据齐备后才关闭 Slice 1。届时再建立新的阶段工作日志或更新本交接入口。
+4. 用 `gh issue list` 搜索是否已有 E1 / Slice 2 ticket；没有时创建一个只覆盖“创建角色、连接、进入与恢复闭环”的独立 Issue，并在写代码前认领。
+5. 在该 ticket 内 test-first 实现 Slice 2；验收范围是计划中的 9 项，不提前混入 Slice 3 的显式 takeover。
+6. 只有 ticket 的测试、分层门禁、双轴审查、状态同步和提交证据齐备后才关闭 Slice 2。届时再更新本交接入口。
 
 ## 8. 权威来源与读取条件
 

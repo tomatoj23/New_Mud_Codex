@@ -66,6 +66,8 @@
 
 ## Engine Stage E1 / Slice 1: 注册与独立登录闭环
 
+**Status**: `completed`（2026-08-26；Issue #9）
+
 **User stories**: 作为新玩家，我可以在 H5 注册账号，再独立登录、刷新会话并退出；注册成功不会让我处于已登录状态。覆盖 `AUTH-001`、`AUTH-002`、`CLIENT-001`、`MILESTONE-002`。
 
 ### What to build
@@ -74,14 +76,14 @@
 
 ### Acceptance criteria
 
-- [ ] 注册校验用户名和密码，原子创建 User/GameAccount，且不创建 AuthSession、token 或隐式登录状态。
-- [ ] 注册事务一次性签发明文 `RecoveryCode`，服务端只保存不可逆哈希；恢复或主动轮换时生成新 code，并撤销旧 AuthSession、RefreshTokenFamily 与未使用票据、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence。
-- [ ] login 为账号创建符合唯一性约束的 AuthSession 与 RefreshTokenFamily，并返回短期 access token。
-- [ ] Refresh Token 只存在于受保护 Cookie，不进入 WebSocket payload、响应 JSON、本地持久存储或 Authorization header。
-- [ ] refresh 每次轮换 credential generation，旧凭据重放按冻结状态机终结相关 family/session。
-- [ ] logout 在 access token 存在、仅 Cookie 存在、凭据已终结及重复请求情况下均幂等收敛。
-- [ ] H5 在 PC 和移动视口完成注册、独立登录、刷新与退出，并展示机器错误码对应的明确失败状态。
-- [ ] 数据库约束、API 集成、安全属性和浏览器端到端测试全部通过。
+- [x] 注册校验用户名和密码，原子创建 User/GameAccount，且不创建 AuthSession、token 或隐式登录状态。
+- [x] 注册事务一次性签发明文 `RecoveryCode`，服务端只保存不可逆哈希；恢复或主动轮换时生成新 code，并撤销旧 AuthSession、RefreshTokenFamily 与未使用票据、终止 active/grace PresenceSnapshot 租约、关闭对应运行时 Presence。
+- [x] login 为账号创建符合唯一性约束的 AuthSession 与 RefreshTokenFamily，并返回短期 access token。
+- [x] Refresh Token 只存在于受保护 Cookie，不进入 WebSocket payload、响应 JSON、本地持久存储或 Authorization header。
+- [x] refresh 每次轮换 credential generation，旧凭据重放按冻结状态机终结相关 family/session。
+- [x] logout 在 access token 存在、仅 Cookie 存在、凭据已终结及重复请求情况下均幂等收敛。
+- [x] H5 在 PC 和移动视口完成注册、独立登录、刷新与退出，并展示机器错误码对应的明确失败状态。
+- [x] 数据库约束、API 集成、安全属性和浏览器端到端测试全部通过。
 
 ---
 

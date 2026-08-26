@@ -1,0 +1,313 @@
+:root {
+  font-family: "Noto Serif SC", "Songti SC", "Microsoft YaHei", serif;
+  color: #efe8d7;
+  background: #171d1b;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app,
+uni-app,
+uni-page,
+uni-page-wrapper,
+uni-page-body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(133, 62, 42, 0.26), transparent 38%),
+    linear-gradient(135deg, #101513 0%, #1d2823 52%, #101513 100%);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  min-height: 44px;
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #e1b761;
+  outline-offset: 3px;
+}
+
+.auth-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  width: min(1180px, calc(100% - 64px));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 64px 0;
+  align-items: center;
+  gap: clamp(36px, 7vw, 100px);
+}
+
+.brand-panel {
+  position: relative;
+  padding: 48px 0 48px 32px;
+}
+
+.brand-panel::before {
+  position: absolute;
+  inset: 12px auto 12px 0;
+  width: 1px;
+  background: linear-gradient(transparent, #a64d36, transparent);
+  content: "";
+}
+
+.eyebrow,
+.section-kicker,
+.recovery-label {
+  margin: 0 0 16px;
+  color: #d9a95c;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.brand-panel h1 {
+  max-width: 10ch;
+  margin: 0;
+  font-size: clamp(3rem, 6vw, 5.8rem);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.brand-copy {
+  max-width: 38rem;
+  margin: 32px 0;
+  color: #c9c2b3;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 1rem;
+  line-height: 1.9;
+}
+
+.security-notes {
+  display: grid;
+  gap: 12px;
+  margin: 42px 0 0;
+  font-family: "Microsoft YaHei", sans-serif;
+}
+
+.security-notes div {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+}
+
+.security-notes dt {
+  color: #a64d36;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.security-notes dd {
+  margin: 0;
+  color: #e6decd;
+}
+
+.auth-card {
+  width: 100%;
+  padding: clamp(28px, 4vw, 48px);
+  border: 1px solid rgba(225, 183, 97, 0.28);
+  border-radius: 2px;
+  background: rgba(25, 31, 29, 0.92);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+}
+
+.mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid #39443f;
+  background: #121715;
+}
+
+.mode-tabs button {
+  border: 0;
+  color: #aaa79d;
+  background: transparent;
+}
+
+.mode-tabs button.active {
+  color: #171d1b;
+  background: #dfbd74;
+}
+
+.card-heading {
+  margin: 36px 0 28px;
+}
+
+.card-heading h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 500;
+}
+
+form {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  margin-top: 8px;
+  color: #d9d3c6;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.9rem;
+}
+
+input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid #4a5751;
+  border-radius: 0;
+  color: #fffaf0;
+  background: #111715;
+}
+
+input::placeholder {
+  color: #747d78;
+}
+
+.primary-action {
+  min-height: 52px;
+  margin-top: 20px;
+  border: 1px solid #e1b761;
+  color: #171d1b;
+  background: #e1b761;
+  font-weight: 700;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.recovery-card,
+.error-message,
+.session-panel {
+  margin-top: 24px;
+  padding: 20px;
+  border-left: 3px solid #d9a95c;
+  background: #101613;
+}
+
+.recovery-card code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #fff1c7;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 1rem;
+  line-height: 1.6;
+  user-select: all;
+}
+
+.recovery-card p:last-child,
+.session-panel p,
+.announcement {
+  color: #aaa99f;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.session-state {
+  color: #e1b761 !important;
+  font-size: 1rem !important;
+  font-weight: 700;
+}
+
+.session-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.session-actions button {
+  border: 1px solid #68776f;
+  color: #eee7d9;
+  background: transparent;
+}
+
+.error-message {
+  border-color: #df6049;
+  color: #ffd7cf;
+  font-family: "Microsoft YaHei", sans-serif;
+  line-height: 1.7;
+}
+
+.machine-code {
+  display: block;
+  margin-top: 8px;
+  color: #ca8d82;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.74rem;
+}
+
+.announcement {
+  min-height: 1.5em;
+  margin: 18px 0 0;
+}
+
+@media (max-width: 780px) {
+  .auth-shell {
+    display: block;
+    width: min(100% - 32px, 560px);
+    padding: 28px 0 48px;
+  }
+
+  .brand-panel {
+    padding: 28px 12px 40px 24px;
+  }
+
+  .brand-panel h1 {
+    max-width: 12ch;
+    font-size: clamp(2.7rem, 14vw, 4.3rem);
+  }
+
+  .security-notes {
+    display: none;
+  }
+
+  .auth-card {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 380px) {
+  .auth-shell {
+    width: calc(100% - 20px);
+  }
+
+  .brand-panel {
+    padding-left: 18px;
+  }
+
+  .auth-card {
+    padding: 20px 16px;
+  }
+
+  .session-actions {
+    grid-template-columns: 1fr;
+  }
+}

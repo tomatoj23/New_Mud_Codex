@@ -35,9 +35,17 @@ jobs:
       POSTGRES_PASSWORD: new_mud
       POSTGRES_CONNECT_TIMEOUT: 5
       RUN_POSTGRES_TESTS: 1
+      PLAYWRIGHT_PYTHON: python
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v6
         with:
@@ -47,6 +55,12 @@ jobs:
             pyproject.toml
             requirements.lock
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
       - name: Install dependencies
         run: |
           python -m pip install --disable-pip-version-check --upgrade \
@@ -55,6 +69,10 @@ jobs:
           python -m pip install --disable-pip-version-check --no-deps \
             --no-build-isolation -e ".[dev]"
           python -m pip check
+
+      - name: Install frontend dependencies
+        working-directory: client
+        run: npm ci
 
       - name: Static checks
         run: |
@@ -72,6 +90,24 @@ jobs:
           python manage.py migrate --noinput
           python manage.py migrate content zero --noinput
           python manage.py migrate content 0001 --noinput
+          python manage.py migrate identity 0002 --noinput
+          python manage.py migrate --noinput
 
       - name: Tests
         run: pytest
+
+      - name: Frontend checks
+        working-directory: client
+        run: |
+          npm audit --audit-level=critical --registry=https://registry.npmjs.org
+          npm run typecheck
+          npm test
+          npm run build:h5
+
+      - name: Install browser for H5 end-to-end tests
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+
+      - name: H5 end-to-end tests
+        working-directory: client
+        run: npm run test:e2e

@@ -22,10 +22,12 @@ INSTALLED_APPS = [
     "channels",
     "new_mud.apps.health",
     "new_mud.apps.content",
+    "new_mud.apps.identity",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "new_mud.apps.identity.middleware.AuthNoStoreMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -80,9 +82,48 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CONTENT_INSTANCE_ID = os.getenv("NEW_MUD_INSTANCE_ID", "default")
 CONTENT_STARTUP_ENABLED = True
 
+AUTH_ALLOWED_ORIGINS = [
+    value.strip()
+    for value in os.getenv(
+        "NEW_MUD_AUTH_ALLOWED_ORIGINS",
+        "https://localhost,https://127.0.0.1",
+    ).split(",")
+    if value.strip()
+]
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+AUTH_ACCESS_TOKEN_TTL_SECONDS = int(os.getenv("NEW_MUD_ACCESS_TOKEN_TTL_SECONDS", "900"))
+AUTH_REFRESH_TOKEN_TTL_SECONDS = int(
+    os.getenv("NEW_MUD_REFRESH_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60))
+)
+AUTH_TERMINAL_SECRET_CLEANUP_GRACE_SECONDS = int(
+    os.getenv("NEW_MUD_TERMINAL_SECRET_CLEANUP_GRACE_SECONDS", str(24 * 60 * 60))
+)
+AUTH_REFRESH_REQUEST_RETRY_WINDOW_SECONDS = int(
+    os.getenv("NEW_MUD_REFRESH_REQUEST_RETRY_WINDOW_SECONDS", str(24 * 60 * 60))
+)
+AUTH_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("NEW_MUD_AUTH_RATE_LIMIT_WINDOW_SECONDS", "900"))
+AUTH_REGISTRATION_RATE_LIMIT_ACCOUNT = int(
+    os.getenv("NEW_MUD_REGISTRATION_RATE_LIMIT_ACCOUNT", "5")
+)
+AUTH_REGISTRATION_RATE_LIMIT_IP = int(os.getenv("NEW_MUD_REGISTRATION_RATE_LIMIT_IP", "50"))
+AUTH_LOGIN_RATE_LIMIT_ACCOUNT = int(os.getenv("NEW_MUD_LOGIN_RATE_LIMIT_ACCOUNT", "10"))
+AUTH_LOGIN_RATE_LIMIT_IP = int(os.getenv("NEW_MUD_LOGIN_RATE_LIMIT_IP", "100"))
+AUTH_RECOVERY_RATE_LIMIT_ACCOUNT = int(os.getenv("NEW_MUD_RECOVERY_RATE_LIMIT_ACCOUNT", "5"))
+AUTH_RECOVERY_RATE_LIMIT_IP = int(os.getenv("NEW_MUD_RECOVERY_RATE_LIMIT_IP", "100"))
+AUTH_RECOVERY_RATE_LIMIT_DEVICE = int(os.getenv("NEW_MUD_RECOVERY_RATE_LIMIT_DEVICE", "20"))
+AUTH_RECOVERY_DEVICE_MAX_AGE_SECONDS = int(
+    os.getenv("NEW_MUD_RECOVERY_DEVICE_MAX_AGE_SECONDS", str(365 * 24 * 60 * 60))
+)
+
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "EXCEPTION_HANDLER": "new_mud.apps.identity.exceptions.api_exception_handler",
 }
 
 LOGGING = {

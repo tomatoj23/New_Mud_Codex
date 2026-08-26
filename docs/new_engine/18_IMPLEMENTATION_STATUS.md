@@ -19,6 +19,7 @@
 | V6 前置基线 | Git `d14ce67` | V6 权威、V5 历史边界、CONTEXT/ADR、冻结合同、机器制品与审计记录在同一检查点同步 |
 | 现行文档一致性复核 | GitHub Issue #7 检查点（2026-08-26） | 已复核领域词汇、工程索引、V6、ADR、冻结合同、计划与现行项目文档；归档、V5 和上游文档不在修改范围 |
 | E0 / Slice 2 验收基线 | GitHub Issue #5 检查点（2026-08-25） | Issues #1–#4 的实现已在 V6 基线上完成真库、服务集成、启动 E2E、全量和静态门禁，`ENGINE-001` 与 `MILESTONE-001` 可验证关闭 |
+| E1 / Slice 1 验收基线 | GitHub Issue #9 检查点（2026-08-26） | 注册、独立登录、refresh/logout、RecoveryCode、认证限流、H5 single-flight 与现代移动/桌面自动 E2E 已通过；未实现 Character、Presence、恢复控角或 takeover |
 | M0 工程基线 | Git `7bd76a3` | Django/ASGI 骨架、PostgreSQL 初始迁移、机器合同、来源制品、CI 与自动校验已建立 |
 | M0 profile 基线 | Git `97659ce` | browser、capacity、recovery profile 已批准，M0 基础设施恢复报告已绑定 |
 | 实施计划基线 | Git `b4798fb` | 已验证环境与 Engine Stage E0/E1 五切片计划已建立；当前计划已改用命名空间化 Slice |
@@ -97,6 +98,10 @@
 | M0 / Markdown（2026-08-25） | 56,981 项 M0 检查、0 个 profile blocker；76 项 Markdown 检查、0 errors |
 | M0 / Markdown（2026-08-26） | 57,055 项 M0 检查、0 个 profile blocker；56 份现行 Markdown 共 135 项单 H1、标题层级和本地链接检查，0 errors |
 | 默认全量与合同回归（2026-08-26） | 默认全量 57 passed、16 个 PostgreSQL 项因未设置 `RUN_POSTGRES_TESTS=1` 跳过；`tests/test_contracts.py` 3 passed；仅有已记录的 Daphne / Python 3.16 asyncio policy 弃用警告 |
+| E1 / Slice 1 后端（2026-08-26） | `RUN_POSTGRES_TESTS=1` 全量 134 passed；Auth API 与迁移结构 49 passed；身份专项（含 PostgreSQL 合同）61 passed；RecoveryCode 跨实例撤销、登录/账号生命周期并发、refresh terminal 保留和身份字段不可变触发器均由真库覆盖 |
+| E1 / Slice 1 前端（2026-08-26） | Vue typecheck 通过；Vitest 11 passed；H5 build 通过；Playwright 10 passed、8 个按项目适用性跳过（含 360×640 最低宽度守卫，以及桌面单次持久 refresh/双标签/泄漏扫描） |
+| E1 / Slice 1 静态与迁移（2026-08-26） | Ruff lint 通过、69 files formatted；mypy 69 source files 通过；Django 0 issues；无 migration drift；identity `0003 -> 0002 -> 0003` 往返通过；`pip check` 通过 |
+| E1 / Slice 1 安全与合同（2026-08-26） | `verify_m0.py` 57,053 checks、READY；npm critical audit 通过（0 critical），仍有上游 uni-app/Vite 兼容链的 19 项非 critical 风险：9 low、9 moderate、1 high |
 
 pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两条弃用警告。当前运行时为 Python 3.14.2，且检查当日没有可升级的 Daphne 版本，因此该警告记录为上游兼容性观察项，不构成当前失败。
 
@@ -108,6 +113,16 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 - 恢复报告 `m0-recovery-20260719-145739z` 的文件 SHA-256 为 `50335d0cc36d507bcbc5a674f8a0ed6d5b1360dc5d1a4fc2a6a43c5899a3aac9`。临时 dump 与隔离数据库均已删除，报告不含数据库凭据；该值与 `contracts/v1/profiles/recovery-budget.json` 及报告文件一致。
 - 账号、角色、世界拓扑、非空内容批次和审计链尚未形成发布样本，因此报告固定为 `release_gate_eligible=false`；它只证明 M0 恢复工具链，不把 `NFR-002` 提前标记为通过。
 - CI 已从仅结构检查切换到完整 M0 合同门禁，报告路径、报告 ID、文件哈希、指标、范围集合和内部通过条件均自动复核。
+
+### 3.8 Engine Stage E1 / Slice 1 注册与独立登录
+
+- Issue #9 已实现 `POST /api/v1/auth/register`、`login`、`refresh`、`logout`、`recover` 与 `recovery-code/rotate`。注册原子创建 User、当前实例 GameAccount 与一次性可见 RecoveryCode 哈希，不创建 AuthSession、Character、PresenceSnapshot 或隐式登录状态。
+- login 在 GameAccount 行锁后重读密码与账号状态，创建 lifetime 唯一 AuthSession/RefreshTokenFamily；refresh 使用持久 terminal 区分同 key 重试、冲突、superseded 与攻击 replay，并用 PostgreSQL 触发器保护 family/credential 身份不可变和 terminal 保留下限。
+- RecoveryCode 恢复和轮换按 GameAccount、code、AuthSession、family/credential 固定锁序处理，撤销该 User 跨实例的全部旧认证状态；账号/IP/服务端 opaque 设备 Cookie 合并限流不影响正常密码登录。未来 Presence/ticket 撤销只保留统一收敛缝，本切片没有创建对应模型。
+- H5 access token 只存 Pinia 内存；refresh Cookie 为 Secure、HttpOnly、SameSite=Strict、host-only。IndexedDB 只保存 pending refresh 控制记录，写事务完成后才发送请求；成功时先接受 access token，再清 pending 并用 BroadcastChannel 通知其他标签页。
+- 自动浏览器验收以 1280×720 桌面、412×915 CSS / DPR 3 现代移动竖屏、915×412 CSS / DPR 3 超长比例横屏为主；三个主视口均通过注册、独立登录、refresh、logout 和机器错误显示。桌面额外通过提交后响应丢失重载复用 key、双标签 single-flight 与持久存储泄漏扫描。360×640 仅保留无横向溢出最低守卫，不作为主流程设计目标。
+- 当前环境没有可供 in-app Browser 使用的浏览器，因此未完成额外人工可见检查；该限制不改写已通过的 Playwright 自动证据，也不填充发布级 `tested_versions`。
+- npm audit 的 critical 门禁通过。剩余唯一 high 来自 uni-app 当前 Vue 3 tag 约束的 Vite 5 工具链；升级到 Vite 8.2.2 会越过上游兼容合同，因此记录风险而不在 Slice 1 强制跨大版本。
 
 ## 4. 当前状态
 
@@ -121,13 +136,17 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 | 非功能 M0 profile 基线 | `verified` | browser、capacity、recovery 三份 profile 已批准，恢复报告路径/ID/哈希与指标已纳入自动校验 |
 | 产品里程碑 M0 | `complete` | V6 15.0-15.1 的机器合同、profile 批准与 Issue #5 clean-baseline checklist 已全部满足；对应追踪记录 `MILESTONE-001=verified` |
 | `ENGINE-001` / Engine Stage E0 | `verified` | Issues #1–#4 完成实现；Issue #5 在 V6 基线上完成 PostgreSQL、服务集成、启动 E2E、全量和静态验收 |
+| `AUTH-001` | `verified` | Issue #9 已完成限流注册、User/GameAccount/RecoveryCode 原子事务、独立登录和 H5 端到端证据 |
+| `AUTH-002` | `verified` | Issue #9 已完成 AuthSession/family、refresh generation/terminal/replay、幂等 logout 与前端 single-flight 证据 |
+| `AUTH-004` | `implemented` | RecoveryCode 哈希、替换、User 全会话撤销与合并限流已实现；PresenceRecovery、后台修复、close/reopen 尚未实现 |
+| Engine Stage E1 / Slice 1 | `verified` | 8 项切片验收全部通过；范围止于注册与独立登录，不包含 Character、ConnectionSession、Presence、恢复控角或 takeover |
 | `RELEASE-001` / PublicV1Gate | `blocked` | V6 gate 已定义，尚无公开试运行、完整恢复、ReleaseManifest 或公开资料证据；不影响 M1/E0 的内部状态 |
 
-M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issues #1–#4 固定实现，Issue #5 固定分层证据、状态同步和提交检查点；E0 已关闭，后续实现可从 E1 的独立 ticket 开始。
+M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issue #9 固定 E1 / Slice 1 的注册与独立登录证据；M1 与 `MILESTONE-002` 仍未完成，下一实现入口是独立的 E1 / Slice 2 ticket。
 
 浏览器完整矩阵、容量/soak 报告与五个业务恢复范围仍是 `RELEASE-001` 的发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批或 M1 内部抽样而提前转为 `verified`。
 
-经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。其中两个 E0 切片均已完成并保留为可回查记录；下一步从三个 E1 切片的注册登录、连接恢复和跨设备接管闭环开始。
+经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。两个 E0 切片与 E1 / Slice 1 已完成并保留为可回查记录；下一步从 E1 / Slice 2 的角色、连接、进入与恢复闭环开始，Slice 3 takeover 仍须独立实施。
 
 ## 5. 证据映射
 
@@ -136,8 +155,10 @@ M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `c
 | `MILESTONE-001` | `contracts/v1/`、`scripts/verify_m0.py`、`.github/workflows/m0.yml`、本文件第 3.6 节与 Issue #5 clean-baseline checklist |
 | `ENGINE-001` | Issues #1–#4 的提交、V6 基线 `d14ce67`、`archive/handoffs/2026-08-26-e0-closeout/PHASE2_CONTENT_STARTUP_WORKLOG.md` 第 8 节与 Issue #5 分层验收 |
 | `CONTENT-001` | `src/new_mud/apps/content/models.py`、`migrations/0001_initial.py`–`0002_contentstartupfailure.py`、seed/registry/startup/resolver 实现与 PostgreSQL 合同测试 |
+| `AUTH-001`、`AUTH-002` | Issue #9、`src/new_mud/apps/identity/`、`tests/test_auth_api.py`、`tests/test_postgres_identity_contract.py`、`client/` 与 CI 分层门禁 |
+| `AUTH-004` | Issue #9 的 RecoveryCode/合并限流/User 全会话撤销证据；PresenceRecovery、后台最小修复和账号 close/reopen 仍缺 |
 | `CONVERT-001` | `contracts/v1/artifacts/`、`scripts/generate_source_contracts.py`、`tests/test_contracts.py` |
-| `CLIENT-001` | `browser-matrix.json` 已批准且冻结目标版本；实际 `tested_versions` 与浏览器 E2E 尚缺 |
+| `CLIENT-001` | `browser-matrix.json` 已批准且冻结目标版本；Issue #9 已有 Slice 1 的桌面/现代移动自动 E2E，但实际 `tested_versions` 与完整发布矩阵尚缺 |
 | `NFR-001` | `capacity-profile.json` 已批准；容量报告与两小时 soak 尚缺 |
 | `NFR-002` | `recovery-budget.json`、`m0-recovery-latest.json` 与 `run_recovery_drill.py`；发布级五范围恢复证据尚缺 |
 

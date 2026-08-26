@@ -41,5 +41,9 @@ evennia-main/
 
 # Test and build outputs
 artifacts/reports/
+artifacts/npm-cache/
 dist/
 build/
+node_modules/
+test-results/
+playwright-report/

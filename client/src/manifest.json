@@ -1,0 +1,12 @@
+{
+  "name": "New_Mud H5",
+  "appid": "__NEW_MUD_H5__",
+  "description": "New_Mud 玩家认证入口",
+  "versionName": "0.1.0",
+  "versionCode": "1",
+  "transformPx": false,
+  "h5": {
+    "title": "New_Mud · 玩家入口",
+    "router": { "mode": "hash" }
+  }
+}
