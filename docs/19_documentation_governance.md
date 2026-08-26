@@ -197,7 +197,7 @@
 
 ## 8. V6 变更记录
 
-V6 冻结了以下产品结果并要求受影响合同同步：M1 与 PublicV1Gate 分层；一个 User 对应一个 GameAccount；RecoveryCode 与 CharacterCreationProfile；VillageTopologyEnvelope / VillageInteractionEnvelope 与显式 UnavailableInteraction；Sparring / SafeDefeat；LootClaim / ItemRetirement；Public V1 的社区治理、运营状态、ReleaseManifest、维护与恢复门禁。难逆的边界决策见 `docs/adr/0001-public-v1-gate.md`、`docs/adr/0002-user-game-account-cardinality.md`、`docs/adr/0003-v6-authority-and-milestone-namespaces.md` 与 `docs/adr/0004-recovery-code-and-presence-recovery-boundaries.md`，其余差异汇总见 `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md`。
+V6 冻结了以下产品结果并要求受影响合同同步：M1 与 PublicV1Gate 分层；一个 User 对应一个 GameAccount；VerifiedContactMethod 与 VerificationChallenge 取代 RecoveryCode；CharacterCreationProfile；VillageTopologyEnvelope / VillageInteractionEnvelope 与显式 UnavailableInteraction；Sparring / SafeDefeat；LootClaim / ItemRetirement；Public V1 的社区治理、运营状态、ReleaseManifest、维护与恢复门禁。难逆的现行边界决策见 `docs/adr/0001-public-v1-gate.md`、`docs/adr/0002-user-game-account-cardinality.md`、`docs/adr/0003-v6-authority-and-milestone-namespaces.md` 与 ADR-0005 至 ADR-0008。ADR-0004 已由 ADR-0005 取代其中的 RecoveryCode 决策；其 PresenceRecovery 与显式 takeover 分离的边界继续成立。其余差异汇总见 `docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md`。
 
 M0 产品状态、`MILESTONE-001` 追踪状态与 `ENGINE-001 / Engine Stage E0` readiness 必须分别追踪。本治理文件不保存易陈旧的当前值；当前状态只由 `17_REQUIREMENTS_TRACEABILITY.md` 与 `18_IMPLEMENTATION_STATUS.md` 维护，并不得重新合并。
 

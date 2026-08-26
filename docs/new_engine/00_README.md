@@ -23,7 +23,7 @@
 - 单实例、单 MUDLib、启动期绑定，不支持运行时切换 MUDLib。
 - 客户端主通道是 `WebSocket`；REST 负责注册、登录、Refresh Token 轮换、角色管理与后台操作。
 - 首发面向 `PC 浏览器 + 移动端浏览器`，预留微信小程序，不以传统 telnet-first 为目标。
-- 首发认证固定为用户名密码注册与独立登录、短期 JWT Access Token 与每次刷新后轮换的 Refresh Token。
+- 首发认证固定为已验证邮箱注册、普通账号名/密码登录、短期 JWT Access Token 与每次刷新后轮换的 Refresh Token；注册成功不隐式登录。
 - Refresh Token 仅可作为 REST refresh 的轮换凭据，或作为 REST logout 的受保护 Cookie locator；不得进入 WebSocket payload 或 Authorization header。
 - 首发每个 `GameAccount` 最多拥有一个 `Character`，同时保留可扩展的 `CharacterOwnership`。
 - 同一 `GameAccount` 跨会话与设备最多有一个 `active` 或 `grace_disconnected` PresenceSnapshot 租约；运行时 Presence 只表示当前连接上的控角上下文。普通 enter 拒绝占用，只有显式且获授权的 takeover 才能原子替换租约与 ticket，并在提交后通知旧端。

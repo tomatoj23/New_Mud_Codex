@@ -15,7 +15,7 @@
 
 以下概念的规范定义只存在于 `CONTEXT.md`，本文件不建立第二份定义：
 
-- 身份与控制：**User**、**AuthIdentity**、**GameAccount**、**PlatformRole**、**Character**、**CharacterOwnership**、**ConnectionSession**、**AuthSession**、**Presence**、**PresenceSnapshot**、**GameAccountLifecycle**、**RecoveryCode**、**CharacterCreationProfile**、**CharacterDisplayName**、**RetiredCharacter**、**PresenceRecovery**。
+- 身份与控制：**User**、**AuthIdentity**、**GameAccount**、**PlatformRole**、**Character**、**CharacterOwnership**、**ConnectionSession**、**AuthSession**、**Presence**、**PresenceSnapshot**、**GameAccountLifecycle**、**VerifiedContactMethod**、**VerificationChallenge**、**RecoveryCode**（已退役历史术语）、**CharacterCreationProfile**、**CharacterDisplayName**、**RetiredCharacter**、**PresenceRecovery**。
 - 世界与内容：**Entity**、**Actor**、**NPC**、**Room**、**Exit**、**Region**、**Item**、**Blueprint**、**BlueprintRevision**、**ContentReleaseBatch**、**MUDLib**。
 - 玩法与生命周期：**Sparring**、**SafeDefeat**、**GoldenSkillChain**、**VillageTopologyEnvelope**、**VillageInteractionEnvelope**、**UnavailableInteraction**、**LootClaim**、**ItemRetirement**、**EffectTypeDefinition**、**ConditionDefinition**、**EffectInstance**。
 - 通信与治理：**PlayerBlock**、**ChannelMute**、**ModerationCase**、**ChatChannel**、**DirectMessage**、**SystemNotice**。

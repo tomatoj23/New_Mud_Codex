@@ -69,7 +69,7 @@ Evennia 会用 `AccountSessionHandler` 管理账号关联的连接，用 `Charac
 - `AccountDB = User + TypedObject` 把认证域和游戏对象域耦合得过紧。
 - 在线状态分散在 `AccountDB.db_is_connected`、`ObjectDB.db_account/db_sessid` 与 `ServerSession.account/puppet`，跨持久模型和运行时对象耦合，不利于移动端、多端与断线重连建模。
 - Bot 走账号子类会污染主账号模型。
-- 对手机号、微信这类多身份源登录来说，认证体系缺少显式边界。
+- 对微信等外部登录身份，以及邮箱、手机号等已验证联系方式来说，认证体系缺少显式边界。
 
 ## 4. 对 New_Mud 的设计去向
 
@@ -78,7 +78,8 @@ Evennia 会用 `AccountSessionHandler` 管理账号关联的连接，用 `Charac
 从分析层看，账号域更合理的拆分方向是：
 
 - `User`：认证主体
-- `AuthIdentity`：手机号、微信等外部身份
+- `AuthIdentity`：微信等经独立规格批准的外部登录身份
+- `VerifiedContactMethod`：邮箱、手机号等已验证的注册与恢复渠道，不是登录身份
 - `GameAccount`：游戏域账号资料、玩家侧关系与权益
 - `CharacterOwnership`：账号与角色拥有关系
 

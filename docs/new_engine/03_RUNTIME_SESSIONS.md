@@ -66,8 +66,9 @@ PresenceSnapshot 在 Presence 活跃期间保存最小恢复检查点；断线�
 首发连接顺序固定为：
 
 ```text
-REST 用户名密码注册（首次使用）
-  -> 创建 User 与 GameAccount，不创建认证会话
+REST 已验证邮箱注册（首次使用）
+  -> 先消费 registration VerificationChallenge
+  -> 原子创建 User、GameAccount 与 VerifiedContactMethod，不创建认证会话
 REST 账号密码登录
   -> 创建 active 持久 AuthSession
   -> 签发 access token 与轮换 refresh token

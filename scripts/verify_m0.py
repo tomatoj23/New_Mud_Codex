@@ -177,6 +177,21 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "**VerificationChallenge**",
         "A retired player-held proof",
     },
+    "UBIQUITOUS_LANGUAGE.md": {
+        "**RecoveryCode**（已退役历史术语）",
+        "**VerifiedContactMethod**",
+        "**VerificationChallenge**",
+    },
+    "docs/03_account_system.md": {
+        "`VerifiedContactMethod`",
+        "不是登录身份",
+    },
+    "docs/19_documentation_governance.md": {
+        "ADR-0004 已由 ADR-0005",
+        "ADR-0008",
+        "VerifiedContactMethod",
+        "VerificationChallenge",
+    },
     "docs/adr/0004-recovery-code-and-presence-recovery-boundaries.md": {
         "Status: superseded by ADR-0005",
     },
@@ -191,6 +206,15 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
     },
     "docs/adr/0008-access-tokens-require-active-auth-session.md": {
         "`active` 的 AuthSession",
+    },
+    "docs/new_engine/00_README.md": {
+        "已验证邮箱注册",
+        "普通账号名/密码登录",
+    },
+    "docs/new_engine/03_RUNTIME_SESSIONS.md": {
+        "REST 已验证邮箱注册",
+        "VerifiedContactMethod",
+        "VerificationChallenge",
     },
     "docs/new_engine/08_PERMISSIONS_ADMIN_API.md": {
         "/api/v1/auth/registration-verification/request",
@@ -250,7 +274,13 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
 }
 
 OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS = {
+    "requirements_v6.md": {"- 用户名密码注册"},
+    "docs/03_account_system.md": {"`AuthIdentity`：手机号、微信等外部身份"},
+    "docs/19_documentation_governance.md": {"；RecoveryCode 与 CharacterCreationProfile；"},
+    "docs/new_engine/00_README.md": {"首发认证固定为用户名密码注册与独立登录"},
+    "docs/new_engine/03_RUNTIME_SESSIONS.md": {"REST 用户名密码注册（首次使用）"},
     "docs/new_engine/08_PERMISSIONS_ADMIN_API.md": {
+        "- 用户名密码注册",
         "一次性明文 RecoveryCode",
         "### 4.4 RecoveryCode 与账号生命周期",
     },
@@ -368,31 +398,47 @@ def validate_documents(repository_root: Path, result: VerificationResult) -> Non
             result.check(resolved.exists(), f"{relative}: broken local link: {target}")
 
 
-def validate_authentication_authority(repository_root: Path, result: VerificationResult) -> None:
-    for relative, markers in AUTHENTICATION_AUTHORITY_MARKERS.items():
+def validate_authority_markers(
+    repository_root: Path,
+    result: VerificationResult,
+    marker_groups: dict[str, set[str]],
+    *,
+    must_be_present: bool,
+) -> None:
+    for relative, markers in marker_groups.items():
         path = repository_root / relative
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as error:
-            result.error(f"{relative}: cannot validate authentication authority: {error}")
+            if must_be_present:
+                result.error(f"{relative}: cannot validate authentication authority: {error}")
             continue
         for marker in sorted(markers):
+            qualifier = (
+                "authentication authority"
+                if must_be_present
+                else "obsolete authentication authority"
+            )
             result.check(
-                marker in text,
-                f"{relative}: authentication authority marker {marker!r} is missing",
+                (marker in text) is must_be_present,
+                f"{relative}: {qualifier} marker {marker!r} "
+                f"{'is missing' if must_be_present else 'remains'}",
             )
 
-    for relative, markers in OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS.items():
-        path = repository_root / relative
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError, UnicodeDecodeError:
-            continue
-        for marker in sorted(markers):
-            result.check(
-                marker not in text,
-                f"{relative}: obsolete authentication authority marker {marker!r} remains",
-            )
+
+def validate_authentication_authority(repository_root: Path, result: VerificationResult) -> None:
+    validate_authority_markers(
+        repository_root,
+        result,
+        AUTHENTICATION_AUTHORITY_MARKERS,
+        must_be_present=True,
+    )
+    validate_authority_markers(
+        repository_root,
+        result,
+        OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS,
+        must_be_present=False,
+    )
 
 
 def load_schemas(contract_root: Path, result: VerificationResult) -> dict[str, Any]:
