@@ -32,10 +32,13 @@ from new_mud.apps.identity.models import (
     VerificationDeliveryOutbox,
     VerificationRateLimitBucket,
     VerificationRequestRecord,
+    VerifiedContactMethod,
 )
 from new_mud.apps.identity.services import (
     AuthenticationFailed,
     RefreshFailed,
+    RegistrationUnavailable,
+    VerificationCodeInvalid,
     login,
     refresh,
     register,
@@ -87,6 +90,36 @@ def request_registration_verification_from_thread(
         close_old_connections()
 
 
+def register_verified(*, username: str, password: str):
+    suffix = uuid.uuid4().hex[:12]
+    destination = f"{username[:32]}-{suffix}@example.com"
+    assert request_registration_verification_from_thread(
+        destination=destination,
+        idempotency_key=f"verified-{suffix}",
+        device_id=f"verified-device-{suffix}",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    messages: list[VerificationEmail] = []
+
+    class CaptureSender:
+        def send(self, message: VerificationEmail) -> None:
+            messages.append(message)
+
+    assert (
+        deliver_one_verification(worker_id=f"verified-worker-{suffix}", sender=CaptureSender())
+        == DeliveryOutcome.DELIVERED
+    )
+    code = messages[0].body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+    return register(
+        username=username,
+        password=password,
+        verification={
+            "channel": "email",
+            "destination": destination,
+            "code": code,
+        },
+    )
+
+
 def create_identity_pair(
     *,
     session_user=None,
@@ -135,7 +168,7 @@ def test_valid_identity_lifetime_pair_satisfies_all_deferred_contracts() -> None
 
 
 def test_refresh_waits_for_account_lifecycle_commit_before_rotating() -> None:
-    register(username="lifecycle_refresh", password="safe-example-passphrase-42")
+    register_verified(username="lifecycle_refresh", password="safe-example-passphrase-42")
     authentication = login(
         username="lifecycle_refresh",
         password="safe-example-passphrase-42",
@@ -182,7 +215,7 @@ def test_refresh_waits_for_account_lifecycle_commit_before_rotating() -> None:
 
 
 def test_login_rechecks_password_after_serializing_with_account_recovery() -> None:
-    registration = register(
+    registration = register_verified(
         username="login_recovery_race",
         password="safe-example-passphrase-42",
     )
@@ -323,7 +356,7 @@ def test_auth_session_and_family_must_be_a_symmetric_lifetime_pair() -> None:
 
 
 def test_partial_unique_constraints_reject_second_active_recovery_and_refresh_credentials() -> None:
-    registration = register(
+    registration = register_verified(
         username="unique_identity",
         password="safe-example-passphrase-42",
     )
@@ -332,6 +365,11 @@ def test_partial_unique_constraints_reject_second_active_recovery_and_refresh_cr
         password="safe-example-passphrase-42",
     )
     account = GameAccount.objects.get(pk=registration.game_account_id)
+    RecoveryCodeCredential.objects.create(
+        game_account=account,
+        generation=1,
+        code_hash="legacy-active-hash",
+    )
     family = RefreshTokenFamily.objects.get(
         auth_session_id=uuid.UUID(authentication.auth_session_id)
     )
@@ -356,7 +394,7 @@ def test_partial_unique_constraints_reject_second_active_recovery_and_refresh_cr
 
 
 def test_terminal_identity_rows_cannot_be_reactivated_or_rebound() -> None:
-    register(username="terminal_guard", password="safe-example-passphrase-42")
+    register_verified(username="terminal_guard", password="safe-example-passphrase-42")
     authentication = login(
         username="terminal_guard",
         password="safe-example-passphrase-42",
@@ -414,6 +452,171 @@ def test_concurrent_replay_creates_one_registration_challenge_and_delivery() -> 
     assert VerificationDeliveryOutbox.objects.count() == 1
     assert VerificationRequestRecord.objects.count() == 1
     assert set(VerificationRateLimitBucket.objects.values_list("request_count", flat=True)) == {1}
+
+
+def test_concurrent_registration_consumes_one_challenge_into_one_complete_identity() -> None:
+    destination = "concurrent-register@example.com"
+    assert request_registration_verification_from_thread(
+        destination=destination,
+        idempotency_key="concurrent-register-code",
+        device_id="concurrent-register-device",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    sender = RecordingEmailSender()
+    assert (
+        deliver_one_verification(worker_id="concurrent-register-worker", sender=sender)
+        == DeliveryOutcome.DELIVERED
+    )
+    code = sender.messages[0].body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+    start = Event()
+
+    def finish_registration(username: str) -> str:
+        close_old_connections()
+        try:
+            assert start.wait(timeout=5)
+            register(
+                username=username,
+                password="safe-example-passphrase-42",
+                verification={
+                    "channel": "email",
+                    "destination": destination,
+                    "code": code,
+                },
+            )
+            return "created"
+        except VerificationCodeInvalid:
+            return "invalid"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(finish_registration, "concurrent_register_a"),
+            executor.submit(finish_registration, "concurrent_register_b"),
+        ]
+        start.set()
+        outcomes = [future.result(timeout=10) for future in futures]
+
+    assert sorted(outcomes) == ["created", "invalid"]
+    assert get_user_model().objects.count() == 1
+    assert GameAccount.objects.count() == 1
+    assert VerifiedContactMethod.objects.count() == 1
+    assert RecoveryCodeCredential.objects.count() == 0
+    assert AuthSession.objects.count() == 0
+    assert VerificationChallenge.objects.get().state == VerificationChallenge.State.CONSUMED
+
+
+def test_concurrent_registration_with_one_username_leaves_no_partial_loser() -> None:
+    prepared: list[tuple[str, str]] = []
+    for suffix in ("a", "b"):
+        destination = f"concurrent-username-{suffix}@example.com"
+        assert request_registration_verification_from_thread(
+            destination=destination,
+            idempotency_key=f"concurrent-username-{suffix}",
+            device_id=f"concurrent-username-device-{suffix}",
+        ) == (202, {"status": "accepted", "retry_after": 60})
+        sender = RecordingEmailSender()
+        assert (
+            deliver_one_verification(
+                worker_id=f"concurrent-username-worker-{suffix}", sender=sender
+            )
+            == DeliveryOutcome.DELIVERED
+        )
+        code = sender.messages[0].body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+        prepared.append((destination, code))
+
+    start = Event()
+
+    def finish_registration(destination: str, code: str) -> str:
+        close_old_connections()
+        try:
+            assert start.wait(timeout=5)
+            register(
+                username="concurrent_shared_username",
+                password="safe-example-passphrase-42",
+                verification={
+                    "channel": "email",
+                    "destination": destination,
+                    "code": code,
+                },
+            )
+            return "created"
+        except RegistrationUnavailable:
+            return "unavailable"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(finish_registration, *item) for item in prepared]
+        start.set()
+        outcomes = [future.result(timeout=10) for future in futures]
+
+    assert sorted(outcomes) == ["created", "unavailable"]
+    assert get_user_model().objects.count() == 1
+    assert GameAccount.objects.count() == 1
+    assert VerifiedContactMethod.objects.count() == 1
+    assert sorted(VerificationChallenge.objects.values_list("state", flat=True)) == [
+        VerificationChallenge.State.ACTIVE,
+        VerificationChallenge.State.CONSUMED,
+    ]
+
+
+def test_registration_database_failure_rolls_back_identity_and_challenge_consumption() -> None:
+    destination = "rollback-register@example.com"
+    assert request_registration_verification_from_thread(
+        destination=destination,
+        idempotency_key="rollback-register-code",
+        device_id="rollback-register-device",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    sender = RecordingEmailSender()
+    assert (
+        deliver_one_verification(worker_id="rollback-register-worker", sender=sender)
+        == DeliveryOutcome.DELIVERED
+    )
+    code = sender.messages[0].body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE FUNCTION identity_test_fail_contact_insert()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'test contact insert failure' USING ERRCODE = '23514';
+            END;
+            $$
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TRIGGER identity_test_fail_contact_insert_trigger
+            BEFORE INSERT ON identity_verifiedcontactmethod
+            FOR EACH ROW EXECUTE FUNCTION identity_test_fail_contact_insert()
+            """
+        )
+
+    try:
+        with pytest.raises(RegistrationUnavailable):
+            register(
+                username="rollback_register",
+                password="safe-example-passphrase-42",
+                verification={
+                    "channel": "email",
+                    "destination": destination,
+                    "code": code,
+                },
+            )
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DROP TRIGGER IF EXISTS identity_test_fail_contact_insert_trigger "
+                "ON identity_verifiedcontactmethod"
+            )
+            cursor.execute("DROP FUNCTION IF EXISTS identity_test_fail_contact_insert()")
+
+    assert get_user_model().objects.count() == 0
+    assert GameAccount.objects.count() == 0
+    assert VerifiedContactMethod.objects.count() == 0
+    assert VerificationChallenge.objects.get().state == VerificationChallenge.State.ACTIVE
 
 
 def test_concurrent_keys_for_one_contact_allow_only_one_cooldown_winner() -> None:
@@ -537,7 +740,10 @@ def test_expired_delivery_lease_is_reclaimed_with_the_same_payload() -> None:
 
 
 def test_limiter_database_failure_is_global_without_disabling_password_login() -> None:
-    register(username="limiter_outage", password="safe-example-passphrase-42")
+    register_verified(username="limiter_outage", password="safe-example-passphrase-42")
+    initial_limit_buckets = VerificationRateLimitBucket.objects.count()
+    initial_request_records = VerificationRequestRecord.objects.count()
+    initial_challenges = VerificationChallenge.objects.count()
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -585,7 +791,7 @@ def test_limiter_database_failure_is_global_without_disabling_password_login() -
             cursor.execute("DROP FUNCTION IF EXISTS identity_test_fail_verification_limit_write()")
 
     assert verification == (503, {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}})
-    assert VerificationRateLimitBucket.objects.count() == 0
-    assert VerificationRequestRecord.objects.count() == 0
-    assert VerificationChallenge.objects.count() == 0
+    assert VerificationRateLimitBucket.objects.count() == initial_limit_buckets
+    assert VerificationRequestRecord.objects.count() == initial_request_records
+    assert VerificationChallenge.objects.count() == initial_challenges
     assert login_response.status_code == 200

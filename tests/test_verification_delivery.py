@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from datetime import timedelta
 
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.checks import Tags, run_checks
@@ -19,6 +20,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from new_mud.apps.identity.models import (
+    GameAccount,
     VerificationChallenge,
     VerificationDeliveryOutbox,
     VerificationRateLimitBucket,
@@ -468,14 +470,14 @@ def test_verification_dependency_failure_is_global_while_password_login_remains_
     failure_name: str,
     failure_settings: dict[str, object],
 ) -> None:
-    registration = client.post(
-        reverse("auth-register"),
-        {"username": failure_name, "password": "safe-example-passphrase-42"},
-        content_type="application/json",
-        secure=True,
-        headers={"origin": "https://testserver"},
+    user = get_user_model().objects.create_user(
+        username=failure_name,
+        password="safe-example-passphrase-42",
     )
-    assert registration.status_code == 201
+    GameAccount.objects.create(
+        user=user,
+        instance_id=settings.CONTENT_INSTANCE_ID,
+    )
 
     with override_settings(**failure_settings):
         verification = verification_post(
@@ -826,8 +828,18 @@ def test_startup_check_rejects_enabled_verification_with_missing_keys() -> None:
     assert "secret" not in str(verification_errors[0]).lower()
 
 
-def test_startup_check_rejects_locmem_provider_outside_explicit_test_mode() -> None:
-    with override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False):
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "django.core.mail.backends.filebased.EmailBackend",
+        "django.core.mail.backends.locmem.EmailBackend",
+    ],
+)
+def test_startup_check_rejects_test_provider_outside_explicit_test_mode(backend: str) -> None:
+    with override_settings(
+        AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False,
+        EMAIL_BACKEND=backend,
+    ):
         errors = run_checks(tags=[Tags.security])
 
     verification_errors = [

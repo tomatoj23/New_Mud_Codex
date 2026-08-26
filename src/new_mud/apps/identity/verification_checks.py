@@ -19,7 +19,11 @@ def check_verification_configuration(app_configs, **kwargs):
                 id="identity.E001",
             )
         ]
-    if settings.EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend" and not getattr(
+    test_backends = {
+        "django.core.mail.backends.filebased.EmailBackend",
+        "django.core.mail.backends.locmem.EmailBackend",
+    }
+    if settings.EMAIL_BACKEND in test_backends and not getattr(
         settings, "AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND", False
     ):
         return [

@@ -12,10 +12,13 @@ describe("authStore", () => {
 
   it("keeps registration separate from authenticated state", async () => {
     const api: AuthApi = {
+      requestRegistrationVerification: vi.fn().mockResolvedValue({
+        status: "accepted",
+        retry_after: 60,
+      }),
       register: vi.fn().mockResolvedValue({
         user_id: 7,
         game_account_id: "account-7",
-        recovery_code: "recovery-once",
       }),
       login: vi.fn(),
       refresh: vi.fn(),
@@ -23,10 +26,27 @@ describe("authStore", () => {
       logout: vi.fn(),
     };
     const store = createAuthStore(api)();
+    const verification = {
+      channel: "email" as const,
+      destination: "new.player@example.com",
+      code: "123456",
+    };
 
-    const result = await store.register("New_Player", "example-passphrase-42");
+    await expect(
+      store.requestRegistrationVerification("new.player@example.com", "request-1"),
+    ).resolves.toEqual({ status: "accepted", retry_after: 60 });
+    const result = await store.register(
+      "New_Player",
+      "example-passphrase-42",
+      verification,
+    );
 
-    expect(result.recovery_code).toBe("recovery-once");
+    expect(result).toEqual({ user_id: 7, game_account_id: "account-7" });
+    expect(api.register).toHaveBeenCalledWith(
+      "New_Player",
+      "example-passphrase-42",
+      verification,
+    );
     expect(store.accessToken).toBeNull();
     expect(store.authSessionId).toBeNull();
     expect(store.isAuthenticated).toBe(false);
@@ -34,6 +54,7 @@ describe("authStore", () => {
 
   it("keeps the access token in memory and clears it after logout", async () => {
     const api: AuthApi = {
+      requestRegistrationVerification: vi.fn(),
       register: vi.fn(),
       login: vi.fn().mockResolvedValue({
         access_token: "access-secret",
@@ -67,6 +88,7 @@ describe("authStore", () => {
       game_account_id: "account-recovered",
     };
     const api: AuthApi = {
+      requestRegistrationVerification: vi.fn(),
       register: vi.fn(),
       login: vi.fn(),
       refresh: vi.fn(),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import { AuthApiError } from "../../api/auth";
 import { errorMessage } from "../../features/auth/messages";
@@ -9,16 +9,48 @@ type Mode = "register" | "login";
 
 const auth = useAuthStore();
 const mode = ref<Mode>("register");
+const email = ref("");
+const verificationCode = ref("");
+const sentDestination = ref<string | null>(null);
+const resendRemaining = ref(0);
 const username = ref("");
 const password = ref("");
 const busy = ref(false);
+const verificationBusy = ref(false);
 const errorCode = ref<string | null>(null);
-const recoveryCode = ref<string | null>(null);
 const announcement = ref("尚未登录");
+let resendTimer: ReturnType<typeof setInterval> | null = null;
 
 const title = computed(() => (mode.value === "register" ? "创建江湖账号" : "登录江湖"));
-const submitLabel = computed(() => (mode.value === "register" ? "注册账号" : "独立登录"));
+const submitLabel = computed(() => (mode.value === "register" ? "注册账号" : "登录"));
 const visibleError = computed(() => (errorCode.value ? errorMessage(errorCode.value) : null));
+const currentEmailWasSent = computed(
+  () => sentDestination.value !== null && sentDestination.value === email.value.trim(),
+);
+const registrationVerificationReady = computed(
+  () => currentEmailWasSent.value && /^\d{6}$/.test(verificationCode.value),
+);
+const verificationButtonLabel = computed(() => {
+  if (verificationBusy.value) return "发送中…";
+  if (resendRemaining.value > 0) return `${resendRemaining.value} 秒后可重发`;
+  return sentDestination.value === null ? "发送验证码" : "重新发送验证码";
+});
+
+function stopCountdown() {
+  if (resendTimer !== null) {
+    clearInterval(resendTimer);
+    resendTimer = null;
+  }
+}
+
+function startCountdown(seconds: number) {
+  stopCountdown();
+  resendRemaining.value = Math.max(0, Math.floor(seconds));
+  resendTimer = setInterval(() => {
+    resendRemaining.value = Math.max(0, resendRemaining.value - 1);
+    if (resendRemaining.value === 0) stopCountdown();
+  }, 1000);
+}
 
 function chooseMode(nextMode: Mode) {
   mode.value = nextMode;
@@ -30,15 +62,48 @@ function captureError(error: unknown) {
   announcement.value = errorMessage(errorCode.value);
 }
 
+async function requestVerificationCode() {
+  verificationBusy.value = true;
+  errorCode.value = null;
+  try {
+    const destination = email.value.trim();
+    const result = await auth.requestRegistrationVerification(
+      destination,
+      `registration-${crypto.randomUUID()}`,
+    );
+    sentDestination.value = destination;
+    verificationCode.value = "";
+    startCountdown(result.retry_after);
+    announcement.value = "验证码请求已受理，请查看邮箱。未收到时可在倒计时结束后手动重发。";
+  } catch (error) {
+    captureError(error);
+  } finally {
+    verificationBusy.value = false;
+  }
+}
+
 async function submit() {
   busy.value = true;
   errorCode.value = null;
   try {
     if (mode.value === "register") {
-      const result = await auth.register(username.value, password.value);
-      recoveryCode.value = result.recovery_code;
+      if (!registrationVerificationReady.value || sentDestination.value === null) {
+        errorCode.value = "VERIFICATION_CODE_INVALID";
+        announcement.value = errorMessage(errorCode.value);
+        return;
+      }
+      await auth.register(username.value, password.value, {
+        channel: "email",
+        destination: sentDestination.value,
+        code: verificationCode.value,
+      });
       mode.value = "login";
-      announcement.value = "注册成功。请妥善保存恢复码，然后使用独立登录。";
+      email.value = "";
+      verificationCode.value = "";
+      sentDestination.value = null;
+      resendRemaining.value = 0;
+      stopCountdown();
+      announcement.value = "注册成功，请登录。";
     } else {
       await auth.login(username.value, password.value);
       announcement.value = "登录成功。认证会话已建立。";
@@ -91,6 +156,8 @@ onMounted(async () => {
     busy.value = false;
   }
 });
+
+onBeforeUnmount(stopCountdown);
 </script>
 
 <template>
@@ -99,11 +166,11 @@ onMounted(async () => {
       <p class="eyebrow">NEW_MUD · 武侠文字世界</p>
       <h1 id="brand-title">从一盏灯下，走入江湖。</h1>
       <p class="brand-copy">
-        注册不会自动登录。恢复码只展示一次；登录后，访问凭据只停留在当前页面内存。
+        先验证可用邮箱，再创建账号。注册完成后请使用账号名和密码登录。
       </p>
       <dl class="security-notes">
-        <div><dt>01</dt><dd>先注册，再独立登录</dd></div>
-        <div><dt>02</dt><dd>恢复码离线妥善保存</dd></div>
+        <div><dt>01</dt><dd>邮箱验证码十分钟内有效</dd></div>
+        <div><dt>02</dt><dd>注册成功后不会自动登录</dd></div>
         <div><dt>03</dt><dd>退出后清理本地会话</dd></div>
       </dl>
     </section>
@@ -134,6 +201,48 @@ onMounted(async () => {
       </div>
 
       <form v-if="!auth.isAuthenticated" @submit.prevent="submit">
+        <template v-if="mode === 'register'">
+          <label for="email">邮箱</label>
+          <div class="verification-request-row">
+            <input
+              id="email"
+              v-model="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="用于接收注册验证码"
+              data-testid="email"
+              required
+            />
+            <button
+              class="verification-action"
+              type="button"
+              :disabled="verificationBusy || resendRemaining > 0 || email.trim().length === 0"
+              data-testid="request-verification"
+              @click="requestVerificationCode"
+            >
+              {{ verificationButtonLabel }}
+            </button>
+          </div>
+          <p v-if="currentEmailWasSent" class="verification-hint" data-testid="verification-hint">
+            请求已受理。请输入邮件中的六位验证码。
+          </p>
+
+          <label for="verification-code">邮箱验证码</label>
+          <input
+            id="verification-code"
+            v-model.trim="verificationCode"
+            name="verification-code"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            maxlength="6"
+            pattern="[0-9]{6}"
+            placeholder="六位数字"
+            data-testid="verification-code"
+            required
+          />
+        </template>
+
         <label for="username">账号名</label>
         <input
           id="username"
@@ -162,7 +271,7 @@ onMounted(async () => {
         <button
           class="primary-action"
           type="button"
-          :disabled="busy"
+          :disabled="busy || (mode === 'register' && !registrationVerificationReady)"
           data-testid="submit"
           @click="submit"
         >
@@ -182,12 +291,6 @@ onMounted(async () => {
           </button>
         </div>
       </div>
-
-      <aside v-if="recoveryCode" class="recovery-card" data-testid="recovery-code">
-        <p class="recovery-label">一次性恢复码</p>
-        <code>{{ recoveryCode }}</code>
-        <p>现在离线保存。离开本页后，服务端不会再次返回明文。</p>
-      </aside>
 
       <p v-if="visibleError" class="error-message" role="alert" data-testid="error">
         {{ visibleError }}

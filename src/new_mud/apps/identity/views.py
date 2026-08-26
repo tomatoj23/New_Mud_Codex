@@ -16,6 +16,7 @@ from .services import (
     RefreshFailed,
     RegistrationInvalid,
     RegistrationUnavailable,
+    VerificationCodeInvalid,
     login,
     logout,
     recover_password_with_code,
@@ -208,17 +209,21 @@ def register_view(request):
         result = register(
             username=request.data.get("username"),
             password=request.data.get("password"),
+            verification=request.data.get("verification"),
         )
     except RegistrationInvalid:
         return _error("REGISTRATION_INVALID", status=400)
+    except VerificationCodeInvalid:
+        return _error("VERIFICATION_CODE_INVALID", status=400)
     except RegistrationUnavailable:
         return _error("REGISTRATION_UNAVAILABLE", status=409)
+    except VerificationServiceUnavailable:
+        return _error("VERIFICATION_SERVICE_UNAVAILABLE", status=503)
 
     return _response(
         {
             "user_id": result.user_id,
             "game_account_id": result.game_account_id,
-            "recovery_code": result.recovery_code,
         },
         status=201,
     )

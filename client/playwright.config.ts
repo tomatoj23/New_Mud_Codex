@@ -1,12 +1,21 @@
 import { defineConfig, devices } from "@playwright/test";
+import { mkdirSync } from "node:fs";
+
+import {
+  emailOutboxDirectory,
+  verificationTestEnvironment,
+} from "./e2e/verification-test-support";
 
 const python =
   process.env.PLAYWRIGHT_PYTHON ??
   (process.platform === "win32" ? ".venv\\Scripts\\python.exe" : ".venv/bin/python");
 
+mkdirSync(emailOutboxDirectory, { recursive: true });
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
+  workers: 1,
   retries: 0,
   reporter: "list",
   use: {
@@ -41,13 +50,13 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command:
-        `${python} manage.py runserver 127.0.0.1:8000 --noreload`,
+      command: `${python} scripts/run_playwright_backend.py`,
       cwd: "..",
       url: "http://127.0.0.1:8000/api/v1/health/live",
       reuseExistingServer: !process.env.CI,
       env: {
         ...process.env,
+        ...verificationTestEnvironment,
         DJANGO_SETTINGS_MODULE: "new_mud.settings.development",
       },
       timeout: 120_000,

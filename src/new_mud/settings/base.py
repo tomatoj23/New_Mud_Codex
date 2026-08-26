@@ -175,6 +175,7 @@ EMAIL_BACKEND = os.getenv(
     "NEW_MUD_EMAIL_BACKEND",
     "django.core.mail.backends.locmem.EmailBackend",
 )
+EMAIL_FILE_PATH = os.getenv("NEW_MUD_EMAIL_FILE_PATH", "")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")

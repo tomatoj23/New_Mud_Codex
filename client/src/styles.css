@@ -44,6 +44,29 @@ input:focus-visible {
   outline-offset: 3px;
 }
 
+.verification-request-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+  gap: 10px;
+}
+
+.verification-action {
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid #68776f;
+  color: #eee7d9;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.verification-hint {
+  margin: 2px 0 4px;
+  color: #aaa99f;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
 .auth-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
@@ -308,6 +331,10 @@ button:disabled {
   }
 
   .session-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .verification-request-row {
     grid-template-columns: 1fr;
   }
 }

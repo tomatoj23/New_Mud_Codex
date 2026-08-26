@@ -2,18 +2,27 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
+import { deliverRegistrationCode } from "./verification-test-support";
+
 const nativeInput = (page: Page, testId: string) =>
   page.getByTestId(testId).locator("input");
 
 async function registerAndLogin(page: Page, username: string, password: string) {
+  const email = `${username}@example.com`;
   await page.goto("/");
+  await nativeInput(page, "email").fill(email);
+  await page.getByTestId("request-verification").click();
+  await expect(page.getByTestId("verification-hint")).toBeVisible();
+  const code = await deliverRegistrationCode(email);
+  await nativeInput(page, "verification-code").fill(code);
   await nativeInput(page, "username").fill(username);
   await nativeInput(page, "password").fill(password);
   await page.getByTestId("submit").click();
-  await expect(page.getByTestId("recovery-code")).toBeVisible();
+  await expect(page.getByTestId("announcement")).toContainText("注册成功，请登录");
   await nativeInput(page, "password").fill(password);
   await page.getByTestId("submit").click();
   await expect(page.getByTestId("session-panel")).toBeVisible();
+  return { code, email };
 }
 
 async function login(page: Page, username: string, password: string) {
@@ -87,16 +96,42 @@ test("registration stays separate, then login refresh and logout complete", asyn
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "创建江湖账号" })).toBeVisible();
+  const email = `${username}@example.com`;
+  await page.route("**/api/v1/auth/registration-verification/request", async (route) => {
+    const response = await route.fetch();
+    const payload = (await response.json()) as { status: string; retry_after: number };
+    expect(payload).toEqual({ status: "accepted", retry_after: 60 });
+    await route.fulfill({ response, json: { ...payload, retry_after: 1 } });
+  }, { times: 1 });
+  await nativeInput(page, "email").fill(email);
+  await page.getByTestId("request-verification").click();
+  await expect(page.getByTestId("verification-hint")).toBeVisible();
+  const verificationButton = page.getByTestId("request-verification");
+  await expect(verificationButton).toHaveAttribute("disabled", "true");
+  await expect(verificationButton).toContainText("1 秒后可重发");
+  const code = await deliverRegistrationCode(email);
+
+  await expect(verificationButton).toContainText("重新发送验证码");
+  await page.route("**/api/v1/auth/registration-verification/request", async (route) => {
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "accepted", retry_after: 60 }),
+    });
+  }, { times: 1 });
+  await verificationButton.click();
+  await expect(verificationButton).toContainText("60 秒后可重发");
+
+  await nativeInput(page, "verification-code").fill(code);
   await nativeInput(page, "username").fill(username);
   await nativeInput(page, "password").fill(password);
   await page.getByTestId("submit").click();
 
-  await expect(page.getByTestId("recovery-code")).toBeVisible();
-  await expect(page.getByTestId("announcement")).toContainText(
-    "请妥善保存恢复码，然后使用独立登录",
-  );
+  await expect(page.getByTestId("announcement")).toContainText("注册成功，请登录");
   await expect(page.getByRole("heading", { name: "登录江湖" })).toBeVisible();
   await expect(page.getByTestId("session-panel")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("独立登录");
+  await expect(page.locator("body")).not.toContainText("恢复码");
 
   await nativeInput(page, "password").fill(password);
   await page.getByTestId("submit").click();
@@ -218,9 +253,7 @@ test("authentication secrets never enter browser-persistent storage or console l
   const username = `e1_storage_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const password = "safe-e2e-passphrase-42";
 
-  const registrationResponse = page.waitForResponse("**/api/v1/auth/register");
-  await registerAndLogin(page, username, password);
-  const recoveryCode = (await (await registrationResponse).json()).recovery_code as string;
+  const { code, email } = await registerAndLogin(page, username, password);
   const refreshResponse = page.waitForResponse("**/api/v1/auth/refresh");
   await page.getByTestId("refresh").click();
   const accessToken = (await (await refreshResponse).json()).access_token as string;
@@ -228,17 +261,23 @@ test("authentication secrets never enter browser-persistent storage or console l
 
   const persistedWhileAuthenticated = JSON.stringify(await browserPersistence(page));
   expect(persistedWhileAuthenticated).not.toContain(accessToken);
-  expect(persistedWhileAuthenticated).not.toContain(recoveryCode);
+  expect(persistedWhileAuthenticated).not.toContain(password);
+  expect(persistedWhileAuthenticated).not.toContain(code);
+  expect(persistedWhileAuthenticated).not.toContain(email);
   expect(persistedWhileAuthenticated).not.toMatch(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\./);
 
   await page.getByTestId("logout").click();
   await expect(page.getByTestId("session-panel")).toHaveCount(0);
   const persistedAfterLogout = JSON.stringify(await browserPersistence(page));
   expect(persistedAfterLogout).not.toContain(accessToken);
-  expect(persistedAfterLogout).not.toContain(recoveryCode);
+  expect(persistedAfterLogout).not.toContain(password);
+  expect(persistedAfterLogout).not.toContain(code);
+  expect(persistedAfterLogout).not.toContain(email);
   expect(persistedAfterLogout).not.toContain("access_token");
   expect(JSON.stringify(consoleMessages)).not.toContain(accessToken);
-  expect(JSON.stringify(consoleMessages)).not.toContain(recoveryCode);
+  expect(JSON.stringify(consoleMessages)).not.toContain(password);
+  expect(JSON.stringify(consoleMessages)).not.toContain(code);
+  expect(JSON.stringify(consoleMessages)).not.toContain(email);
 
   const refreshCookie = (await context.cookies()).find(
     (cookie) => cookie.name === "new_mud_refresh",

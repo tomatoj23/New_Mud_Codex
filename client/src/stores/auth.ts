@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { authApi, type AuthApi } from "../api/auth";
+import { authApi, type AuthApi, type EmailVerification } from "../api/auth";
 
 export function createAuthStore(api: AuthApi = authApi) {
   return defineStore("auth", {
@@ -13,9 +13,12 @@ export function createAuthStore(api: AuthApi = authApi) {
       isAuthenticated: (state) => state.accessToken !== null && state.authSessionId !== null,
     },
     actions: {
-      register(username: string, password: string) {
+      requestRegistrationVerification(destination: string, idempotencyKey: string) {
+        return api.requestRegistrationVerification(destination, idempotencyKey);
+      },
+      register(username: string, password: string, verification: EmailVerification) {
         this.clearAuthentication();
-        return api.register(username, password);
+        return api.register(username, password, verification);
       },
       async login(username: string, password: string) {
         const result = await api.login(username, password);

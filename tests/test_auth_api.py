@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import base64
 import json
+import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
+from django.core import mail
 from django.core.cache import cache
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from new_mud.apps.identity.models import (
     AuthSession,
@@ -18,6 +24,20 @@ from new_mud.apps.identity.models import (
     RefreshTokenCredential,
     RefreshTokenFamily,
     SecurityAuditEvent,
+    VerificationChallenge,
+    VerifiedContactMethod,
+)
+from new_mud.apps.identity.verification import normalize_email
+from new_mud.apps.identity.verification_config import verification_keyrings
+from new_mud.apps.identity.verification_crypto import (
+    EncryptedValue,
+    decrypt_value,
+    encrypt_value,
+    keyed_digest,
+)
+from new_mud.apps.identity.verification_delivery import (
+    DeliveryOutcome,
+    deliver_one_verification,
 )
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -31,6 +51,22 @@ def auth_post(
     remote_addr: str = "127.0.0.1",
     **headers,
 ):
+    if route_name == "auth-register" and "verification" not in payload:
+        suffix = uuid.uuid4().hex
+        destination = f"test-{suffix}@example.com"
+        code = request_delivered_registration_code(
+            client,
+            destination=destination,
+            idempotency_key=f"registration-{suffix}",
+        )
+        payload = {
+            **payload,
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": code,
+            },
+        }
     return client.post(
         reverse(route_name),
         payload,
@@ -59,32 +95,410 @@ def login_in_additional_instance(client, *, username: str, password: str):
         )
 
 
+def request_delivered_registration_code(
+    client,
+    *,
+    destination: str,
+    idempotency_key: str,
+) -> str:
+    response = auth_post(
+        client,
+        "auth-registration-verification-request",
+        {"channel": "email", "destination": destination},
+        **{"idempotency-key": idempotency_key},
+    )
+    assert response.status_code == 202
+    assert (
+        deliver_one_verification(worker_id=f"test-{idempotency_key}") == DeliveryOutcome.DELIVERED
+    )
+    body = mail.outbox[-1].body
+    return body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+
+
+def create_legacy_recovery_code(*, game_account_id: str) -> str:
+    # Issue #13 stops new issuance; Issue #15 owns removal of the legacy endpoints.
+    code = secrets.token_urlsafe(24)
+    RecoveryCodeCredential.objects.create(
+        game_account_id=game_account_id,
+        generation=1,
+        code_hash=make_password(code),
+    )
+    return code
+
+
+def verification_key(byte: int) -> str:
+    return base64.urlsafe_b64encode(bytes([byte]) * 32).decode("ascii")
+
+
 def test_registration_creates_identity_without_authentication(client) -> None:
+    destination = "New.Player@example.com"
+    code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="registration-success",
+    )
+    assert get_user_model().objects.count() == 0
+    assert GameAccount.objects.count() == 0
     response = auth_post(
         client,
         "auth-register",
-        {"username": "New_Player", "password": "safe-example-passphrase-42"},
+        {
+            "username": "New_Player",
+            "password": "safe-example-passphrase-42",
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": code,
+            },
+        },
     )
 
     assert response.status_code == 201
     payload = response.json()
-    assert set(payload) == {"user_id", "game_account_id", "recovery_code"}
-    assert payload["recovery_code"]
+    assert set(payload) == {"user_id", "game_account_id"}
     assert response.headers["Cache-Control"] == "no-store"
     assert "new_mud_refresh" not in response.cookies
 
     user = get_user_model().objects.get(pk=payload["user_id"])
     assert user.username == "new_player"
+    assert user.email == ""
     assert user.check_password("safe-example-passphrase-42")
     account = GameAccount.objects.get(pk=payload["game_account_id"])
     assert account.user_id == user.pk
 
-    recovery = RecoveryCodeCredential.objects.get(game_account=account)
-    assert recovery.code_hash != payload["recovery_code"]
-    assert recovery.check_code(payload["recovery_code"])
+    contact = VerifiedContactMethod.objects.get(user=user)
+    assert contact.channel == VerifiedContactMethod.Channel.EMAIL
+    assert contact.state == VerifiedContactMethod.State.ACTIVE
+    assert contact.destination_ciphertext != destination
+    assert (
+        decrypt_value(
+            EncryptedValue(contact.destination_ciphertext, contact.encryption_key_id),
+            keyring=verification_keyrings().contact_encryption,
+            context="contact:email",
+        )
+        == destination
+    )
+    challenge = VerificationChallenge.objects.get()
+    assert challenge.state == VerificationChallenge.State.CONSUMED
+    assert challenge.consumed_at is not None
+    assert RecoveryCodeCredential.objects.count() == 0
     assert AuthSession.objects.count() == 0
     assert RefreshTokenFamily.objects.count() == 0
     assert RefreshTokenCredential.objects.count() == 0
+
+
+def test_registration_code_locks_after_five_failures_with_one_stable_error(
+    client,
+    settings,
+) -> None:
+    settings.AUTH_REGISTRATION_RATE_LIMIT_ACCOUNT = 100
+    settings.AUTH_REGISTRATION_RATE_LIMIT_IP = 100
+    destination = "attempts@example.com"
+    delivered_code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="registration-attempts",
+    )
+    incorrect_code = "999999" if delivered_code != "999999" else "000000"
+    payload: dict[str, object] = {
+        "username": "attempt_player",
+        "password": "safe-example-passphrase-42",
+        "verification": {
+            "channel": "email",
+            "destination": destination,
+            "code": incorrect_code,
+        },
+    }
+
+    responses = [auth_post(client, "auth-register", payload) for _ in range(6)]
+
+    assert [response.status_code for response in responses] == [400] * 6
+    assert all(
+        response.json() == {"error": {"code": "VERIFICATION_CODE_INVALID"}}
+        for response in responses
+    )
+    challenge = VerificationChallenge.objects.get()
+    assert challenge.state == VerificationChallenge.State.LOCKED
+    assert challenge.attempt_count == 5
+    assert get_user_model().objects.count() == 0
+    assert GameAccount.objects.count() == 0
+    assert VerifiedContactMethod.objects.count() == 0
+
+
+def test_registration_expires_an_elapsed_challenge_and_rejects_reuse(client) -> None:
+    destination = "expired@example.com"
+    code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="registration-expired",
+    )
+    now = timezone.now()
+    VerificationChallenge.objects.update(
+        activated_at=now - timedelta(minutes=20),
+        expires_at=now - timedelta(minutes=10),
+    )
+    payload: dict[str, object] = {
+        "username": "expired_player",
+        "password": "safe-example-passphrase-42",
+        "verification": {
+            "channel": "email",
+            "destination": destination,
+            "code": code,
+        },
+    }
+
+    response = auth_post(client, "auth-register", payload)
+    repeated = auth_post(client, "auth-register", payload)
+
+    for result in (response, repeated):
+        assert result.status_code == 400
+        assert result.json() == {"error": {"code": "VERIFICATION_CODE_INVALID"}}
+    challenge = VerificationChallenge.objects.get()
+    assert challenge.state == VerificationChallenge.State.EXPIRED
+    assert challenge.terminal_at is not None
+    assert get_user_model().objects.count() == 0
+
+
+def test_registration_rejects_an_occupied_verified_email_without_consuming_challenge(
+    client,
+) -> None:
+    destination = "occupied@example.com"
+    normalized = normalize_email(destination)
+    rings = verification_keyrings()
+    encrypted = encrypt_value(
+        normalized.delivery,
+        keyring=rings.contact_encryption,
+        context="contact:email",
+    )
+    lookup = keyed_digest(
+        normalized.comparison,
+        keyring=rings.contact_lookup,
+        context="contact:email",
+    )
+    owner = get_user_model().objects.create_user(username="existing_contact_owner")
+    VerifiedContactMethod.objects.create(
+        user=owner,
+        channel=VerifiedContactMethod.Channel.EMAIL,
+        destination_ciphertext=encrypted.ciphertext,
+        encryption_key_id=encrypted.key_id,
+        lookup_digest=lookup.digest,
+        lookup_key_id=lookup.key_id,
+        verified_at=timezone.now(),
+    )
+    code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="registration-occupied-contact",
+    )
+
+    response = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "new_contact_claimant",
+            "password": "safe-example-passphrase-42",
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": code,
+            },
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"error": {"code": "REGISTRATION_UNAVAILABLE"}}
+    assert get_user_model().objects.count() == 1
+    assert GameAccount.objects.count() == 0
+    assert VerifiedContactMethod.objects.count() == 1
+    assert VerificationChallenge.objects.get().state == VerificationChallenge.State.ACTIVE
+
+
+def test_registration_reads_a_rotated_challenge_and_writes_current_contact_keys(client) -> None:
+    destination = "rotated-registration@example.com"
+    old_settings = {
+        "AUTH_CONTACT_ENCRYPTION_KEYS": {"old-encryption": verification_key(11)},
+        "AUTH_CONTACT_ENCRYPTION_CURRENT_KEY_ID": "old-encryption",
+        "AUTH_CONTACT_LOOKUP_KEYS": {"old-lookup": verification_key(12)},
+        "AUTH_CONTACT_LOOKUP_CURRENT_KEY_ID": "old-lookup",
+        "AUTH_VERIFICATION_CODE_PEPPER_KEYS": {"old-code": verification_key(13)},
+        "AUTH_VERIFICATION_CODE_PEPPER_CURRENT_KEY_ID": "old-code",
+        "AUTH_DELIVERY_PAYLOAD_ENCRYPTION_KEYS": {"old-delivery": verification_key(14)},
+        "AUTH_DELIVERY_PAYLOAD_ENCRYPTION_CURRENT_KEY_ID": "old-delivery",
+    }
+    with override_settings(**old_settings):
+        code = request_delivered_registration_code(
+            client,
+            destination=destination,
+            idempotency_key="registration-old-keys",
+        )
+
+    rotated_settings = {
+        "AUTH_CONTACT_ENCRYPTION_KEYS": {
+            "old-encryption": verification_key(11),
+            "current-encryption": verification_key(21),
+        },
+        "AUTH_CONTACT_ENCRYPTION_CURRENT_KEY_ID": "current-encryption",
+        "AUTH_CONTACT_LOOKUP_KEYS": {
+            "old-lookup": verification_key(12),
+            "current-lookup": verification_key(22),
+        },
+        "AUTH_CONTACT_LOOKUP_CURRENT_KEY_ID": "current-lookup",
+        "AUTH_VERIFICATION_CODE_PEPPER_KEYS": {
+            "old-code": verification_key(13),
+            "current-code": verification_key(23),
+        },
+        "AUTH_VERIFICATION_CODE_PEPPER_CURRENT_KEY_ID": "current-code",
+        "AUTH_DELIVERY_PAYLOAD_ENCRYPTION_KEYS": {
+            "old-delivery": verification_key(14),
+            "current-delivery": verification_key(24),
+        },
+        "AUTH_DELIVERY_PAYLOAD_ENCRYPTION_CURRENT_KEY_ID": "current-delivery",
+    }
+    with override_settings(**rotated_settings):
+        response = auth_post(
+            client,
+            "auth-register",
+            {
+                "username": "rotated_registration",
+                "password": "safe-example-passphrase-42",
+                "verification": {
+                    "channel": "email",
+                    "destination": destination,
+                    "code": code,
+                },
+            },
+        )
+
+    assert response.status_code == 201
+    contact = VerifiedContactMethod.objects.get()
+    assert contact.encryption_key_id == "current-encryption"
+    assert contact.lookup_key_id == "current-lookup"
+    assert VerificationChallenge.objects.get().state == VerificationChallenge.State.CONSUMED
+
+
+def test_registration_can_retry_password_and_username_with_the_same_challenge(
+    client,
+    settings,
+) -> None:
+    settings.AUTH_REGISTRATION_RATE_LIMIT_ACCOUNT = 100
+    settings.AUTH_REGISTRATION_RATE_LIMIT_IP = 100
+    waiting_destination = "waiting@example.com"
+    waiting_code = request_delivered_registration_code(
+        client,
+        destination=waiting_destination,
+        idempotency_key="registration-waiting",
+    )
+    waiting_challenge_id = VerificationChallenge.objects.get().pk
+    waiting_verification = {
+        "channel": "email",
+        "destination": waiting_destination,
+        "code": waiting_code,
+    }
+
+    weak_password = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "waiting_player",
+            "password": "short",
+            "verification": waiting_verification,
+        },
+    )
+    assert weak_password.status_code == 400
+    assert weak_password.json() == {"error": {"code": "REGISTRATION_INVALID"}}
+    assert (
+        VerificationChallenge.objects.get(pk=waiting_challenge_id).state
+        == VerificationChallenge.State.ACTIVE
+    )
+
+    competing_destination = "competing@example.com"
+    competing_code = request_delivered_registration_code(
+        client,
+        destination=competing_destination,
+        idempotency_key="registration-competing",
+    )
+    competing = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "waiting_player",
+            "password": "safe-example-passphrase-42",
+            "verification": {
+                "channel": "email",
+                "destination": competing_destination,
+                "code": competing_code,
+            },
+        },
+    )
+    assert competing.status_code == 201
+
+    occupied = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "WAITING_PLAYER",
+            "password": "another-safe-passphrase-73",
+            "verification": waiting_verification,
+        },
+    )
+    assert occupied.status_code == 409
+    assert occupied.json() == {"error": {"code": "REGISTRATION_UNAVAILABLE"}}
+
+    retried = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "available_player",
+            "password": "another-safe-passphrase-73",
+            "verification": waiting_verification,
+        },
+    )
+    assert retried.status_code == 201
+    assert get_user_model().objects.filter(username="available_player").exists()
+    assert (
+        VerificationChallenge.objects.filter(state=VerificationChallenge.State.CONSUMED).count()
+        == 2
+    )
+
+
+@pytest.mark.parametrize(
+    "verification_override",
+    [
+        {"code": "999999"},
+        {"channel": "sms"},
+        {"destination": "other@example.com"},
+    ],
+)
+def test_registration_verification_mismatches_share_one_error(
+    client,
+    verification_override: dict[str, str],
+) -> None:
+    destination = "mismatch@example.com"
+    code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key="registration-mismatch",
+    )
+    verification = {
+        "channel": "email",
+        "destination": destination,
+        "code": code,
+        **verification_override,
+    }
+
+    response = auth_post(
+        client,
+        "auth-register",
+        {
+            "username": "mismatch_player",
+            "password": "safe-example-passphrase-42",
+            "verification": verification,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"error": {"code": "VERIFICATION_CODE_INVALID"}}
+    assert get_user_model().objects.count() == 0
 
 
 def test_login_creates_one_session_family_and_protected_refresh_cookie(client) -> None:
@@ -357,7 +771,9 @@ def test_recovery_code_replaces_password_and_revokes_all_authentication(client) 
         "auth-register",
         {"username": "recover_player", "password": "safe-example-passphrase-42"},
     )
-    original_code = registration.json()["recovery_code"]
+    original_code = create_legacy_recovery_code(
+        game_account_id=registration.json()["game_account_id"]
+    )
     for _ in range(2):
         assert (
             auth_post(
@@ -461,6 +877,7 @@ def test_recovery_rate_limit_does_not_lock_password_login(client, settings) -> N
         {"username": "rate_limited_recovery", "password": "safe-example-passphrase-42"},
     )
     account = GameAccount.objects.get(pk=registration.json()["game_account_id"])
+    recovery_code = create_legacy_recovery_code(game_account_id=str(account.pk))
 
     first = auth_post(
         client,
@@ -476,7 +893,7 @@ def test_recovery_rate_limit_does_not_lock_password_login(client, settings) -> N
         "auth-recover",
         {
             "username": "rate_limited_recovery",
-            "recovery_code": registration.json()["recovery_code"],
+            "recovery_code": recovery_code,
             "new_password": "replacement-passphrase-73-safe",
         },
     )
@@ -727,7 +1144,9 @@ def test_recovery_code_rotation_revokes_the_calling_session(client) -> None:
         "auth-register",
         {"username": "rotate_player", "password": "safe-example-passphrase-42"},
     )
-    original_code = registration.json()["recovery_code"]
+    original_code = create_legacy_recovery_code(
+        game_account_id=registration.json()["game_account_id"]
+    )
     login_response = auth_post(
         client,
         "auth-login",
@@ -808,7 +1227,7 @@ def test_registration_rejects_case_insensitive_duplicate_without_partial_identit
     assert duplicate.headers["Cache-Control"] == "no-store"
     assert get_user_model().objects.count() == 1
     assert GameAccount.objects.count() == 1
-    assert RecoveryCodeCredential.objects.count() == 1
+    assert RecoveryCodeCredential.objects.count() == 0
 
 
 @pytest.mark.parametrize(
@@ -1106,7 +1525,9 @@ def test_plaintext_authentication_secrets_never_enter_audit_terminal_or_logs(
         "auth-register",
         {"username": "secret_audit", "password": password},
     )
-    recovery_code = registration.json()["recovery_code"]
+    recovery_code = create_legacy_recovery_code(
+        game_account_id=registration.json()["game_account_id"]
+    )
     login_response = auth_post(
         client,
         "auth-login",

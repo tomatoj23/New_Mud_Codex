@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
 import secrets
 import uuid
@@ -23,6 +24,8 @@ from .models import (
     RefreshTokenCredential,
     RefreshTokenFamily,
     SecurityAuditEvent,
+    VerificationChallenge,
+    VerifiedContactMethod,
 )
 from .tokens import (
     decode_access_token,
@@ -31,6 +34,19 @@ from .tokens import (
     parse_refresh_token,
     refresh_token_hash,
 )
+from .verification import ContactInvalid, normalize_email
+from .verification_config import (
+    VerificationServiceUnavailable,
+    require_verification_service,
+)
+from .verification_crypto import (
+    KeyUnavailable,
+    encrypt_value,
+    keyed_digest,
+    keyed_digest_candidates,
+    verification_code_digest,
+)
+from .verification_limits import advisory_transaction_lock
 
 USERNAME_PATTERN = re.compile(r"^[a-z0-9_]{3,32}$")
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
@@ -41,6 +57,10 @@ class RegistrationInvalid(Exception):
 
 
 class RegistrationUnavailable(Exception):
+    pass
+
+
+class VerificationCodeInvalid(Exception):
     pass
 
 
@@ -64,7 +84,6 @@ class RecoveryFailed(Exception):
 class RegistrationResult:
     user_id: int
     game_account_id: str
-    recovery_code: str
 
 
 @dataclass(frozen=True)
@@ -77,43 +96,151 @@ class AuthenticationResult:
     game_account_id: str
 
 
-def register(*, username: object, password: object) -> RegistrationResult:
+def register(
+    *,
+    username: object,
+    password: object,
+    verification: object,
+) -> RegistrationResult:
     if not isinstance(username, str) or not isinstance(password, str):
         raise RegistrationInvalid
     normalized_username = username.lower()
     if not USERNAME_PATTERN.fullmatch(normalized_username):
         raise RegistrationInvalid
-
-    user_model = get_user_model()
-    candidate = user_model(username=normalized_username)
     try:
-        validate_password(password, user=candidate)
-    except ValidationError as error:
-        raise RegistrationInvalid from error
+        if not isinstance(verification, dict):
+            raise VerificationCodeInvalid
+        if verification.get("channel") != VerificationChallenge.Channel.EMAIL:
+            raise VerificationCodeInvalid
+        code = verification.get("code")
+        if not isinstance(code, str) or len(code) != 6 or not code.isascii() or not code.isdigit():
+            raise VerificationCodeInvalid
+        normalized_email = normalize_email(verification.get("destination"))
+    except ContactInvalid as error:
+        raise VerificationCodeInvalid from error
 
-    recovery_code = secrets.token_urlsafe(24)
+    keyrings = require_verification_service()
+    lookup_candidates = keyed_digest_candidates(
+        normalized_email.comparison,
+        keyring=keyrings.contact_lookup,
+        context="contact:email",
+    )
+    lookup_digests = [candidate.digest for candidate in lookup_candidates]
+    current_lookup = keyed_digest(
+        normalized_email.comparison,
+        keyring=keyrings.contact_lookup,
+        context="contact:email",
+    )
+    invalid_code = False
+    user_model = get_user_model()
     try:
         with transaction.atomic():
-            user = user_model.objects.create_user(
-                username=normalized_username,
-                password=password,
+            advisory_transaction_lock(f"registration:username:{normalized_username}")
+            advisory_transaction_lock(f"registration:email:{normalized_email.comparison}")
+            now = timezone.now()
+            challenge = (
+                VerificationChallenge.objects.select_for_update()
+                .filter(
+                    purpose=VerificationChallenge.Purpose.REGISTRATION,
+                    channel=VerificationChallenge.Channel.EMAIL,
+                    destination_lookup_digest__in=lookup_digests,
+                    user__isnull=True,
+                    state=VerificationChallenge.State.ACTIVE,
+                )
+                .order_by("-activated_at", "challenge_id")
+                .first()
             )
-            account = GameAccount.objects.create(
-                user=user,
-                instance_id=settings.CONTENT_INSTANCE_ID,
-            )
-            RecoveryCodeCredential.objects.create(
-                game_account=account,
-                generation=1,
-                code_hash=make_password(recovery_code),
-            )
+            if challenge is None:
+                invalid_code = True
+            elif challenge.expires_at is None or challenge.expires_at <= now:
+                challenge.state = VerificationChallenge.State.EXPIRED
+                challenge.terminal_at = now
+                challenge.version += 1
+                challenge.save(update_fields=("state", "terminal_at", "version"))
+                invalid_code = True
+            else:
+                try:
+                    submitted_digest = verification_code_digest(
+                        code,
+                        keyring=keyrings.code_pepper,
+                        purpose=challenge.purpose,
+                        channel=challenge.channel,
+                        destination_lookup_digest=challenge.destination_lookup_digest,
+                        user_id=None,
+                        key_id=challenge.pepper_key_id,
+                    ).digest
+                except KeyUnavailable as error:
+                    raise VerificationServiceUnavailable from error
+                if not hmac.compare_digest(challenge.code_digest, submitted_digest):
+                    challenge.attempt_count += 1
+                    update_fields = ["attempt_count", "version"]
+                    if challenge.attempt_count >= 5:
+                        challenge.state = VerificationChallenge.State.LOCKED
+                        challenge.terminal_at = now
+                        update_fields.extend(("state", "terminal_at"))
+                    challenge.version += 1
+                    challenge.save(update_fields=update_fields)
+                    invalid_code = True
+
+            if invalid_code:
+                user = None
+                account = None
+            else:
+                assert challenge is not None
+                candidate = user_model(username=normalized_username)
+                try:
+                    validate_password(password, user=candidate)
+                except ValidationError as error:
+                    raise RegistrationInvalid from error
+                if user_model.objects.filter(username=normalized_username).exists():
+                    raise RegistrationUnavailable
+                if VerifiedContactMethod.objects.filter(
+                    channel=VerifiedContactMethod.Channel.EMAIL,
+                    lookup_digest__in=lookup_digests,
+                    state__in=(
+                        VerifiedContactMethod.State.ACTIVE,
+                        VerifiedContactMethod.State.UNREACHABLE,
+                    ),
+                ).exists():
+                    raise RegistrationUnavailable
+
+                encrypted_email = encrypt_value(
+                    normalized_email.delivery,
+                    keyring=keyrings.contact_encryption,
+                    context="contact:email",
+                )
+                user = user_model.objects.create_user(
+                    username=normalized_username,
+                    password=password,
+                )
+                account = GameAccount.objects.create(
+                    user=user,
+                    instance_id=settings.CONTENT_INSTANCE_ID,
+                )
+                VerifiedContactMethod.objects.create(
+                    user=user,
+                    channel=VerifiedContactMethod.Channel.EMAIL,
+                    destination_ciphertext=encrypted_email.ciphertext,
+                    encryption_key_id=encrypted_email.key_id,
+                    lookup_digest=current_lookup.digest,
+                    lookup_key_id=current_lookup.key_id,
+                    verified_at=now,
+                )
+                challenge.state = VerificationChallenge.State.CONSUMED
+                challenge.consumed_at = now
+                challenge.terminal_at = now
+                challenge.version += 1
+                challenge.save(update_fields=("state", "consumed_at", "terminal_at", "version"))
     except IntegrityError as error:
         raise RegistrationUnavailable from error
+
+    if invalid_code:
+        raise VerificationCodeInvalid
+    assert user is not None and account is not None
 
     return RegistrationResult(
         user_id=user.pk,
         game_account_id=str(account.pk),
-        recovery_code=recovery_code,
     )
 
 

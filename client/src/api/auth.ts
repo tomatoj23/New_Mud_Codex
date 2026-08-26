@@ -9,11 +9,29 @@ import {
 export interface RegistrationResult {
   user_id: number;
   game_account_id: string;
-  recovery_code: string;
+}
+
+export interface EmailVerification {
+  channel: "email";
+  destination: string;
+  code: string;
+}
+
+export interface VerificationRequestResult {
+  status: "accepted";
+  retry_after: number;
 }
 
 export interface AuthApi {
-  register(username: string, password: string): Promise<RegistrationResult>;
+  requestRegistrationVerification(
+    destination: string,
+    idempotencyKey: string,
+  ): Promise<VerificationRequestResult>;
+  register(
+    username: string,
+    password: string,
+    verification: EmailVerification,
+  ): Promise<RegistrationResult>;
   login(username: string, password: string): Promise<RefreshResult>;
   refresh(acceptResult: (result: RefreshResult) => void): Promise<RefreshResult>;
   retryPendingRefresh(acceptResult: (result: RefreshResult) => void): Promise<boolean>;
@@ -87,9 +105,18 @@ async function refreshRequest(
 }
 
 export const authApi: AuthApi = {
-  register(username, password) {
+  requestRegistrationVerification(destination, idempotencyKey) {
+    return jsonRequest<VerificationRequestResult>(
+      "/api/v1/auth/registration-verification/request",
+      {
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ channel: "email", destination }),
+      },
+    );
+  },
+  register(username, password, verification) {
     return jsonRequest<RegistrationResult>("/api/v1/auth/register", {
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, verification }),
     });
   },
   login(username, password) {
