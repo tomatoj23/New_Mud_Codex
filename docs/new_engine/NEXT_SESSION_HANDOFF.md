@@ -1,4 +1,4 @@
-# 下一会话交接：注册验证投递基础已完成，下一步 Issue #13
+# 下一会话交接：已验证邮箱最终注册已完成，下一步 Issue #14
 
 > 快照日期：2026-08-26。
 >
@@ -22,7 +22,7 @@ git log -8 --decorate --oneline
 - 分支是 `main`，工作树为空；若不为空，先辨认并保留已有修改。
 - Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
 - GitHub 原生子票顺序为 #11–#16，阻塞链为 `#11 -> #12 -> #13 -> #14 -> #15 -> #16`。
-- #12 关闭后，唯一未认领 frontier 是 #13；不要提前进入 #14 或 Character Slice 2。
+- #13 关闭后，唯一未认领 frontier 是 #14；不要提前进入 #15 或 Character Slice 2。
 
 若本机 PATH 找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`。当前已验证环境是 Windows 10 `10.0.19045`、仓库 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。
 
@@ -34,7 +34,8 @@ git log -8 --decorate --oneline
 - Issue #9 / Engine Stage E1 / Slice 1 仍是当时注册、普通登录、refresh/logout、RecoveryCode 与 H5 single-flight 的已验证历史事实。
 - Issue #10 已批准 `AUTH-005`：VerifiedContactMethod 与 VerificationChallenge 取代 RecoveryCode，当前渠道只启用 email。
 - Issue #11 已把 V6、冻结合同、追踪、状态、差异、路线、tracer plan 和本交接统一到新认证权威；本票没有修改数据库、运行配置或业务行为。
-- Issue #12 已交付 registration-verification REST、应用层 crypto/lookup、PostgreSQL 持久合并限流、加密 outbox 与独立 worker；未创建最终 User、消费 challenge、实现 password reset、切换 RecoveryCode 或修改 H5。
+- Issue #12 已交付 registration-verification REST、应用层 crypto/lookup、PostgreSQL 持久合并限流、加密 outbox 与独立 worker。
+- Issue #13 已交付已验证邮箱最终注册与 H5：register 原子消费权威 challenge，创建 User、当前实例 GameAccount 和唯一 VerifiedContactMethod，保持零认证状态；跨 lookup key 轮换不会复活已替代旧码。尚未实现 password reset 或切换 RecoveryCode。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - Character Slice 2 被整个 Auth Baseline Amendment 阻塞；只有 Issue #16 完成后才能启动。
 
@@ -46,8 +47,8 @@ git log -8 --decorate --oneline
 | #10 | Open Spec；已验证联系方式注册与账号恢复基线修订 | — |
 | #11 | 权威修订；V6/合同/追踪/状态/计划/交接 | 无 |
 | #12 | 已关闭；challenge、crypto、持久限流、outbox 与 worker 投递 tracer | #11 |
-| #13 | 当前 frontier；已验证邮箱最终注册与 H5 | #12 |
-| #14 | 邮箱密码重置、即时认证撤销与 H5 | #13 |
+| #13 | 已关闭；已验证邮箱最终注册与 H5 | #12 |
+| #14 | 当前 frontier；邮箱密码重置、即时认证撤销与 H5 | #13 |
 | #15 | RecoveryCode 退役与原子切换 | #14 |
 | #16 | 分层证据、SMTP opt-in smoke 与双轴复审 | #15 |
 
@@ -61,7 +62,7 @@ git log -8 --decorate --oneline
 | `AUTH-001`、`AUTH-002` | `verified` | Issue #9 的注册零隐式登录和会话生命周期历史证据仍成立 |
 | `AUTH-004` | `retired` | RecoveryCode + PresenceRecovery 的旧复合追踪项已拆开，ID 不复用 |
 | `IDENTITY-001` | `verified` | 每实例一个 User 永久映射一个 GameAccount 已由 Issue #9 验证 |
-| `AUTH-005` | `specified` | 新认证权威已明确，#12 已交付投递基础；最终注册、恢复、切换与总证据仍待 #13–#16 |
+| `AUTH-005` | `specified` | 新认证权威已明确，#12/#13 已交付投递基础与最终注册；恢复、切换与总证据仍待 #14–#16 |
 | `AUTH-006` | `specified` | PresenceRecovery 属于未来 Character Slice 2，takeover 仍独立 |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器、容量/soak 与发布级恢复证据未完成 |
 | `RELEASE-001` / PublicV1Gate | `blocked` | 尚不具备公开接纳真实玩家的发布证据 |
@@ -96,15 +97,15 @@ git log -8 --decorate --oneline
 - Character、CharacterOwnership、ConnectionSession、Presence、PresenceSnapshot、enter、resume、PresenceRecovery 与 takeover。
 - CAPTCHA provider、完整发布浏览器矩阵、容量/soak 或 PublicV1Gate 完成声明。
 
-## 7. Issue #13 的唯一合法启动顺序
+## 7. Issue #14 的唯一合法启动顺序
 
-1. 完成第 1 节仓库与 Issue 检查，确认 #12 已关闭、#13 无其他 open blocker 且未被他人认领。
-2. 阅读 Issue #10、#13、`CONTEXT.md`、ADR-0005 至 ADR-0008，以及 V6 第 8 章和 08/13/15/16 的认证修订段落。
-3. 认领 #13；按 `/implement` 内部逐条 `/tdd`，先确认公开 seam：最终 registration REST、PostgreSQL 原子消费/唯一性、H5 + fake provider。
-4. 只实现 #13 的已验证邮箱最终注册与 H5：重验并消费 active registration challenge，原子创建 User、当前实例 GameAccount 和 VerifiedContactMethod，保持零 AuthSession/token/RecoveryCode/Character/Presence。
-5. 不实现 password reset、RecoveryCode 410 切换、SMS、联系方式换绑、账号关闭/重开、Character、PresenceRecovery 或 takeover；发布 feature flag 保持关闭。
+1. 完成第 1 节仓库与 Issue 检查，确认 #13 已关闭、#14 无其他 open blocker 且未被他人认领。
+2. 阅读 Issue #10、#14、`CONTEXT.md`、ADR-0005 至 ADR-0008，以及 V6 第 8 章和 08/13/15/16 的认证修订段落。
+3. 认领 #14；按 `/implement` 内部逐条 `/tdd`，先确认公开 seam：password-reset request/confirm REST、PostgreSQL 即时认证撤销、受保护入口与 H5 + fake provider。
+4. 只实现 #14 的邮箱密码重置与 H5：非枚举 request 只为合格 User 产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销该 User 跨实例全部旧认证，成功后要求重新登录且不改变 GameAccount lifecycle。
+5. 普通账号名/密码登录必须继续不依赖邮件系统；不实现 RecoveryCode 410 切换、SMS、联系方式换绑、账号关闭/重开、Character、PresenceRecovery 或 takeover，发布 feature flag 保持关闭。
 6. PostgreSQL 测试串行运行；默认测试零公网，不使用真实 SMTP 作为必需门禁。
-7. 完成受影响测试、H5 E2E、全量/静态门禁和 Standards + Spec 双轴复审后提交、回填并关闭 #13；随后 frontier 才是 #14。
+7. 完成受影响测试、H5 E2E、全量/静态门禁和 Standards + Spec 双轴复审后提交、回填并关闭 #14；随后 frontier 才是 #15。
 
 ## 8. 权威来源
 
@@ -118,7 +119,7 @@ git log -8 --decorate --oneline
 | 当前实现与验证结果 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
 | 实施顺序 | `docs/new_engine/10_ROADMAP.md`、`plans/m0-e1-tracer-bullets.md` |
 | 完整批准规格 | GitHub Issue #10 |
-| 当前 ticket | GitHub Issue #13 |
+| 当前 ticket | GitHub Issue #14 |
 
 ## 9. 工程与证据边界
 

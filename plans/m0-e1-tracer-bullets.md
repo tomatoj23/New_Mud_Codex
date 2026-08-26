@@ -91,7 +91,7 @@
 
 ## Engine Stage E1 / Auth Baseline Amendment: 已验证联系方式注册与账号恢复
 
-**Status**: `specified`（Issue #10；Issue #11 已完成权威修订，运行实现等待 #12–#16）
+**Status**: `specified`（Issue #10；Issues #11–#13 已完成，运行实现等待 #14–#16）
 
 **User stories**: 作为新玩家，我先验证邮箱再创建账号；作为忘记密码的玩家，我通过已验证邮箱重置密码并让全部旧认证立即失效；作为普通玩家，我始终使用账号名和密码登录，不需要理解“独立登录”或 RecoveryCode。覆盖 `AUTH-005`、`CLIENT-001`、`MILESTONE-002`。
 
@@ -99,11 +99,13 @@
 
 按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。该 Amendment 必须完整结束后才能启动 Character Slice 2。
 
+当前下一 frontier 是 #14；不得提前认领或实现 #15，也不得启动 Character Slice 2。
+
 ### Acceptance criteria
 
 - [x] Issue #11 将 V6、冻结合同、追踪、状态、差异、计划与交接统一到 VerifiedContactMethod/VerificationChallenge，并保留 Issue #9 历史。
-- [ ] #12 交付 email challenge、独立密钥、加密联系方式/lookup、PostgreSQL 持久限流/outbox、worker 与非枚举 request。
-- [ ] #13 最终 register 原子消费 challenge，创建 User/GameAccount/VerifiedContactMethod，返回零认证状态，并完成 H5 注册/普通登录文案。
+- [x] #12 交付 email challenge、独立密钥、加密联系方式/lookup、PostgreSQL 持久限流/outbox、worker 与非枚举 request。
+- [x] #13 最终 register 原子消费 challenge，创建 User/GameAccount/VerifiedContactMethod，返回零认证状态，并完成 H5 注册/普通登录文案。
 - [ ] #14 password reset 原子撤销跨实例全部 AuthSession/family/credential，旧 access/refresh 立即失败，通知失败不回滚密码。
 - [ ] #15 两个旧 RecoveryCode 端点统一 410，现有开发 code 全撤销，注册/reset/退役通过同一受控切换且普通登录保持可用。
 - [ ] #16 完成 PostgreSQL 并发、迁移、静态、全量、E2E、秘密扫描、可选 SMTP smoke 和 Standards + Spec 双轴证据。
