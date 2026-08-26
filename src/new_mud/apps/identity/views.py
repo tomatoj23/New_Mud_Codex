@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import re
 import secrets
 
@@ -22,8 +23,17 @@ from .services import (
     register,
     rotate_recovery_code,
 )
+from .verification import ContactInvalid
+from .verification_config import VerificationServiceUnavailable
+from .verification_requests import (
+    ContactChannelUnavailable,
+    VerificationRequestConflict,
+    VerificationRequestInvalid,
+    request_registration_verification,
+)
 
 RECOVERY_DEVICE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
+VERIFICATION_DEVICE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 
 
 def _response(payload: dict[str, object], *, status: int) -> Response:
@@ -45,7 +55,84 @@ def _account_rate_limit_subject(value: object) -> object:
 
 
 def _client_ip(request) -> str:
-    return str(request.META.get("REMOTE_ADDR") or "<unknown>")
+    peer = str(request.META.get("REMOTE_ADDR") or "<unknown>")
+    try:
+        peer_address = ipaddress.ip_address(peer)
+        trusted = any(
+            peer_address in ipaddress.ip_network(network)
+            for network in settings.AUTH_TRUSTED_PROXY_NETWORKS
+        )
+    except ValueError:
+        return "<unknown>"
+    if not trusted:
+        return peer
+    forwarded = [
+        value.strip()
+        for value in str(request.headers.get("X-Forwarded-For") or "").split(",")
+        if value.strip()
+    ]
+    chain = [*forwarded, peer]
+    for candidate in reversed(chain):
+        try:
+            address = ipaddress.ip_address(candidate)
+        except ValueError:
+            return "<unknown>"
+        if not any(
+            address in ipaddress.ip_network(network)
+            for network in settings.AUTH_TRUSTED_PROXY_NETWORKS
+        ):
+            return str(address)
+    return peer
+
+
+def _verification_device_id(request) -> str:
+    candidate = request.COOKIES.get("new_mud_verification_device")
+    if isinstance(candidate, str) and VERIFICATION_DEVICE_PATTERN.fullmatch(candidate):
+        return candidate
+    return secrets.token_urlsafe(24)
+
+
+def _set_verification_device_cookie(response: Response, device_id: str) -> None:
+    response.set_cookie(
+        "new_mud_verification_device",
+        device_id,
+        max_age=settings.AUTH_VERIFICATION_DEVICE_MAX_AGE_SECONDS,
+        path="/api/v1/auth/",
+        secure=True,
+        httponly=True,
+        samesite="Strict",
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def registration_verification_request_view(request):
+    if not _origin_allowed(request):
+        return _error("CONTACT_INVALID", status=403)
+    device_id = _verification_device_id(request)
+    if request.headers.get("Authorization"):
+        response = _error("CONTACT_INVALID", status=400)
+        _set_verification_device_cookie(response, device_id)
+        return response
+    try:
+        result = request_registration_verification(
+            channel=request.data.get("channel"),
+            destination=request.data.get("destination"),
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            client_ip=_client_ip(request),
+            device_id=device_id,
+        )
+        response = _response(result.payload, status=result.status)
+    except ContactChannelUnavailable:
+        response = _error("CONTACT_CHANNEL_UNAVAILABLE", status=400)
+    except ContactInvalid, VerificationRequestInvalid:
+        response = _error("CONTACT_INVALID", status=400)
+    except VerificationRequestConflict:
+        response = _error("CONTACT_INVALID", status=409)
+    except VerificationServiceUnavailable:
+        response = _error("VERIFICATION_SERVICE_UNAVAILABLE", status=503)
+    _set_verification_device_cookie(response, device_id)
+    return response
 
 
 def _authentication_request_allowed(

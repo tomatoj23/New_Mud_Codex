@@ -16,8 +16,11 @@ def _base64url(value: bytes) -> str:
 
 
 def _signing_key(purpose: str) -> bytes:
+    root_key = settings.AUTH_TOKEN_SIGNING_KEY
+    if not isinstance(root_key, str) or not root_key:
+        raise RuntimeError("token signing key is unavailable")
     return hmac.new(
-        settings.SECRET_KEY.encode("utf-8"),
+        root_key.encode("utf-8"),
         f"new-mud:{purpose}:v1".encode(),
         hashlib.sha256,
     ).digest()

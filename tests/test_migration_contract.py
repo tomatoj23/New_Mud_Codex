@@ -36,3 +36,32 @@ def test_initial_migration_has_reversible_custom_sql() -> None:
     assert reverse_sql.count("DROP CONSTRAINT") == 11
     assert reverse_sql.count("DROP TRIGGER") == 10
     assert reverse_sql.count("DROP FUNCTION") == 6
+
+
+def test_verification_immutability_migration_has_complete_reverse_sql() -> None:
+    migration = import_module(
+        "new_mud.apps.identity.migrations.0006_verification_immutability_guards"
+    )
+    reverse_sql = migration.POSTGRES_VERIFICATION_GUARDS_REVERSE_SQL
+
+    expected_triggers = {
+        "identity_verification_challenge_guard_trigger",
+        "identity_verification_delivery_guard_trigger",
+        "identity_verification_request_guard_trigger",
+        "identity_verified_contact_guard_trigger",
+        "identity_verification_limit_guard_trigger",
+    }
+    expected_functions = {
+        "identity_guard_verification_challenge",
+        "identity_guard_verification_delivery",
+        "identity_reject_verification_request_update",
+        "identity_guard_verified_contact",
+        "identity_guard_verification_limit_bucket",
+    }
+
+    assert reverse_sql.count("DROP TRIGGER") == len(expected_triggers)
+    assert reverse_sql.count("DROP FUNCTION") == len(expected_functions)
+    for trigger_name in expected_triggers:
+        assert f"DROP TRIGGER IF EXISTS {trigger_name}" in reverse_sql
+    for function_name in expected_functions:
+        assert f"DROP FUNCTION IF EXISTS {function_name}()" in reverse_sql

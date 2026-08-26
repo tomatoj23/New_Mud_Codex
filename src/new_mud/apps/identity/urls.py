@@ -7,9 +7,15 @@ from .views import (
     recovery_code_rotate_view,
     refresh_view,
     register_view,
+    registration_verification_request_view,
 )
 
 urlpatterns = [
+    path(
+        "registration-verification/request",
+        registration_verification_request_view,
+        name="auth-registration-verification-request",
+    ),
     path("register", register_view, name="auth-register"),
     path("login", login_view, name="auth-login"),
     path("refresh", refresh_view, name="auth-refresh"),

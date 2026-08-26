@@ -112,7 +112,7 @@ def test_login_creates_one_session_family_and_protected_refresh_cookie(client) -
         "game_account_id",
     }
     assert payload["token_type"] == "Bearer"
-    assert payload["expires_in"] == 900
+    assert 0 < payload["expires_in"] <= 900
     assert "refresh" not in payload
     assert response.headers["Cache-Control"] == "no-store"
 
@@ -132,6 +132,30 @@ def test_login_creates_one_session_family_and_protected_refresh_cookie(client) -
     assert family.current_generation == credential.generation == 1
     assert session.device_id != "browser-fingerprint-must-not-be-device-id"
     assert cookie.value not in credential.token_hash
+
+
+def test_token_credentials_do_not_use_the_django_framework_secret(client) -> None:
+    auth_post(
+        client,
+        "auth-register",
+        {"username": "independent_token_key", "password": "safe-example-passphrase-42"},
+    )
+    login_response = auth_post(
+        client,
+        "auth-login",
+        {"username": "independent_token_key", "password": "safe-example-passphrase-42"},
+    )
+    assert login_response.status_code == 200
+
+    with override_settings(SECRET_KEY="changed-framework-secret"):
+        refresh_response = auth_post(
+            client,
+            "auth-refresh",
+            {},
+            **{"idempotency-key": "independent-token-key-1"},
+        )
+
+    assert refresh_response.status_code == 200
 
 
 def test_login_reports_access_lifetime_from_response_time(client) -> None:

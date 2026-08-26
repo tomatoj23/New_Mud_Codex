@@ -4,6 +4,8 @@ from .base import *  # noqa: F403
 
 if not SECRET_KEY:  # noqa: F405
     raise ImproperlyConfigured("DJANGO_SECRET_KEY is required in production")
+if not AUTH_TOKEN_SIGNING_KEY:  # noqa: F405
+    raise ImproperlyConfigured("NEW_MUD_AUTH_TOKEN_SIGNING_KEY is required in production")
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"

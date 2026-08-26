@@ -11,8 +11,10 @@ requires-python = ">=3.14,<3.15"
 dependencies = [
   "Django>=6.0.7,<6.1",
   "channels>=4.3.2,<5",
+  "cryptography>=49.0.0,<50",
   "daphne>=4.2.2,<5",
   "djangorestframework>=3.17.1,<4",
+  "idna>=3.18,<4",
   "jsonschema>=4.26,<5",
   "psycopg[binary]>=3.3.4,<4",
   "rfc8785>=0.1.4,<0.2",

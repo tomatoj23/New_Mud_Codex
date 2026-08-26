@@ -17,6 +17,8 @@ from django.db import (
     connection,
     transaction,
 )
+from django.test import Client
+from django.urls import reverse
 from django.utils import timezone
 
 from new_mud.apps.identity.models import (
@@ -26,6 +28,10 @@ from new_mud.apps.identity.models import (
     RefreshRequestTerminalRecord,
     RefreshTokenCredential,
     RefreshTokenFamily,
+    VerificationChallenge,
+    VerificationDeliveryOutbox,
+    VerificationRateLimitBucket,
+    VerificationRequestRecord,
 )
 from new_mud.apps.identity.services import (
     AuthenticationFailed,
@@ -33,6 +39,12 @@ from new_mud.apps.identity.services import (
     login,
     refresh,
     register,
+)
+from new_mud.apps.identity.verification_delivery import (
+    DeliveryOutcome,
+    ProviderAcceptedCrash,
+    VerificationEmail,
+    deliver_one_verification,
 )
 
 pytestmark = [
@@ -47,6 +59,32 @@ pytestmark = [
 def force_deferred_constraints() -> None:
     with connection.cursor() as cursor:
         cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+
+
+def request_registration_verification_from_thread(
+    *,
+    destination: str,
+    idempotency_key: str,
+    device_id: str,
+) -> tuple[int, dict[str, object]]:
+    close_old_connections()
+    try:
+        client = Client()
+        client.cookies["new_mud_verification_device"] = device_id
+        response = client.post(
+            reverse("auth-registration-verification-request"),
+            {"channel": "email", "destination": destination},
+            content_type="application/json",
+            secure=True,
+            REMOTE_ADDR="192.0.2.10",
+            headers={
+                "origin": "https://testserver",
+                "idempotency-key": idempotency_key,
+            },
+        )
+        return response.status_code, response.json()
+    finally:
+        close_old_connections()
 
 
 def create_identity_pair(
@@ -350,3 +388,204 @@ def test_terminal_identity_rows_cannot_be_reactivated_or_rebound() -> None:
         RefreshTokenCredential.objects.filter(pk=credential.pk).update(
             state=RefreshTokenCredential.State.ACTIVE,
         )
+
+
+def test_concurrent_replay_creates_one_registration_challenge_and_delivery() -> None:
+    start = Event()
+
+    def request() -> tuple[int, dict[str, object]]:
+        assert start.wait(timeout=5)
+        return request_registration_verification_from_thread(
+            destination="concurrent-replay@example.com",
+            idempotency_key="concurrent-replay-1",
+            device_id="concurrent-replay-device",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(request) for _ in range(2)]
+        start.set()
+        responses = [future.result(timeout=10) for future in futures]
+
+    assert responses == [
+        (202, {"status": "accepted", "retry_after": 60}),
+        (202, {"status": "accepted", "retry_after": 60}),
+    ]
+    assert VerificationChallenge.objects.count() == 1
+    assert VerificationDeliveryOutbox.objects.count() == 1
+    assert VerificationRequestRecord.objects.count() == 1
+    assert set(VerificationRateLimitBucket.objects.values_list("request_count", flat=True)) == {1}
+
+
+def test_concurrent_keys_for_one_contact_allow_only_one_cooldown_winner() -> None:
+    start = Event()
+
+    def request(idempotency_key: str) -> tuple[int, dict[str, object]]:
+        assert start.wait(timeout=5)
+        return request_registration_verification_from_thread(
+            destination="concurrent-cooldown@example.com",
+            idempotency_key=idempotency_key,
+            device_id=f"device-{idempotency_key}",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(request, "concurrent-cooldown-a"),
+            executor.submit(request, "concurrent-cooldown-b"),
+        ]
+        start.set()
+        responses = [future.result(timeout=10) for future in futures]
+
+    assert sorted(status for status, _ in responses) == [202, 429]
+    assert [payload for status, payload in responses if status == 202] == [
+        {"status": "accepted", "retry_after": 60}
+    ]
+    limited = [payload for status, payload in responses if status == 429]
+    assert len(limited) == 1
+    assert limited[0]["error"] == {"code": "VERIFICATION_RATE_LIMITED"}
+    retry_after = limited[0]["retry_after"]
+    assert isinstance(retry_after, int)
+    assert 1 <= retry_after <= 60
+    assert VerificationChallenge.objects.count() == 1
+    assert VerificationDeliveryOutbox.objects.count() == 1
+    assert VerificationRequestRecord.objects.count() == 2
+
+
+class BlockingEmailSender:
+    def __init__(self, *, started: Event, release: Event) -> None:
+        self.started = started
+        self.release = release
+        self.messages: list[VerificationEmail] = []
+
+    def send(self, message: VerificationEmail) -> None:
+        self.messages.append(message)
+        self.started.set()
+        assert self.release.wait(timeout=5)
+
+
+class RecordingEmailSender:
+    def __init__(self) -> None:
+        self.messages: list[VerificationEmail] = []
+
+    def send(self, message: VerificationEmail) -> None:
+        self.messages.append(message)
+
+
+def test_two_workers_cannot_send_the_same_unexpired_delivery_lease() -> None:
+    assert request_registration_verification_from_thread(
+        destination="concurrent-worker@example.com",
+        idempotency_key="concurrent-worker-1",
+        device_id="concurrent-worker-device",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    provider_started = Event()
+    release_provider = Event()
+    first_sender = BlockingEmailSender(started=provider_started, release=release_provider)
+    second_sender = RecordingEmailSender()
+
+    def deliver_first() -> DeliveryOutcome:
+        close_old_connections()
+        try:
+            return deliver_one_verification(worker_id="worker-a", sender=first_sender)
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        first = executor.submit(deliver_first)
+        assert provider_started.wait(timeout=5)
+        try:
+            second = deliver_one_verification(worker_id="worker-b", sender=second_sender)
+        finally:
+            release_provider.set()
+        assert first.result(timeout=5) == DeliveryOutcome.DELIVERED
+
+    assert second == DeliveryOutcome.NO_WORK
+    assert len(first_sender.messages) == 1
+    assert second_sender.messages == []
+    assert VerificationChallenge.objects.get().state == VerificationChallenge.State.ACTIVE
+    assert (
+        VerificationDeliveryOutbox.objects.get().state == VerificationDeliveryOutbox.State.DELIVERED
+    )
+
+
+def test_expired_delivery_lease_is_reclaimed_with_the_same_payload() -> None:
+    assert request_registration_verification_from_thread(
+        destination="lease-reclaim@example.com",
+        idempotency_key="lease-reclaim-1",
+        device_id="lease-reclaim-device",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    sender = RecordingEmailSender()
+
+    with pytest.raises(ProviderAcceptedCrash):
+        deliver_one_verification(
+            worker_id="crashed-worker",
+            sender=sender,
+            crash_after_provider_accept=True,
+        )
+    leased = VerificationDeliveryOutbox.objects.get()
+    assert leased.state == VerificationDeliveryOutbox.State.LEASED
+    assert leased.payload_ciphertext is not None
+    VerificationDeliveryOutbox.objects.filter(pk=leased.pk).update(lease_expires_at=timezone.now())
+
+    outcome = deliver_one_verification(worker_id="reclaiming-worker", sender=sender)
+
+    assert outcome == DeliveryOutcome.DELIVERED
+    assert len(sender.messages) == 2
+    assert sender.messages[0] == sender.messages[1]
+    assert VerificationChallenge.objects.get().state == VerificationChallenge.State.ACTIVE
+    delivered = VerificationDeliveryOutbox.objects.get()
+    assert delivered.state == VerificationDeliveryOutbox.State.DELIVERED
+    assert delivered.payload_ciphertext is None
+
+
+def test_limiter_database_failure_is_global_without_disabling_password_login() -> None:
+    register(username="limiter_outage", password="safe-example-passphrase-42")
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE FUNCTION identity_test_fail_verification_limit_write()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'test limiter unavailable' USING ERRCODE = '58000';
+            END;
+            $$
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TRIGGER identity_test_fail_verification_limit_write_trigger
+            BEFORE INSERT OR UPDATE ON identity_verificationratelimitbucket
+            FOR EACH ROW EXECUTE FUNCTION identity_test_fail_verification_limit_write()
+            """
+        )
+
+    try:
+        verification = request_registration_verification_from_thread(
+            destination="limiter-outage@example.com",
+            idempotency_key="limiter-outage-1",
+            device_id="limiter-outage-device",
+        )
+        client = Client()
+        login_response = client.post(
+            reverse("auth-login"),
+            {"username": "limiter_outage", "password": "safe-example-passphrase-42"},
+            content_type="application/json",
+            secure=True,
+            REMOTE_ADDR="192.0.2.10",
+            headers={"origin": "https://testserver"},
+        )
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                DROP TRIGGER IF EXISTS identity_test_fail_verification_limit_write_trigger
+                    ON identity_verificationratelimitbucket
+                """
+            )
+            cursor.execute("DROP FUNCTION IF EXISTS identity_test_fail_verification_limit_write()")
+
+    assert verification == (503, {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}})
+    assert VerificationRateLimitBucket.objects.count() == 0
+    assert VerificationRequestRecord.objects.count() == 0
+    assert VerificationChallenge.objects.count() == 0
+    assert login_response.status_code == 200
