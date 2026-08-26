@@ -5,6 +5,9 @@ from dataclasses import dataclass
 
 import idna
 
+from .verification_crypto import DigestedValue, KeyRing, keyed_digest_candidates
+from .verification_limits import advisory_transaction_lock
+
 EMAIL_LOCAL_PATTERN = re.compile(
     r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*"
 )
@@ -18,6 +21,17 @@ class ContactInvalid(ValueError):
 class NormalizedEmail:
     delivery: str
     comparison: str
+
+
+@dataclass(frozen=True)
+class RegistrationEmailScope:
+    email: NormalizedEmail
+    current_lookup: DigestedValue
+    lookup_candidates: tuple[DigestedValue, ...]
+
+    @property
+    def lookup_digests(self) -> tuple[str, ...]:
+        return tuple(candidate.digest for candidate in self.lookup_candidates)
 
 
 def normalize_email(destination: object) -> NormalizedEmail:
@@ -42,3 +56,27 @@ def normalize_email(destination: object) -> NormalizedEmail:
     if len(delivery) > 254:
         raise ContactInvalid
     return NormalizedEmail(delivery=delivery, comparison=delivery.casefold())
+
+
+def registration_email_scope(
+    email: NormalizedEmail,
+    *,
+    lookup_keyring: KeyRing,
+) -> RegistrationEmailScope:
+    candidates = keyed_digest_candidates(
+        email.comparison,
+        keyring=lookup_keyring,
+        context="contact:email",
+    )
+    current_lookup = next(
+        candidate for candidate in candidates if candidate.key_id == lookup_keyring.current_key_id
+    )
+    return RegistrationEmailScope(
+        email=email,
+        current_lookup=current_lookup,
+        lookup_candidates=candidates,
+    )
+
+
+def lock_registration_email_scope(scope: RegistrationEmailScope) -> None:
+    advisory_transaction_lock(f"registration:email:{scope.email.comparison}")

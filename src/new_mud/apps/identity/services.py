@@ -34,7 +34,12 @@ from .tokens import (
     parse_refresh_token,
     refresh_token_hash,
 )
-from .verification import ContactInvalid, normalize_email
+from .verification import (
+    ContactInvalid,
+    lock_registration_email_scope,
+    normalize_email,
+    registration_email_scope,
+)
 from .verification_config import (
     VerificationServiceUnavailable,
     require_verification_service,
@@ -42,8 +47,6 @@ from .verification_config import (
 from .verification_crypto import (
     KeyUnavailable,
     encrypt_value,
-    keyed_digest,
-    keyed_digest_candidates,
     verification_code_digest,
 )
 from .verification_limits import advisory_transaction_lock
@@ -120,30 +123,23 @@ def register(
         raise VerificationCodeInvalid from error
 
     keyrings = require_verification_service()
-    lookup_candidates = keyed_digest_candidates(
-        normalized_email.comparison,
-        keyring=keyrings.contact_lookup,
-        context="contact:email",
-    )
-    lookup_digests = [candidate.digest for candidate in lookup_candidates]
-    current_lookup = keyed_digest(
-        normalized_email.comparison,
-        keyring=keyrings.contact_lookup,
-        context="contact:email",
+    email_scope = registration_email_scope(
+        normalized_email,
+        lookup_keyring=keyrings.contact_lookup,
     )
     invalid_code = False
     user_model = get_user_model()
     try:
         with transaction.atomic():
             advisory_transaction_lock(f"registration:username:{normalized_username}")
-            advisory_transaction_lock(f"registration:email:{normalized_email.comparison}")
+            lock_registration_email_scope(email_scope)
             now = timezone.now()
             challenge = (
                 VerificationChallenge.objects.select_for_update()
                 .filter(
                     purpose=VerificationChallenge.Purpose.REGISTRATION,
                     channel=VerificationChallenge.Channel.EMAIL,
-                    destination_lookup_digest__in=lookup_digests,
+                    destination_lookup_digest__in=email_scope.lookup_digests,
                     user__isnull=True,
                     state=VerificationChallenge.State.ACTIVE,
                 )
@@ -196,7 +192,7 @@ def register(
                     raise RegistrationUnavailable
                 if VerifiedContactMethod.objects.filter(
                     channel=VerifiedContactMethod.Channel.EMAIL,
-                    lookup_digest__in=lookup_digests,
+                    lookup_digest__in=email_scope.lookup_digests,
                     state__in=(
                         VerifiedContactMethod.State.ACTIVE,
                         VerifiedContactMethod.State.UNREACHABLE,
@@ -222,8 +218,8 @@ def register(
                     channel=VerifiedContactMethod.Channel.EMAIL,
                     destination_ciphertext=encrypted_email.ciphertext,
                     encryption_key_id=encrypted_email.key_id,
-                    lookup_digest=current_lookup.digest,
-                    lookup_key_id=current_lookup.key_id,
+                    lookup_digest=email_scope.current_lookup.digest,
+                    lookup_key_id=email_scope.current_lookup.key_id,
                     verified_at=now,
                 )
                 challenge.state = VerificationChallenge.State.CONSUMED
