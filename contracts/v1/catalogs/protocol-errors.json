@@ -1,7 +1,7 @@
 {
   "contract_version": "1",
   "artifact_type": "error_code_catalog",
-  "requirement_ids": ["AUTH-003", "AUTH-004", "CHARACTER-001", "COMMUNITY-001", "MILESTONE-001"],
+  "requirement_ids": ["AUTH-003", "AUTH-004", "AUTH-005", "CHARACTER-001", "COMMUNITY-001", "MILESTONE-001"],
   "source_document": "docs/new_engine/11_PROTOCOL_CATALOG.md",
   "values": {
     "protocol": [
@@ -35,12 +35,15 @@
       "TOKEN_EXPIRED",
       "TOKEN_INVALID",
       "PRESENCE_RECOVERY_UNAVAILABLE",
-      "RECOVERY_CODE_INVALID",
-      "RECOVERY_RATE_LIMITED",
-      "ACCOUNT_RECOVERY_UNAVAILABLE",
+      "RECOVERY_CODE_RETIRED",
       "ACCOUNT_REOPEN_WINDOW_EXPIRED",
       "ACCOUNT_NOT_REOPENABLE",
       "ACCOUNT_ALREADY_RETIRED"
+    ],
+    "retired_authentication_provenance": [
+      "ACCOUNT_RECOVERY_UNAVAILABLE",
+      "RECOVERY_CODE_INVALID",
+      "RECOVERY_RATE_LIMITED"
     ],
     "action_domain": [
       "ACTION_AMBIGUOUS",

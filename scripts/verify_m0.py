@@ -69,7 +69,12 @@ EXPECTED_CATALOG_KEYS = {
         "blueprint_revision_kinds",
         "publication_reasons",
     },
-    "protocol-errors.json": {"action_domain", "authentication_presence", "protocol"},
+    "protocol-errors.json": {
+        "action_domain",
+        "authentication_presence",
+        "protocol",
+        "retired_authentication_provenance",
+    },
     "protocol-states.json": {"activation_states", "delivery_statuses"},
     "protocol.json": {
         "action_sources",
@@ -135,9 +140,14 @@ REQUIRED_RECOVERY_SCOPES = {
 }
 
 FROZEN_PROTOCOL_REQUEST_MINIMUM = {"presence.recover"}
+RETIRED_RECOVERY_ERROR_PROVENANCE = {
+    "ACCOUNT_RECOVERY_UNAVAILABLE",
+    "RECOVERY_CODE_INVALID",
+    "RECOVERY_RATE_LIMITED",
+}
 FROZEN_PROTOCOL_ERROR_MINIMUM = {
     "PRESENCE_RECOVERY_UNAVAILABLE",
-    "RECOVERY_CODE_INVALID",
+    "RECOVERY_CODE_RETIRED",
     "CHARACTER_PROFILE_INVALID",
     "MODERATION_REPORT_INVALID",
 }
@@ -176,6 +186,10 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "**VerifiedContactMethod**",
         "**VerificationChallenge**",
         "A retired player-held proof",
+    },
+    "contracts/v1/catalogs/protocol-errors.json": {
+        '"RECOVERY_CODE_RETIRED"',
+        '"retired_authentication_provenance"',
     },
     "UBIQUITOUS_LANGUAGE.md": {
         "**RecoveryCode**（已退役历史术语）",
@@ -226,6 +240,10 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "Auth Baseline Amendment",
         "Character Slice 2",
         "Issue #10",
+    },
+    "docs/new_engine/11_PROTOCOL_CATALOG.md": {
+        "RECOVERY_CODE_RETIRED",
+        "已退役的实现 provenance",
     },
     "docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md": {
         "`VerificationChallenge`",
@@ -283,6 +301,9 @@ OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS = {
         "- 用户名密码注册",
         "一次性明文 RecoveryCode",
         "### 4.4 RecoveryCode 与账号生命周期",
+    },
+    "docs/new_engine/11_PROTOCOL_CATALOG.md": {
+        "`PRESENCE_RECOVERY_UNAVAILABLE`、`RECOVERY_CODE_INVALID`、`RECOVERY_RATE_LIMITED`、`ACCOUNT_RECOVERY_UNAVAILABLE`、",
     },
     "docs/new_engine/13_SESSION_AUTH_STATE_MACHINE.md": {
         "REST register 只原子创建 User、GameAccount 与 RecoveryCode 哈希",
@@ -638,6 +659,20 @@ def validate_catalogs(
                     f"{relative}: verifier minimum {value!r} is absent from source document",
                 )
         if filename == "protocol-errors.json":
+            active_errors = set(catalog["values"].get("authentication_presence", []))
+            retired_errors = set(catalog["values"].get("retired_authentication_provenance", []))
+            result.check(
+                "RECOVERY_CODE_RETIRED" in active_errors,
+                f"{relative}: current RecoveryCode retirement error is missing",
+            )
+            result.check(
+                active_errors.isdisjoint(RETIRED_RECOVERY_ERROR_PROVENANCE),
+                f"{relative}: retired RecoveryCode errors remain active",
+            )
+            result.check(
+                retired_errors == RETIRED_RECOVERY_ERROR_PROVENANCE,
+                f"{relative}: retired RecoveryCode provenance has drifted",
+            )
             for value in FROZEN_PROTOCOL_ERROR_MINIMUM:
                 result.check(
                     value in catalog_values(catalog),
