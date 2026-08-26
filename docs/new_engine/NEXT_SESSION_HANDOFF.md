@@ -2,6 +2,8 @@
 
 > 快照日期：2026-08-27。
 >
+> 本地交付基线：Git `638e8cf`。快照时 `main` 相对 `origin/main` 为 ahead 12、behind 0，本次会话未 push。
+>
 > 本文件是无会话记忆时的现行启动入口。它汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序；不创造需求、合同或正式状态。冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
 
 ## 1. 新会话先做什么
@@ -20,6 +22,7 @@ git log -8 --decorate --oneline
 期望结果：
 
 - 分支是 `main`，工作树为空；若不为空，先辨认并保留已有修改。
+- 快照基线的 `HEAD` 是 `638e8cf460d4ceeedfbced058e20a98da1e42719`，`origin/main` 是 `5a36979304be7c91d8e9ce50c3873a79cf3291fd`，左右计数为 `12 0`。若远端尚未变化，这是预期的未推送本地历史，不是 pull、reset 或 rebase 的理由；若数值变化，先审计新增提交来源。
 - Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
 - GitHub 原生子票顺序为 #11–#16，阻塞链为 `#11 -> #12 -> #13 -> #14 -> #15 -> #16`。
 - #14 关闭后，唯一未认领 frontier 是 #15；不要提前进入 #16 或 Character Slice 2。
@@ -36,7 +39,8 @@ git log -8 --decorate --oneline
 - Issue #11 已把 V6、冻结合同、追踪、状态、差异、路线、tracer plan 和本交接统一到新认证权威；本票没有修改数据库、运行配置或业务行为。
 - Issue #12 已交付 registration-verification REST、应用层 crypto/lookup、PostgreSQL 持久合并限流、加密 outbox 与独立 worker。
 - Issue #13 已交付已验证邮箱最终注册与 H5：register 原子消费权威 challenge，创建 User、当前实例 GameAccount 和唯一 VerifiedContactMethod，保持零认证状态；跨 lookup key 轮换不会复活已替代旧码。
-- Issue #14 已交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知失败不回滚密码事务。
+- Issue #14 已由 Git `638e8cf` 交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知投递失败不回滚密码事务。identity 当前迁移叶节点是 `0008_security_notification_outbox`，安全通知 worker 入口是 `python manage.py process_security_notifications`。
+- #14 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 全量 231 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、mypy、Django check、migration drift、4 项认证合同与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - Character Slice 2 被整个 Auth Baseline Amendment 阻塞；只有 Issue #16 完成后才能启动。
 
@@ -75,7 +79,7 @@ git log -8 --decorate --oneline
 - 登录仍只使用账号名和密码；邮箱、未来手机号不是登录名、passwordless 或 MFA。
 - 新注册必须先验证 email，最终事务创建 User、当前实例 GameAccount 与 VerifiedContactMethod，但创建零 AuthSession/token/Character/Presence。
 - password reset 只使用 purpose 隔离的短期 VerificationChallenge，成功后撤销 User 跨实例全部 AuthSession/family/credential，不改变 GameAccount lifecycle，也不自动登录。
-- RecoveryCode 不再签发、展示或消费。旧 recover/rotate 先返回 `410 RECOVERY_CODE_RETIRED`，Public V1 前删除。
+- #15 必须落地的冻结目标是停止 RecoveryCode 的签发、展示与消费，让旧 recover/rotate 统一返回 `410 RECOVERY_CODE_RETIRED`，并在 Public V1 前删除兼容路由。Git `638e8cf` 仍保留旧端点与既有 code，不能把目标合同误报为当前运行事实。
 - 完整联系方式只保存应用层密文；精确查询和唯一性只使用独立 keyed lookup digest；Django `User.email` 保持为空。
 - HTTP 不同步发送 SMTP。VerificationDeliveryOutbox 与独立 worker 负责验证码投递、同 code 重试、provider 接受后激活和 terminal payload 擦除；密码重置成功通知使用独立 SecurityNotificationOutbox，投递失败不回滚已提交的密码事务。
 - 格式有效的 request 返回非枚举 202；request 需要 `Idempotency-Key`，限流状态持久化到 PostgreSQL，并合并联系方式、IP 和匿名设备维度。
