@@ -104,6 +104,7 @@
 | E1 / Slice 1 静态与迁移（2026-08-26） | Ruff lint 通过、69 files formatted；mypy 69 source files 通过；Django 0 issues；无 migration drift；identity `0003 -> 0002 -> 0003` 往返通过；`pip check` 通过 |
 | E1 / Slice 1 安全与合同（2026-08-26） | `verify_m0.py` 57,053 checks、READY；npm critical audit 通过（0 critical），仍有上游 uni-app/Vite 兼容链的 19 项非 critical 风险：9 low、9 moderate、1 high |
 | E1 / Auth Baseline Amendment 权威（2026-08-26，Issue #11） | 认证权威合同测试 1 passed；`tests/test_contracts.py` 4 passed；默认全量使用仓库内 `--basetemp` 后 107 passed、28 个 PostgreSQL 条件项跳过；Ruff、70 files format、mypy 69 source files、diff check 通过；`verify_m0.py` 57,152 checks、READY |
+| E1 / Auth Baseline Amendment 投递基础（2026-08-26，Issue #12） | `RUN_POSTGRES_TESTS=1` 全量 187 passed；registration-verification REST、PostgreSQL 并发/迁移、worker/fake provider、密钥轮换和 fail-closed 专项通过；Ruff、84 files format、mypy 84 source files、Django 0 issues、无 migration drift、`pip check` 通过；`verify_m0.py` 57,156 checks、READY |
 
 pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两条弃用警告。当前运行时为 Python 3.14.2，且检查当日没有可升级的 Daphne 版本，因此该警告记录为上游兼容性观察项，不构成当前失败。
 
@@ -131,7 +132,8 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 - Issue #10 固定已验证邮箱注册、邮箱密码重置、即时认证撤销、RecoveryCode 退役，以及 SMS/换绑/关闭重开/Character/Presence/takeover 禁区；Issue #11 只发布这项权威修订，不修改数据库、运行配置或业务行为。
 - `VerifiedContactMethod`、`VerificationChallenge` 与已退役 RecoveryCode 已进入单一领域词汇；ADR-0005 至 ADR-0008 记录联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - `AUTH-004` 的历史复合语义已退役，Issue #9 的实现证据继续保留；`IDENTITY-001`、`AUTH-005` 与 `AUTH-006` 分别追踪 User/GameAccount 基数、现行联系方式认证修订和未来 PresenceRecovery。
-- 路线与 tracer plan 在原 E1 / Slice 1 与 Character Slice 2 之间插入 `Auth Baseline Amendment`。#12 是下一 frontier；#16 完成前不得启动 Character Slice 2。
+- Issue #12 已实现 registration-verification request、加密 challenge/outbox、持久合并限流和独立 worker 投递 tracer；provider 接受后才激活十分钟 challenge，terminal payload 擦除，key/limiter/worker/provider 故障只关闭验证功能而不关闭普通密码登录。
+- 路线与 tracer plan 在原 E1 / Slice 1 与 Character Slice 2 之间插入 `Auth Baseline Amendment`。#13 是下一 frontier；#16 完成前不得启动 Character Slice 2。
 - 新增认证权威文档合同检查，要求 V6、冻结合同、追踪、状态、差异、计划与交接使用同一现行边界，并拒绝旧 RecoveryCode 注册/恢复承诺重新进入活跃权威。
 
 ## 4. 当前状态
@@ -150,12 +152,12 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 | `AUTH-002` | `verified` | Issue #9 已完成 AuthSession/family、refresh generation/terminal/replay、幂等 logout 与前端 single-flight 证据 |
 | `AUTH-004` | `retired` | 原 RecoveryCode + PresenceRecovery 复合追踪项被有意拆开，ID 不复用；Issue #9 历史证据不删除 |
 | `IDENTITY-001` | `verified` | Issue #9 已验证每实例一个 User 永久映射一个 GameAccount 的数据库、迁移与并发边界 |
-| `AUTH-005` | `specified` | Issue #10 已批准，Issue #11 已同步权威；#12–#16 尚未实现已验证邮箱注册/恢复、即时撤销与 RecoveryCode 退役 |
+| `AUTH-005` | `specified` | Issue #10 已批准、Issue #11 已同步权威、Issue #12 已交付 challenge/crypto/limiter/outbox/worker 基础；#13–#16 仍须完成最终注册、恢复、即时撤销、RecoveryCode 退役与总证据 |
 | `AUTH-006` | `specified` | PresenceRecovery 继续属于未来 Character Slice 2，跨 AuthSession takeover 仍为后续独立切片 |
 | Engine Stage E1 / Slice 1 | `verified` | 8 项切片验收全部通过；范围止于注册与独立登录，不包含 Character、ConnectionSession、Presence、恢复控角或 takeover |
 | `RELEASE-001` / PublicV1Gate | `blocked` | V6 gate 已定义，尚无公开试运行、完整恢复、ReleaseManifest 或公开资料证据；不影响 M1/E0 的内部状态 |
 
-M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issue #9 固定 E1 / Slice 1 的历史注册与登录证据；M1 与 `MILESTONE-002` 仍未完成，下一实现入口是 Auth Baseline Amendment 的 Issue #12。
+M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issue #9 固定 E1 / Slice 1 的历史注册与登录证据；M1 与 `MILESTONE-002` 仍未完成，下一实现入口是 Auth Baseline Amendment 的 Issue #13。
 
 浏览器完整矩阵、容量/soak 报告与五个业务恢复范围仍是 `RELEASE-001` 的发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批或 M1 内部抽样而提前转为 `verified`。
 
@@ -171,7 +173,7 @@ M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `c
 | `AUTH-001`、`AUTH-002` | Issue #9、`src/new_mud/apps/identity/`、`tests/test_auth_api.py`、`tests/test_postgres_identity_contract.py`、`client/` 与 CI 分层门禁 |
 | `AUTH-004` | Issue #9 的 RecoveryCode/合并限流/User 全会话撤销历史证据；ADR-0005 与 Issue #10 记录有意退役，ID 不复用 |
 | `IDENTITY-001` | Issue #9 的 User/GameAccount 数据库唯一约束、迁移与并发证据 |
-| `AUTH-005` | Issue #10、Issue #11、CONTEXT/ADR-0005 至 0008、V6/08/13/15/16 权威与认证文档合同；运行实现仍待 #12–#16 |
+| `AUTH-005` | Issue #10、Issue #11、CONTEXT/ADR-0005 至 0008、V6/08/13/15/16 权威与认证文档合同；Issue #12 的 challenge/crypto/limiter/outbox/worker 实现与测试；完整运行结果仍待 #13–#16 |
 | `AUTH-006` | 11/13/15 的 PresenceRecovery 与 takeover 分离合同；Character Slice 2 尚未实现 |
 | `CONVERT-001` | `contracts/v1/artifacts/`、`scripts/generate_source_contracts.py`、`tests/test_contracts.py` |
 | `CLIENT-001` | `browser-matrix.json` 已批准且冻结目标版本；Issue #9 已有 Slice 1 的桌面/现代移动自动 E2E，但实际 `tested_versions` 与完整发布矩阵尚缺 |
