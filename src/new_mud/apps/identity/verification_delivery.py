@@ -14,8 +14,10 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from .models import VerificationChallenge, VerificationDeliveryOutbox
+from .verification import normalize_email
 from .verification_config import require_verification_service
-from .verification_crypto import EncryptedValue, decrypt_value
+from .verification_crypto import EncryptedValue, decrypt_value, keyed_digest_candidates
+from .verification_limits import advisory_transaction_lock
 
 
 class DeliveryTransientError(RuntimeError):
@@ -221,7 +223,18 @@ def _claim_delivery(*, worker_id: str, now) -> ClaimedDelivery | None:
 
 
 def _finish_delivery(claim: ClaimedDelivery, *, now) -> DeliveryOutcome:
+    normalized = normalize_email(claim.payload["destination"])
+    keyrings = require_verification_service()
+    lookup_digests = [
+        candidate.digest
+        for candidate in keyed_digest_candidates(
+            normalized.comparison,
+            keyring=keyrings.contact_lookup,
+            context="contact:email",
+        )
+    ]
     with transaction.atomic():
+        advisory_transaction_lock(f"registration:email:{normalized.comparison}")
         outbox = VerificationDeliveryOutbox.objects.select_for_update().get(pk=claim.outbox_id)
         if (
             outbox.state != VerificationDeliveryOutbox.State.LEASED
@@ -232,7 +245,7 @@ def _finish_delivery(claim: ClaimedDelivery, *, now) -> DeliveryOutcome:
         VerificationChallenge.objects.select_for_update().filter(
             purpose=challenge.purpose,
             channel=challenge.channel,
-            destination_lookup_digest=challenge.destination_lookup_digest,
+            destination_lookup_digest__in=lookup_digests,
             state=VerificationChallenge.State.ACTIVE,
         ).exclude(pk=challenge.pk).update(
             state=VerificationChallenge.State.SUPERSEDED,

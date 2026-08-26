@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -17,7 +18,7 @@ from django.db import (
     connection,
     transaction,
 )
-from django.test import Client
+from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -503,6 +504,66 @@ def test_concurrent_registration_consumes_one_challenge_into_one_complete_identi
     assert RecoveryCodeCredential.objects.count() == 0
     assert AuthSession.objects.count() == 0
     assert VerificationChallenge.objects.get().state == VerificationChallenge.State.CONSUMED
+
+
+def test_rotated_lookup_key_cannot_revive_a_superseded_registration_code() -> None:
+    destination = "rotated-replacement@example.com"
+    assert request_registration_verification_from_thread(
+        destination=destination,
+        idempotency_key="rotated-replacement-old",
+        device_id="rotated-replacement-old-device",
+    ) == (202, {"status": "accepted", "retry_after": 60})
+    old_sender = RecordingEmailSender()
+    assert (
+        deliver_one_verification(worker_id="rotated-replacement-old-worker", sender=old_sender)
+        == DeliveryOutcome.DELIVERED
+    )
+    old_code = old_sender.messages[0].body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+
+    VerificationRateLimitBucket.objects.filter(scope="contact", window_seconds=60).update(
+        window_started_at=timezone.now() - timedelta(seconds=61)
+    )
+    rotated_lookup_keys = {
+        **settings.AUTH_CONTACT_LOOKUP_KEYS,
+        "contact-lookup-v2": base64.urlsafe_b64encode(b"r" * 32).decode("ascii"),
+    }
+    with override_settings(
+        AUTH_CONTACT_LOOKUP_KEYS=rotated_lookup_keys,
+        AUTH_CONTACT_LOOKUP_CURRENT_KEY_ID="contact-lookup-v2",
+    ):
+        assert request_registration_verification_from_thread(
+            destination=destination,
+            idempotency_key="rotated-replacement-new",
+            device_id="rotated-replacement-new-device",
+        ) == (202, {"status": "accepted", "retry_after": 60})
+        new_sender = RecordingEmailSender()
+        assert (
+            deliver_one_verification(
+                worker_id="rotated-replacement-new-worker",
+                sender=new_sender,
+            )
+            == DeliveryOutcome.DELIVERED
+        )
+
+        for _ in range(6):
+            with pytest.raises(VerificationCodeInvalid):
+                register(
+                    username="rotated_replacement",
+                    password="safe-example-passphrase-42",
+                    verification={
+                        "channel": "email",
+                        "destination": destination,
+                        "code": old_code,
+                    },
+                )
+
+    assert get_user_model().objects.count() == 0
+    assert GameAccount.objects.count() == 0
+    assert VerifiedContactMethod.objects.count() == 0
+    assert sorted(VerificationChallenge.objects.values_list("state", flat=True)) == [
+        VerificationChallenge.State.LOCKED,
+        VerificationChallenge.State.SUPERSEDED,
+    ]
 
 
 def test_concurrent_registration_with_one_username_leaves_no_partial_loser() -> None:

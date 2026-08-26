@@ -51,22 +51,6 @@ def auth_post(
     remote_addr: str = "127.0.0.1",
     **headers,
 ):
-    if route_name == "auth-register" and "verification" not in payload:
-        suffix = uuid.uuid4().hex
-        destination = f"test-{suffix}@example.com"
-        code = request_delivered_registration_code(
-            client,
-            destination=destination,
-            idempotency_key=f"registration-{suffix}",
-        )
-        payload = {
-            **payload,
-            "verification": {
-                "channel": "email",
-                "destination": destination,
-                "code": code,
-            },
-        }
     return client.post(
         reverse(route_name),
         payload,
@@ -113,6 +97,36 @@ def request_delivered_registration_code(
     )
     body = mail.outbox[-1].body
     return body.split("注册验证码是：", maxsplit=1)[1].splitlines()[0]
+
+
+def post_registration_with_fresh_verified_email(
+    client,
+    payload: dict[str, object],
+    *,
+    remote_addr: str = "127.0.0.1",
+    **headers,
+):
+    suffix = uuid.uuid4().hex
+    destination = f"test-{suffix}@example.com"
+    code = request_delivered_registration_code(
+        client,
+        destination=destination,
+        idempotency_key=f"registration-{suffix}",
+    )
+    return auth_post(
+        client,
+        "auth-register",
+        {
+            **payload,
+            "verification": {
+                "channel": "email",
+                "destination": destination,
+                "code": code,
+            },
+        },
+        remote_addr=remote_addr,
+        **headers,
+    )
 
 
 def create_legacy_recovery_code(*, game_account_id: str) -> str:
@@ -502,9 +516,8 @@ def test_registration_verification_mismatches_share_one_error(
 
 
 def test_login_creates_one_session_family_and_protected_refresh_cookie(client) -> None:
-    registration = auth_post(
+    registration = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "login_player", "password": "safe-example-passphrase-42"},
     )
     assert registration.status_code == 201
@@ -549,9 +562,8 @@ def test_login_creates_one_session_family_and_protected_refresh_cookie(client) -
 
 
 def test_token_credentials_do_not_use_the_django_framework_secret(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "independent_token_key", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -573,9 +585,8 @@ def test_token_credentials_do_not_use_the_django_framework_secret(client) -> Non
 
 
 def test_login_reports_access_lifetime_from_response_time(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "delayed_login", "password": "safe-example-passphrase-42"},
     )
     issued_at = datetime(2026, 8, 26, 0, 0, tzinfo=UTC)
@@ -596,9 +607,8 @@ def test_login_reports_access_lifetime_from_response_time(client) -> None:
 
 
 def test_refresh_rotates_the_same_family_to_the_next_generation(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "refresh_player", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -639,9 +649,8 @@ def test_refresh_rotates_the_same_family_to_the_next_generation(client) -> None:
 
 
 def test_refresh_replay_with_a_different_key_revokes_family_and_session(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "replay_player", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -685,9 +694,8 @@ def test_refresh_replay_with_a_different_key_revokes_family_and_session(client) 
 
 
 def test_used_refresh_is_audited_as_replay_even_after_account_lifecycle_changes(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "late_replay", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -718,9 +726,8 @@ def test_used_refresh_is_audited_as_replay_even_after_account_lifecycle_changes(
 
 
 def test_logout_converges_cookie_and_bearer_sessions_idempotently(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "logout_player", "password": "safe-example-passphrase-42"},
     )
     first_login = auth_post(
@@ -766,9 +773,8 @@ def test_logout_converges_cookie_and_bearer_sessions_idempotently(client) -> Non
 
 
 def test_recovery_code_replaces_password_and_revokes_all_authentication(client) -> None:
-    registration = auth_post(
+    registration = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "recover_player", "password": "safe-example-passphrase-42"},
     )
     original_code = create_legacy_recovery_code(
@@ -871,9 +877,8 @@ def test_recovery_rate_limit_does_not_lock_password_login(client, settings) -> N
     settings.AUTH_RECOVERY_RATE_LIMIT_ACCOUNT = 1
     settings.AUTH_RECOVERY_RATE_LIMIT_IP = 100
     settings.AUTH_RECOVERY_RATE_LIMIT_DEVICE = 100
-    registration = auth_post(
+    registration = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "rate_limited_recovery", "password": "safe-example-passphrase-42"},
     )
     account = GameAccount.objects.get(pk=registration.json()["game_account_id"])
@@ -913,9 +918,8 @@ def test_recovery_rate_limit_does_not_lock_password_login(client, settings) -> N
 
 
 def test_recovery_does_not_reveal_account_existence_before_code_validation(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "existing_recovery", "password": "safe-example-passphrase-42"},
     )
 
@@ -948,14 +952,12 @@ def test_registration_and_login_are_rate_limited_with_stable_errors(client, sett
     settings.AUTH_LOGIN_RATE_LIMIT_ACCOUNT = 1
     settings.AUTH_LOGIN_RATE_LIMIT_IP = 100
 
-    first_registration = auth_post(
+    first_registration = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "limited_login", "password": "safe-example-passphrase-42"},
     )
-    limited_registration = auth_post(
+    limited_registration = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "other_registration", "password": "safe-example-passphrase-42"},
     )
     failed_login = auth_post(
@@ -979,9 +981,8 @@ def test_registration_and_login_are_rate_limited_with_stable_errors(client, sett
 
 
 def test_refresh_same_key_is_safe_and_old_result_becomes_superseded(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "retry_player", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1035,9 +1036,8 @@ def test_refresh_same_key_is_safe_and_old_result_becomes_superseded(client) -> N
 
 
 def test_refresh_retry_reports_access_token_remaining_lifetime(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "remaining_lifetime", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1070,9 +1070,8 @@ def test_refresh_retry_reports_access_token_remaining_lifetime(client) -> None:
 
 
 def test_refresh_retry_at_family_cutoff_does_not_extend_the_cookie(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "cutoff_retry", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1107,9 +1106,8 @@ def test_refresh_retry_at_family_cutoff_does_not_extend_the_cookie(client) -> No
 
 
 def test_refresh_same_key_with_a_different_credential_is_a_conflict(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "conflict_player", "password": "safe-example-passphrase-42"},
     )
     auth_post(
@@ -1139,9 +1137,8 @@ def test_refresh_same_key_with_a_different_credential_is_a_conflict(client) -> N
 
 
 def test_recovery_code_rotation_revokes_the_calling_session(client) -> None:
-    registration = auth_post(
+    registration = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "rotate_player", "password": "safe-example-passphrase-42"},
     )
     original_code = create_legacy_recovery_code(
@@ -1194,9 +1191,8 @@ def test_registration_rejects_invalid_credentials_without_partial_identity(
     username: str,
     password: str,
 ) -> None:
-    response = auth_post(
+    response = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": username, "password": password},
     )
 
@@ -1209,16 +1205,14 @@ def test_registration_rejects_invalid_credentials_without_partial_identity(
 
 
 def test_registration_rejects_case_insensitive_duplicate_without_partial_identity(client) -> None:
-    first = auth_post(
+    first = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "Duplicate_Player", "password": "safe-example-passphrase-42"},
     )
     assert first.status_code == 201
 
-    duplicate = auth_post(
+    duplicate = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "DUPLICATE_PLAYER", "password": "another-safe-passphrase-73"},
     )
 
@@ -1308,9 +1302,8 @@ def test_auth_endpoints_reject_untrusted_origin_without_authentication_side_effe
     client,
     origin: str | None,
 ) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "origin_player", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1364,9 +1357,8 @@ def test_invalid_refresh_key_fails_before_the_credential_is_consumed(
     client,
     idempotency_key: str | None,
 ) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "invalid_key_player", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1388,9 +1380,8 @@ def test_invalid_refresh_key_fails_before_the_credential_is_consumed(
 
 
 def test_refresh_rejects_json_and_authorization_transport_without_rotation(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "transport_player", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1428,9 +1419,8 @@ def test_refresh_rejects_json_and_authorization_transport_without_rotation(clien
 
 
 def test_logout_ignores_a_damaged_cookie_when_valid_bearer_locates_the_session(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "damaged_cookie", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1458,9 +1448,8 @@ def test_logout_ignores_a_damaged_cookie_when_valid_bearer_locates_the_session(c
 
 
 def test_logout_preserves_revoked_terminal_state_and_converges_children(client) -> None:
-    auth_post(
+    post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "terminal_logout", "password": "safe-example-passphrase-42"},
     )
     login_response = auth_post(
@@ -1520,9 +1509,8 @@ def test_plaintext_authentication_secrets_never_enter_audit_terminal_or_logs(
     caplog,
 ) -> None:
     password = "secret-audit-passphrase-42"
-    registration = auth_post(
+    registration = post_registration_with_fresh_verified_email(
         client,
-        "auth-register",
         {"username": "secret_audit", "password": password},
     )
     recovery_code = create_legacy_recovery_code(
