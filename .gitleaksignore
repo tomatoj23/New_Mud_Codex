@@ -1,0 +1,15 @@
+# Synthetic test passphrases verified in their original commits. Keep these
+# exemptions fingerprint-specific so new findings in the same files or rule
+# still fail both local and CI scans.
+1e6e930ebab86e724a0a79dbe3ce93875d76adbe:tests/test_verification_delivery.py:generic-api-key:943
+e504c8cfcef55f2dbc864ebbff372691775b43ea:tests/test_verification_delivery.py:generic-api-key:841
+638e8cf460d4ceeedfbced058e20a98da1e42719:tests/test_verification_delivery.py:generic-api-key:1610
+638e8cf460d4ceeedfbced058e20a98da1e42719:tests/test_auth_api.py:generic-api-key:315
+638e8cf460d4ceeedfbced058e20a98da1e42719:tests/test_auth_api.py:generic-api-key:444
+638e8cf460d4ceeedfbced058e20a98da1e42719:tests/test_auth_api.py:generic-api-key:472
+638e8cf460d4ceeedfbced058e20a98da1e42719:tests/test_auth_api.py:generic-api-key:494
+5a36979304be7c91d8e9ce50c3873a79cf3291fd:tests/test_auth_api.py:generic-api-key:361
+5a36979304be7c91d8e9ce50c3873a79cf3291fd:tests/test_auth_api.py:generic-api-key:387
+5a36979304be7c91d8e9ce50c3873a79cf3291fd:tests/test_auth_api.py:generic-api-key:415
+5a36979304be7c91d8e9ce50c3873a79cf3291fd:tests/test_auth_api.py:generic-api-key:447
+5a36979304be7c91d8e9ce50c3873a79cf3291fd:tests/test_auth_api.py:generic-api-key:456

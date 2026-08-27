@@ -2,7 +2,7 @@
 
 > 状态：Issue #16 的现行关闭证据，执行日期为 2026-08-27。本文只记录 `AUTH-005` 的验收结果，不创造认证语义，也不构成 Public V1 发布批准。
 >
-> 审查固定点：`1e6e930ebab86e724a0a79dbe3ce93875d76adbe`（Issue #15 最终提交）。Issue #16 的交付提交由关闭评论和本文件所在提交共同定位；本轮未 push。
+> 审查固定点：`1e6e930ebab86e724a0a79dbe3ce93875d76adbe`（Issue #15 最终提交）。Issue #16 的交付提交由关闭评论和本文件所在提交共同定位；Issue #16 关闭会话当时未 push，后续发布状态以 Git 远端和 GitHub Actions 为准。
 
 ## 1. 结论与范围
 
@@ -114,7 +114,7 @@ rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!ar
 
 两条命令均无匹配，记录为 `none`。CI 继续使用官方 `gitleaks/gitleaks-action@v2`。
 
-本机依次尝试 `curl.exe -L <official-release-asset>`、`gh release download v8.30.1 --pattern gitleaks_8.30.1_windows_x64.zip` 与 `gh api <release-asset> --method GET` 获取 gitleaks `v8.30.1`，但都在受限网络中途停止或超时；官方 Windows x64 zip 期望 SHA-256 为 `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`，未完成的忽略目录下载从未执行。因此本文件不声称“本机 gitleaks passed”；CI gitleaks 仍是提交进入远端后的独立必经门禁。
+关闭后的网络恢复复核已从官方 release 下载 gitleaks `v8.30.1` Windows x64 zip，并确认 SHA-256 为 `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`。首次全 Git 历史扫描在测试文件中命中 12 个 `generic-api-key`：逐行回看原始提交后，均是带 `safe` / `replacement` 标记的合成测试口令。`.gitleaksignore` 只豁免这 12 个“提交 SHA + 文件 + 规则 + 行号”精确 fingerprint，不按目录或规则放宽；以显式 ignore path 和 CI 默认发现方式各重扫 37 commits、约 5.11 MB，均为 `no leaks found`。CI 官方 gitleaks gate 继续作为远端独立门禁。
 
 `tests/test_smtp_smoke.py` 是显式 opt-in 的开发入口，默认结果为 `1 skipped`：本轮没有 `RUN_SMTP_TESTS=1`、显式收件人和本地 SMTP 秘密授权，所以没有向公网或 163 SMTP 发送邮件。该 smoke 还会强制 Django SMTP backend、`smtp.163.com`、发件账号、密码和 `DEFAULT_FROM_EMAIL`，并抑制收件人与 provider 异常细节。跳过不写成通过，163 也不构成 Public V1 provider 证据。
 
@@ -153,6 +153,6 @@ rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!ar
 | Python / Django / 合同 | Ruff passed；94 files formatted；mypy 94 source files；Django 0 issues；pip check passed；5 个文档合同 passed；57,189 项 M0 checks READY |
 | 前端 | Vue typecheck passed；Vitest 12 passed；H5 build passed；隔离数据库 Playwright 13 passed / 8 skipped |
 | 依赖 | npm critical gate 退出 0；0 critical，保留 9 low / 9 moderate / 1 high，未强制破坏性 Vite 8 升级 |
-| 秘密 | 行为与浏览器存储/console/network 扫描通过；tracked 高风险 token 形态与 secret assignment 均为 none；本机 gitleaks 未下载完成，CI 官方 gate 保留 |
+| 秘密 | 行为与浏览器存储/console/network 扫描通过；tracked 高风险 token 形态与 secret assignment 均为 none；官方 gitleaks `v8.30.1` 校验后全历史扫描通过，12 个合成测试口令以精确 fingerprint 豁免；CI 官方 gate 保留 |
 | 清理 | 8000/5173 无残留 listener；无 `new_mud_issue16_e2e_*` 临时数据库 |
 | 双轴审查 | 首审 Standards 1 hard / 1 judgement、Spec 2 hard / 0 scope creep；`4c5a4b3` 修复后正式复审为 Standards 0 hard / 1 judgement、Spec 0 hard / 0 观察；无未解决 hard finding |

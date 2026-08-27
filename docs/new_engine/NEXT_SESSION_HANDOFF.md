@@ -2,7 +2,7 @@
 
 > 快照日期：2026-08-27。
 >
-> 本地交付基线：#14 功能提交 Git `638e8cf`，计划/交接同步提交 Git `28d6715`；#15 最终提交 Git `1e6e930`；#16 证据提交 Git `b545ed1`、审查修复 Git `4c5a4b3`、复审状态同步 Git `116b4fc`，GitHub Issue 已回填关闭；最终 CLOSED 状态同步由本文件所在提交交付。本次会话未 push。
+> 本地交付基线：#14 功能提交 Git `638e8cf`，计划/交接同步提交 Git `28d6715`；#15 最终提交 Git `1e6e930`；#16 证据提交 Git `b545ed1`、审查修复 Git `4c5a4b3`、复审状态同步 Git `116b4fc`，GitHub Issue 已回填关闭；最终 CLOSED 状态同步由本文件所在提交交付。Issue #16 关闭会话当时未 push，后续发布状态以 Git 远端和 GitHub Actions 为准。
 >
 > 本文件是无会话记忆时的现行启动入口。它汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序；不创造需求、合同或正式状态。冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
 
@@ -42,7 +42,7 @@ git log -8 --decorate --oneline
 - Issue #14 已由 Git `638e8cf` 交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知投递失败不回滚密码事务。该票交付时 identity 叶节点是 `0008_security_notification_outbox`，安全通知 worker 入口是 `python manage.py process_security_notifications`。
 - Issue #15 已交付 RecoveryCode 不可逆退役与认证基线受控切换：identity `0009_retire_recovery_codes` 撤销全部 active code、保留 User/GameAccount/历史行并禁止新增 active；`0010_authentication_baseline_runtime_state` 可逆增加初始 fail-closed 的 verification-delivery/security-notification heartbeat 与共享 provider circuit/probe；旧 recover/rotate 不解析请求或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`。注册和重置只在两个 heartbeat fresh、circuit closed 且静态 cutover/keyring/operator kill switch 完整时共同开放；生产启动还拒绝测试 bypass，普通密码登录不依赖验证基础设施。
 - #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 284 项、认证 API 67 项、运行态/投递 100 项、生产 health 20 项、PostgreSQL identity/migrations 29 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、94 files format、mypy 93 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
-- Issue #16 的 PostgreSQL、迁移往返、Python/前端静态与构建、隔离数据库 H5 E2E、秘密与依赖检查已执行。真实 SMTP 因没有显式 opt-in、收件人和秘密授权准确记录为 1 skipped；本机 gitleaks 因受限网络未完成下载且未声称通过，CI 官方 gate 保留。首轮 Standards 1 hard / 1 judgement 与 Spec 2 hard / 0 scope creep 已由 `4c5a4b3` 修复；正式复审为 Standards 0 hard / 1 judgement、Spec 0 hard / 0 观察，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。
+- Issue #16 的 PostgreSQL、迁移往返、Python/前端静态与构建、隔离数据库 H5 E2E、秘密与依赖检查已执行。真实 SMTP 因没有显式 opt-in、收件人和秘密授权准确记录为 1 skipped；关闭后的网络恢复复核已校验并运行官方 gitleaks `v8.30.1`，12 个确认是合成测试口令的历史命中以精确 fingerprint 豁免，全历史重扫为 `no leaks found`，CI 官方 gate 保留。首轮 Standards 1 hard / 1 judgement 与 Spec 2 hard / 0 scope creep 已由 `4c5a4b3` 修复；正式复审为 Standards 0 hard / 1 judgement、Spec 0 hard / 0 观察，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - Auth Baseline Amendment 的运行实现、证据验收与 Issue 回填均已完成，`AUTH-005=verified`。Character Slice 2 已成为下一 frontier，但尚未认领或实现。
 
