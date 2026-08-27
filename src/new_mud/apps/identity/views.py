@@ -16,6 +16,7 @@ from .services import (
     PasswordResetUnavailable,
     RefreshFailed,
     RegistrationInvalid,
+    RegistrationRateLimited,
     RegistrationUnavailable,
     VerificationCodeInvalid,
     login,
@@ -246,19 +247,20 @@ def register_view(request):
         return _error("REGISTRATION_UNAVAILABLE", status=403)
     if request.headers.get("Authorization"):
         return _error("REGISTRATION_INVALID", status=400)
-    if not _authentication_request_allowed(
-        request,
-        namespace="registration",
-        account_limit=settings.AUTH_REGISTRATION_RATE_LIMIT_ACCOUNT,
-        ip_limit=settings.AUTH_REGISTRATION_RATE_LIMIT_IP,
-    ):
-        return _error("REGISTRATION_UNAVAILABLE", status=429)
     try:
         result = register(
             username=request.data.get("username"),
             password=request.data.get("password"),
             verification=request.data.get("verification"),
+            consume_request_limit=lambda: _authentication_request_allowed(
+                request,
+                namespace="registration",
+                account_limit=settings.AUTH_REGISTRATION_RATE_LIMIT_ACCOUNT,
+                ip_limit=settings.AUTH_REGISTRATION_RATE_LIMIT_IP,
+            ),
         )
+    except RegistrationRateLimited:
+        return _error("REGISTRATION_UNAVAILABLE", status=429)
     except RegistrationInvalid:
         return _error("REGISTRATION_INVALID", status=400)
     except VerificationCodeInvalid:

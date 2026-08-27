@@ -166,7 +166,7 @@ test("forgot password resets through email and invalidates the old browser sessi
   const username = `e1_reset_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const oldPassword = "safe-e2e-reset-passphrase-42";
   const newPassword = "safe-e2e-reset-replacement-84";
-  const { accessToken, email } = await registerAndLogin(page, username, oldPassword);
+  const { email } = await registerAndLogin(page, username, oldPassword);
   const resetPage = await context.newPage();
   const consoleMessages: string[] = [];
   const resetResponseBodies: string[] = [];
@@ -226,18 +226,17 @@ test("forgot password resets through email and invalidates the old browser sessi
   await expect(resetPage.locator("body")).not.toContainText("独立登录");
   await expect(resetPage.locator("body")).not.toContainText("恢复码");
 
-  const protectedResult = await page.evaluate(async (token) => {
+  const retiredRecoveryResult = await page.evaluate(async () => {
     const response = await fetch("/api/v1/auth/recovery-code/rotate", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: "{}",
     });
     return { status: response.status, payload: await response.json() };
-  }, accessToken);
-  expect(protectedResult).toEqual({
+  });
+  expect(retiredRecoveryResult).toEqual({
     status: 410,
     payload: { error: { code: "RECOVERY_CODE_RETIRED" } },
   });

@@ -100,7 +100,7 @@ def verification_keyrings() -> VerificationKeyRings:
     return rings
 
 
-def require_authentication_baseline() -> VerificationKeyRings:
+def require_authentication_baseline_configured() -> VerificationKeyRings:
     if not all(
         (
             getattr(settings, "AUTH_BASELINE_CUTOVER_ENABLED", False),
@@ -109,7 +109,25 @@ def require_authentication_baseline() -> VerificationKeyRings:
         )
     ):
         raise VerificationServiceUnavailable
+    operational_durations = (
+        getattr(settings, "AUTH_VERIFICATION_HEARTBEAT_MAX_AGE_SECONDS", 0),
+        getattr(settings, "AUTH_VERIFICATION_PROVIDER_RETRY_SECONDS", 0),
+        getattr(settings, "AUTH_VERIFICATION_PROVIDER_PROBE_LEASE_SECONDS", 0),
+    )
+    if any(type(value) is not int or value <= 0 for value in operational_durations):
+        raise VerificationServiceUnavailable
     return verification_keyrings()
+
+
+def require_authentication_baseline() -> VerificationKeyRings:
+    keyrings = require_authentication_baseline_configured()
+    if not getattr(settings, "AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND", False):
+        from .authentication_baseline_operations import (
+            require_authentication_baseline_operational,
+        )
+
+        require_authentication_baseline_operational()
+    return keyrings
 
 
 def authentication_baseline_configuration_issue() -> (
@@ -131,7 +149,7 @@ def authentication_baseline_configuration_issue() -> (
     if not getattr(settings, "AUTH_BASELINE_CUTOVER_ENABLED", False):
         return None
     try:
-        require_authentication_baseline()
+        require_authentication_baseline_configured()
     except VerificationServiceUnavailable as error:
         return AuthenticationBaselineConfigurationIssue(
             check_id="identity.E001",
@@ -156,3 +174,16 @@ def validate_authentication_baseline_startup() -> None:
     issue = authentication_baseline_configuration_issue()
     if issue is not None:
         raise ImproperlyConfigured(issue.startup_message) from issue.cause
+    if getattr(settings, "AUTH_PRODUCTION_MODE", False) and getattr(
+        settings, "AUTH_BASELINE_CUTOVER_ENABLED", False
+    ):
+        from .authentication_baseline_operations import (
+            require_authentication_baseline_operational,
+        )
+
+        try:
+            require_authentication_baseline_operational()
+        except VerificationServiceUnavailable as error:
+            raise ImproperlyConfigured(
+                "Authentication baseline runtime dependencies are not operational."
+            ) from error

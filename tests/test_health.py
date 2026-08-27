@@ -1,4 +1,6 @@
 import json
+import uuid
+from datetime import timedelta
 from types import SimpleNamespace
 
 import psycopg
@@ -9,9 +11,11 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connections
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from new_mud.apps.content.models import BlueprintHead
 from new_mud.apps.content.runtime import ContentRuntime
+from new_mud.apps.identity.models import AuthenticationBaselineRuntimeState
 from new_mud.asgi import application, create_application
 from new_mud.process_guard import (
     release_single_process_leases,
@@ -54,6 +58,78 @@ def test_production_startup_rejects_incomplete_authentication_cutover(
     failure_settings: dict[str, object],
 ) -> None:
     with override_settings(**failure_settings), pytest.raises(ImproperlyConfigured):
+        create_application()
+
+
+@pytest.mark.django_db(transaction=True)
+@override_settings(
+    AUTH_PRODUCTION_MODE=True,
+    AUTH_BASELINE_CUTOVER_ENABLED=True,
+    AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False,
+    EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+    CONTENT_STARTUP_ENABLED=False,
+)
+def test_production_startup_accepts_fresh_workers_and_a_closed_provider_circuit() -> None:
+    now = timezone.now()
+    AuthenticationBaselineRuntimeState.objects.update_or_create(
+        runtime_key="email",
+        defaults={
+            "verification_delivery_heartbeat_at": now,
+            "security_notification_heartbeat_at": now,
+            "provider_state": AuthenticationBaselineRuntimeState.ProviderState.CLOSED,
+            "provider_retry_at": None,
+            "provider_probe_token": None,
+            "provider_probe_expires_at": None,
+        },
+    )
+
+    create_application()
+
+
+@pytest.mark.parametrize(
+    "runtime_failure",
+    ["missing", "verification_stale", "security_stale", "open", "probing"],
+)
+@pytest.mark.django_db(transaction=True)
+@override_settings(
+    AUTH_PRODUCTION_MODE=True,
+    AUTH_BASELINE_CUTOVER_ENABLED=True,
+    AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False,
+    EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+    CONTENT_STARTUP_ENABLED=False,
+)
+def test_production_startup_rejects_missing_stale_or_open_runtime_dependencies(
+    runtime_failure: str,
+) -> None:
+    AuthenticationBaselineRuntimeState.objects.all().delete()
+    now = timezone.now()
+    if runtime_failure != "missing":
+        defaults: dict[str, object] = {
+            "verification_delivery_heartbeat_at": now,
+            "security_notification_heartbeat_at": now,
+            "provider_state": AuthenticationBaselineRuntimeState.ProviderState.CLOSED,
+            "provider_retry_at": None,
+            "provider_probe_token": None,
+            "provider_probe_expires_at": None,
+        }
+        if runtime_failure == "verification_stale":
+            defaults["verification_delivery_heartbeat_at"] = now - timedelta(minutes=5)
+        elif runtime_failure == "security_stale":
+            defaults["security_notification_heartbeat_at"] = now - timedelta(minutes=5)
+        elif runtime_failure == "open":
+            defaults.update(
+                provider_state=AuthenticationBaselineRuntimeState.ProviderState.OPEN,
+                provider_retry_at=now + timedelta(seconds=30),
+            )
+        elif runtime_failure == "probing":
+            defaults.update(
+                provider_state=AuthenticationBaselineRuntimeState.ProviderState.PROBING,
+                provider_probe_token=uuid.uuid4(),
+                provider_probe_expires_at=now + timedelta(seconds=15),
+            )
+        AuthenticationBaselineRuntimeState.objects.create(runtime_key="email", **defaults)
+
+    with pytest.raises(ImproperlyConfigured):
         create_application()
 
 

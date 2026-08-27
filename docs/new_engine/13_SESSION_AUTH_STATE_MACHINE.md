@@ -502,6 +502,10 @@ REST 路径及请求 / 响应外形以 `08_PERMISSIONS_ADMIN_API.md` 4.2/4.4 为
 
 投递 outbox 通过 lease 与并发安全 claim 由独立 worker 处理。一次逻辑任务重试同一 code；provider 接受与本地确认之间崩溃可以重复投递同一 code，但不能产生第二个 active code。公开 request 不等待 SMTP，不根据联系方式存在、占用、资格或单封投递结果改变响应。
 
+`AuthenticationBaselineRuntimeState(runtime_key=email)` 是认证切换运行态的 PostgreSQL 单例。两个 `--watch` worker 即使空轮询也分别刷新 heartbeat；公开验证流程只在两个 heartbeat 都 fresh 且 provider circuit=`closed` 时开放。circuit 初始及全局 transient/connect/HELO/auth/sender 故障后为 `open`，冷却到期后由一个 worker 取得带版本与到期时间的 `probing` lease，并执行不发送邮件的连接/认证 probe；成功转为 `closed`，失败重新 `open`，owner 崩溃后 lease 可接管，旧 token 的迟到结果不得覆盖新状态。收件人或 DATA 的单消息 4xx 只重试该任务，5xx 与坏模板只终结该任务，均不打开共享 circuit；provider 已接受后，本地确认不再因 circuit 的并发变化回退，以免制造额外重复投递。
+
+identity `0009_retire_recovery_codes` 的既有 code 撤销仍不可逆；`0010_authentication_baseline_runtime_state` 只增加可逆运行态结构，每次前进都以 heartbeat 缺失、circuit=`open` 的 fail-closed 状态初始化。回滚 `0010` 可以关闭验证注册和重置，但不能复活 `0009` 已撤销的 RecoveryCode、已擦除 payload、旧密码、旧会话或已提交敏感事务。
+
 密码重置事务固定按以下顺序持锁，并在提交前重验版本与资格：
 
 ```text

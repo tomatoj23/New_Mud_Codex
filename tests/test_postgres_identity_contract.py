@@ -24,6 +24,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from new_mud.apps.identity.models import (
+    AuthenticationBaselineRuntimeState,
     AuthSession,
     GameAccount,
     RecoveryCodeCredential,
@@ -1046,6 +1047,72 @@ def test_expired_delivery_lease_is_reclaimed_with_the_same_payload() -> None:
     delivered = VerificationDeliveryOutbox.objects.get()
     assert delivered.state == VerificationDeliveryOutbox.State.DELIVERED
     assert delivered.payload_ciphertext is None
+
+
+@override_settings(
+    AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False,
+    AUTH_VERIFICATION_PROVIDER_PROBE_LEASE_SECONDS=30,
+)
+def test_provider_probe_lease_is_unique_recoverable_and_rejects_the_old_result() -> None:
+    now = timezone.now()
+    state, _ = AuthenticationBaselineRuntimeState.objects.update_or_create(
+        runtime_key="email",
+        defaults={
+            "verification_delivery_heartbeat_at": now,
+            "security_notification_heartbeat_at": now,
+            "provider_state": AuthenticationBaselineRuntimeState.ProviderState.OPEN,
+            "provider_retry_at": now - timedelta(seconds=1),
+            "provider_probe_token": None,
+            "provider_probe_expires_at": None,
+        },
+    )
+    first_probe_started = Event()
+    release_first_probe = Event()
+
+    def blocked_probe() -> None:
+        first_probe_started.set()
+        assert release_first_probe.wait(timeout=5)
+
+    def poll_with_blocked_probe() -> DeliveryOutcome:
+        close_old_connections()
+        try:
+            return deliver_one_verification(
+                worker_id="probe-owner-a",
+                provider_probe=blocked_probe,
+            )
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        first = executor.submit(poll_with_blocked_probe)
+        assert first_probe_started.wait(timeout=5)
+        contender_probes: list[str] = []
+        contender = deliver_one_verification(
+            worker_id="probe-contender",
+            provider_probe=lambda: contender_probes.append("unexpected"),
+        )
+        assert contender == DeliveryOutcome.NO_WORK
+        assert contender_probes == []
+
+        state.refresh_from_db()
+        assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.PROBING
+        state.provider_probe_expires_at = timezone.now() - timedelta(seconds=1)
+        state.save(update_fields=("provider_probe_expires_at",))
+        takeover_probes: list[str] = []
+        takeover = deliver_one_verification(
+            worker_id="probe-owner-b",
+            provider_probe=lambda: takeover_probes.append("probed"),
+        )
+        assert takeover == DeliveryOutcome.NO_WORK
+        assert takeover_probes == ["probed"]
+        release_first_probe.set()
+        assert first.result(timeout=5) == DeliveryOutcome.NO_WORK
+
+    state.refresh_from_db()
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.CLOSED
+    assert state.provider_retry_at is None
+    assert state.provider_probe_token is None
+    assert state.provider_probe_expires_at is None
 
 
 def test_limiter_database_failure_is_global_without_disabling_password_login() -> None:

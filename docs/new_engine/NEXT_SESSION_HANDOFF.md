@@ -40,8 +40,8 @@ git log -8 --decorate --oneline
 - Issue #12 已交付 registration-verification REST、应用层 crypto/lookup、PostgreSQL 持久合并限流、加密 outbox 与独立 worker。
 - Issue #13 已交付已验证邮箱最终注册与 H5：register 原子消费权威 challenge，创建 User、当前实例 GameAccount 和唯一 VerifiedContactMethod，保持零认证状态；跨 lookup key 轮换不会复活已替代旧码。
 - Issue #14 已由 Git `638e8cf` 交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知投递失败不回滚密码事务。该票交付时 identity 叶节点是 `0008_security_notification_outbox`，安全通知 worker 入口是 `python manage.py process_security_notifications`。
-- Issue #15 已交付 RecoveryCode 不可逆退役与认证基线受控切换：identity `0009_retire_recovery_codes` 撤销全部 active code、保留 User/GameAccount/历史行并禁止新增 active；旧 recover/rotate 不解析请求或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`；注册、重置、验证 worker 和安全通知 worker 共用 `NEW_MUD_AUTH_BASELINE_CUTOVER_ENABLED`，生产启动预检 keyring/current key IDs、worker、provider 与测试 bypass 禁区，普通密码登录不依赖验证基础设施。
-- #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 239 项、认证专项 67 项、生产启动/配置专项 9 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、90 files format、mypy 90 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
+- Issue #15 已交付 RecoveryCode 不可逆退役与认证基线受控切换：identity `0009_retire_recovery_codes` 撤销全部 active code、保留 User/GameAccount/历史行并禁止新增 active；`0010_authentication_baseline_runtime_state` 可逆增加初始 fail-closed 的 verification-delivery/security-notification heartbeat 与共享 provider circuit/probe；旧 recover/rotate 不解析请求或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`。注册和重置只在两个 heartbeat fresh、circuit closed 且静态 cutover/keyring/operator kill switch 完整时共同开放；生产启动还拒绝测试 bypass，普通密码登录不依赖验证基础设施。
+- #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 284 项、认证 API 67 项、运行态/投递 100 项、生产 health 20 项、PostgreSQL identity/migrations 29 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、94 files format、mypy 93 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - Character Slice 2 被整个 Auth Baseline Amendment 阻塞；只有 Issue #16 完成后才能启动。
 
@@ -82,7 +82,7 @@ git log -8 --decorate --oneline
 - password reset 只使用 purpose 隔离的短期 VerificationChallenge，成功后撤销 User 跨实例全部 AuthSession/family/credential，不改变 GameAccount lifecycle，也不自动登录。
 - RecoveryCode 已停止签发、展示与消费，旧 recover/rotate 统一返回 `410 RECOVERY_CODE_RETIRED`；兼容路由仍须在 Public V1 前删除，该后续要求不得因 #15 关闭而丢失。
 - 完整联系方式只保存应用层密文；精确查询和唯一性只使用独立 keyed lookup digest；Django `User.email` 保持为空。
-- HTTP 不同步发送 SMTP。VerificationDeliveryOutbox 与独立 worker 负责验证码投递、同 code 重试、provider 接受后激活和 terminal payload 擦除；密码重置成功通知使用独立 SecurityNotificationOutbox，投递失败不回滚已提交的密码事务。
+- HTTP 不同步发送 SMTP。VerificationDeliveryOutbox 与独立 worker 负责验证码投递、同 code 重试、provider 接受后激活和 terminal payload 擦除；密码重置成功通知使用独立 SecurityNotificationOutbox，投递失败不回滚已提交的密码事务。两个 worker 以 `--watch` 长驻并在空轮询时刷新 heartbeat；全局 transient/connect/HELO/auth/sender 故障打开共享 circuit，冷却后由唯一无邮件 probe 恢复，收件人/DATA 的单消息临时或永久失败只重试/终结对应任务而不打开全局 circuit。
 - 格式有效的 request 返回非枚举 202；request 需要 `Idempotency-Key`，限流状态持久化到 PostgreSQL，并合并联系方式、IP 和匿名设备维度。
 - 每个受保护 HTTP/WebSocket 入口必须把 access token 解析到仍 active 的 AuthSession；JWT 剩余寿命不能绕过撤销。
 - 默认自动测试使用 fake/locmem 邮件适配器且零公网。163 SMTP 只用于显式 opt-in 的开发 smoke；秘密只从 Git 忽略的本地环境文件或部署 secret manager 注入。

@@ -201,6 +201,8 @@ password-reset request 只为 active、未禁用且持有可用 `VerifiedContact
 
 六位验证码从 provider 接受并激活起十分钟有效，最多五次校验；重发冷却从 request 接受起 60 秒。purpose、channel、destination 和适用 User 必须进入摘要上下文，跨用途或跨渠道消费统一失败。HTTP 请求只写 PostgreSQL challenge/outbox，不同步连接 SMTP；worker 重试同一逻辑任务时重发同一 code，terminal 后擦除加密 payload。
 
+registration-verification request、最终 register 与 password-reset request/confirm 共用同一认证基线运行门禁：静态 cutover、keyring/current key IDs 和 operator kill switch 均有效，PostgreSQL 中 verification-delivery 与 security-notification 两类 worker heartbeat 都在 freshness 窗口内，且共享 provider circuit 为 `closed`。任一 heartbeat 缺失或过期、circuit 为 `open/probing`、密钥或静态开关不可用时，这四个入口统一返回 `503 / VERIFICATION_SERVICE_UNAVAILABLE` 且不得写入或消费认证状态；普通账号名/密码 login 不读取该运行门禁。
+
 登录和 refresh 的成功响应最小结构一致：
 
 ```json

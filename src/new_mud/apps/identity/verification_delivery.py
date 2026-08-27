@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import smtplib
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
@@ -13,17 +14,29 @@ from django.core.mail import EmailMessage
 from django.db import models, transaction
 from django.utils import timezone
 
+from .authentication_baseline_operations import (
+    EmailDeliveryFailureScope,
+    ProviderOutcome,
+    WorkerRole,
+    classify_email_delivery_failure,
+    finish_provider_attempt,
+    prepare_worker_poll,
+)
 from .models import VerificationChallenge, VerificationDeliveryOutbox
 from .verification import (
     email_contact_scope,
     lock_email_contact_scope,
     normalize_email,
 )
-from .verification_config import require_authentication_baseline
+from .verification_config import require_authentication_baseline_configured
 from .verification_crypto import EncryptedValue, decrypt_value
 
 
 class DeliveryTransientError(RuntimeError):
+    pass
+
+
+class DeliveryMessageTransientError(RuntimeError):
     pass
 
 
@@ -65,18 +78,12 @@ class DjangoEmailSender:
             ).send(fail_silently=False)
         except ValueError as error:
             raise DeliveryPermanentError from error
-        except smtplib.SMTPRecipientsRefused as error:
-            if error.recipients and all(
-                isinstance(details, tuple) and int(details[0]) >= 500
-                for details in error.recipients.values()
-            ):
-                raise DeliveryPermanentError from error
-            raise DeliveryTransientError from error
-        except smtplib.SMTPResponseException as error:
-            if error.smtp_code >= 500:
-                raise DeliveryPermanentError from error
-            raise DeliveryTransientError from error
         except (OSError, smtplib.SMTPException) as error:
+            scope = classify_email_delivery_failure(error)
+            if scope == EmailDeliveryFailureScope.MESSAGE_PERMANENT:
+                raise DeliveryPermanentError from error
+            if scope == EmailDeliveryFailureScope.MESSAGE_TRANSIENT:
+                raise DeliveryMessageTransientError from error
             raise DeliveryTransientError from error
         if delivered != 1:
             raise DeliveryTransientError
@@ -180,7 +187,7 @@ def _message_from_payload(payload: dict[str, str]) -> VerificationEmail:
 
 
 def _claim_delivery(*, worker_id: str, now) -> ClaimedDelivery | None:
-    keyrings = require_authentication_baseline()
+    keyrings = require_authentication_baseline_configured()
     eligible = models.Q(
         state=VerificationDeliveryOutbox.State.PENDING,
         next_attempt_at__lte=now,
@@ -240,7 +247,7 @@ def _claim_delivery(*, worker_id: str, now) -> ClaimedDelivery | None:
 
 def _finish_delivery(claim: ClaimedDelivery, *, now) -> DeliveryOutcome:
     normalized = normalize_email(claim.payload["destination"])
-    keyrings = require_authentication_baseline()
+    keyrings = require_authentication_baseline_configured()
     email_scope = email_contact_scope(normalized, lookup_keyring=keyrings.contact_lookup)
     with transaction.atomic():
         lock_email_contact_scope(email_scope)
@@ -341,7 +348,14 @@ def deliver_one_verification(
     worker_id: str,
     sender: EmailSender | None = None,
     crash_after_provider_accept: bool = False,
+    provider_probe: Callable[[], None] | None = None,
 ) -> DeliveryOutcome:
+    provider_permit = prepare_worker_poll(
+        role=WorkerRole.VERIFICATION_DELIVERY,
+        provider_probe=provider_probe,
+    )
+    if provider_permit is None:
+        return DeliveryOutcome.NO_WORK
     now = timezone.now()
     if _terminalize_one_exhausted_lease(now=now):
         return DeliveryOutcome.DELIVERY_FAILED
@@ -351,9 +365,27 @@ def deliver_one_verification(
     try:
         (sender or DjangoEmailSender()).send(_message_from_payload(claim.payload))
     except DeliveryPermanentError:
+        finish_provider_attempt(
+            provider_permit,
+            outcome=ProviderOutcome.PERMANENT_FAILURE,
+        )
         return _record_failure(claim, permanent=True, now=timezone.now())
-    except DeliveryTransientError:
+    except DeliveryMessageTransientError:
+        finish_provider_attempt(
+            provider_permit,
+            outcome=ProviderOutcome.MESSAGE_TRANSIENT_FAILURE,
+        )
         return _record_failure(claim, permanent=False, now=timezone.now())
+    except DeliveryTransientError:
+        finish_provider_attempt(
+            provider_permit,
+            outcome=ProviderOutcome.TRANSIENT_FAILURE,
+        )
+        return _record_failure(claim, permanent=False, now=timezone.now())
+    finish_provider_attempt(
+        provider_permit,
+        outcome=ProviderOutcome.SUCCESS,
+    )
     if crash_after_provider_accept:
         raise ProviderAcceptedCrash
     return _finish_delivery(claim, now=timezone.now())

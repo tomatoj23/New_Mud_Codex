@@ -1272,6 +1272,8 @@ RecoveryCode 已退役：不得继续签发、展示或消费，既有记录只�
 
 完整联系方式只允许应用层密文保存，精确查询与唯一性使用独立 keyed lookup digest；Django `User.email` 保持为空且不是回退来源。验证码只长期保存带用途上下文的摘要，临时完整目标和验证码只存在于加密 outbox payload，terminal 后擦除。HTTP 请求不得同步连接 SMTP；持久 outbox worker 负责投递与有界重试。
 
+邮箱验证注册与密码重置必须由同一认证基线运行门禁控制：两个独立投递 worker 的 PostgreSQL heartbeat 都须 fresh，共享 provider circuit 须为 closed，且静态 cutover、keyring/current key IDs 与 operator kill switch 全部有效。任一条件缺失时验证注册和重置统一 fail closed，生产启动拒绝开放；普通账号名/密码登录不得依赖该门禁。provider 全局 transient/connect/auth 故障打开 circuit，冷却后只允许一个无邮件副作用的 probe 恢复；收件人或 DATA 的单消息临时失败只重试该任务，单消息 permanent failure 只终结该任务，二者都不得把全局 provider 误判为不可用。
+
 每个 User 每种渠道最多一个 active 或 unreachable `VerifiedContactMethod`；同一规范化联系方式最多属于一个未永久退休 User。失去一个渠道不会自动解绑或转移所有权；同时失去密码和全部已验证渠道时，人工支持只能冻结账号并保全审计，不能依据游戏资料重新分配所有权。联系方式换绑、账号关闭与重新启用由后续独立规格实现；`cooling_off -> active` 必须使用用途独立的 account-reopen challenge，不能复用 password-reset challenge。
 
 本认证基线修订的稳定需求标识为 `AUTH-005`，实施单元称为 `Engine Stage E1 / Auth Baseline Amendment`，必须先于 Character Slice 2 完成。Issue #9 与原 E1 / Slice 1 仍是当时 RecoveryCode 实现和零隐式登录的历史证据；该历史不授权继续把 RecoveryCode 当作现行产品凭据。

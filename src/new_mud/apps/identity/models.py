@@ -5,6 +5,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 
 class GameAccount(models.Model):
@@ -640,5 +641,60 @@ class SecurityNotificationOutbox(models.Model):
                     )
                 ),
                 name="identity_security_notice_state_times",
+            ),
+        ]
+
+
+class AuthenticationBaselineRuntimeState(models.Model):
+    class ProviderState(models.TextChoices):
+        CLOSED = "closed"
+        OPEN = "open"
+        PROBING = "probing"
+
+    runtime_key = models.CharField(primary_key=True, max_length=32, default="email")
+    verification_delivery_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    security_notification_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    provider_state = models.CharField(
+        max_length=16,
+        choices=ProviderState.choices,
+        default=ProviderState.OPEN,
+    )
+    provider_retry_at = models.DateTimeField(default=timezone.now, null=True, blank=True)
+    provider_probe_token = models.UUIDField(null=True, blank=True)
+    provider_probe_expires_at = models.DateTimeField(null=True, blank=True)
+    provider_version = models.PositiveBigIntegerField(default=1)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(runtime_key="email"),
+                name="identity_auth_baseline_email_singleton",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(provider_version__gte=1),
+                name="identity_auth_baseline_version_gte_1",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        provider_state="closed",
+                        provider_retry_at__isnull=True,
+                        provider_probe_token__isnull=True,
+                        provider_probe_expires_at__isnull=True,
+                    )
+                    | models.Q(
+                        provider_state="open",
+                        provider_retry_at__isnull=False,
+                        provider_probe_token__isnull=True,
+                        provider_probe_expires_at__isnull=True,
+                    )
+                    | models.Q(
+                        provider_state="probing",
+                        provider_retry_at__isnull=True,
+                        provider_probe_token__isnull=False,
+                        provider_probe_expires_at__isnull=False,
+                    )
+                ),
+                name="identity_auth_baseline_provider_state",
             ),
         ]

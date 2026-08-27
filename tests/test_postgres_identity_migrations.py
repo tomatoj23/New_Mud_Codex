@@ -28,6 +28,7 @@ pytestmark = [
 ]
 
 VERIFICATION_TABLES = {
+    "identity_authenticationbaselineruntimestate",
     "identity_securitynotificationoutbox",
     "identity_verificationchallenge",
     "identity_verificationdeliveryoutbox",
@@ -132,25 +133,55 @@ def test_recovery_code_retirement_is_irreversible_across_migration_rollback() ->
         assert ReappliedCode.objects.get(pk=active.pk).state == "revoked"
         assert ReappliedCode.objects.get(pk=active.pk).revoked_at == retired_at
     finally:
-        migrate_identity_to("0009_retire_recovery_codes")
+        migrate_identity_to("0010_authentication_baseline_runtime_state")
 
 
-def test_verification_migrations_round_trip_from_0003_to_0009() -> None:
+def test_verification_migrations_round_trip_from_0003_to_0010() -> None:
     try:
         migrate_identity_to("0003_identity_immutability_guards")
         assert VERIFICATION_TABLES.isdisjoint(connection.introspection.table_names())
 
-        migrate_identity_to("0009_retire_recovery_codes")
+        migrate_identity_to("0010_authentication_baseline_runtime_state")
         assert set(connection.introspection.table_names()) >= VERIFICATION_TABLES
         assert verification_guard_triggers() == VERIFICATION_GUARD_TRIGGERS
 
         migrate_identity_to("0003_identity_immutability_guards")
         assert VERIFICATION_TABLES.isdisjoint(connection.introspection.table_names())
     finally:
-        migrate_identity_to("0009_retire_recovery_codes")
+        migrate_identity_to("0010_authentication_baseline_runtime_state")
 
     assert set(connection.introspection.table_names()) >= VERIFICATION_TABLES
     assert verification_guard_triggers() == VERIFICATION_GUARD_TRIGGERS
+
+
+def test_authentication_runtime_state_migration_round_trip_reinitializes_fail_closed() -> None:
+    table_name = "identity_authenticationbaselineruntimestate"
+    try:
+        migrate_identity_to("0009_retire_recovery_codes")
+        assert table_name not in connection.introspection.table_names()
+
+        runtime_apps = migration_apps_at("0010_authentication_baseline_runtime_state")
+        RuntimeState = runtime_apps.get_model("identity", "AuthenticationBaselineRuntimeState")
+        state = RuntimeState.objects.get(runtime_key="email")
+        assert state.verification_delivery_heartbeat_at is None
+        assert state.security_notification_heartbeat_at is None
+        assert state.provider_state == "open"
+        assert state.provider_retry_at is not None
+        assert state.provider_probe_token is None
+        assert state.provider_probe_expires_at is None
+
+        migrate_identity_to("0009_retire_recovery_codes")
+        assert table_name not in connection.introspection.table_names()
+
+        reapplied_apps = migration_apps_at("0010_authentication_baseline_runtime_state")
+        ReappliedState = reapplied_apps.get_model("identity", "AuthenticationBaselineRuntimeState")
+        reapplied = ReappliedState.objects.get(runtime_key="email")
+        assert reapplied.verification_delivery_heartbeat_at is None
+        assert reapplied.security_notification_heartbeat_at is None
+        assert reapplied.provider_state == "open"
+        assert reapplied.provider_retry_at is not None
+    finally:
+        migrate_identity_to("0010_authentication_baseline_runtime_state")
 
 
 def test_password_reset_cancellation_and_security_notice_guards_are_one_way() -> None:

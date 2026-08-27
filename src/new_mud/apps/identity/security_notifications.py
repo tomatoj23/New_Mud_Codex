@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import smtplib
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
@@ -13,18 +14,30 @@ from django.core.mail import EmailMessage
 from django.db import models, transaction
 from django.utils import timezone
 
+from .authentication_baseline_operations import (
+    EmailDeliveryFailureScope,
+    ProviderOutcome,
+    WorkerRole,
+    classify_email_delivery_failure,
+    finish_provider_attempt,
+    prepare_worker_poll,
+)
 from .models import (
     SecurityAuditEvent,
     SecurityNotificationOutbox,
     VerifiedContactMethod,
 )
-from .verification_config import require_authentication_baseline
+from .verification_config import require_authentication_baseline_configured
 from .verification_crypto import EncryptedValue, decrypt_value
 
 logger = logging.getLogger(__name__)
 
 
 class SecurityNotificationTransientError(RuntimeError):
+    pass
+
+
+class SecurityNotificationMessageTransientError(RuntimeError):
     pass
 
 
@@ -62,18 +75,12 @@ class DjangoSecurityNotificationSender:
             ).send(fail_silently=False)
         except ValueError as error:
             raise SecurityNotificationPermanentError from error
-        except smtplib.SMTPRecipientsRefused as error:
-            if error.recipients and all(
-                isinstance(details, tuple) and int(details[0]) >= 500
-                for details in error.recipients.values()
-            ):
-                raise SecurityNotificationPermanentError from error
-            raise SecurityNotificationTransientError from error
-        except smtplib.SMTPResponseException as error:
-            if error.smtp_code >= 500:
-                raise SecurityNotificationPermanentError from error
-            raise SecurityNotificationTransientError from error
         except (OSError, smtplib.SMTPException) as error:
+            scope = classify_email_delivery_failure(error)
+            if scope == EmailDeliveryFailureScope.MESSAGE_PERMANENT:
+                raise SecurityNotificationPermanentError from error
+            if scope == EmailDeliveryFailureScope.MESSAGE_TRANSIENT:
+                raise SecurityNotificationMessageTransientError from error
             raise SecurityNotificationTransientError from error
         if delivered != 1:
             raise SecurityNotificationTransientError
@@ -158,7 +165,7 @@ def _claim_security_notification(
     worker_id: str,
     now,
 ) -> ClaimedSecurityNotification | SecurityNotificationOutcome | None:
-    keyrings = require_authentication_baseline()
+    keyrings = require_authentication_baseline_configured()
     eligible = models.Q(
         state=SecurityNotificationOutbox.State.PENDING,
         next_attempt_at__lte=now,
@@ -368,7 +375,14 @@ def deliver_one_security_notification(
     *,
     worker_id: str,
     sender: SecurityNotificationSender | None = None,
+    provider_probe: Callable[[], None] | None = None,
 ) -> SecurityNotificationOutcome:
+    provider_permit = prepare_worker_poll(
+        role=WorkerRole.SECURITY_NOTIFICATION,
+        provider_probe=provider_probe,
+    )
+    if provider_permit is None:
+        return SecurityNotificationOutcome.NO_WORK
     now = timezone.now()
     if _terminalize_one_exhausted_lease(now=now):
         return SecurityNotificationOutcome.DELIVERY_FAILED
@@ -380,15 +394,37 @@ def deliver_one_security_notification(
     try:
         (sender or DjangoSecurityNotificationSender()).send(claimed.message)
     except SecurityNotificationPermanentError:
+        finish_provider_attempt(
+            provider_permit,
+            outcome=ProviderOutcome.PERMANENT_FAILURE,
+        )
         return _record_security_notification_failure(
             claimed,
             permanent=True,
             now=timezone.now(),
         )
-    except SecurityNotificationTransientError:
+    except SecurityNotificationMessageTransientError:
+        finish_provider_attempt(
+            provider_permit,
+            outcome=ProviderOutcome.MESSAGE_TRANSIENT_FAILURE,
+        )
         return _record_security_notification_failure(
             claimed,
             permanent=False,
             now=timezone.now(),
         )
+    except SecurityNotificationTransientError:
+        finish_provider_attempt(
+            provider_permit,
+            outcome=ProviderOutcome.TRANSIENT_FAILURE,
+        )
+        return _record_security_notification_failure(
+            claimed,
+            permanent=False,
+            now=timezone.now(),
+        )
+    finish_provider_attempt(
+        provider_permit,
+        outcome=ProviderOutcome.SUCCESS,
+    )
     return _finish_security_notification(claimed, now=timezone.now())

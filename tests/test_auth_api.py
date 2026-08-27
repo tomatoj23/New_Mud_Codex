@@ -18,6 +18,7 @@ from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from new_mud.apps.identity import services as identity_services
 from new_mud.apps.identity.models import (
     AuthSession,
     GameAccount,
@@ -345,6 +346,18 @@ def test_password_reset_immediately_revokes_cross_instance_access_and_refresh() 
         password=old_password,
     )
     assert first_login.status_code == second_login.status_code == 200
+    stale_access_tokens = [
+        first_login.json()["access_token"],
+        second_login.json()["access_token"],
+    ]
+    active_session_ids = {
+        str(identity_services.resolve_active_auth_session(token).pk)
+        for token in stale_access_tokens
+    }
+    assert active_session_ids == {
+        first_login.json()["auth_session_id"],
+        second_login.json()["auth_session_id"],
+    }
     reset_code = request_delivered_password_reset_code(
         recovery_client,
         destination=destination,
@@ -370,6 +383,9 @@ def test_password_reset_immediately_revokes_cross_instance_access_and_refresh() 
     assert not RefreshTokenCredential.objects.filter(
         state=RefreshTokenCredential.State.ACTIVE
     ).exists()
+    for stale_access_token in stale_access_tokens:
+        with pytest.raises(identity_services.AuthenticationFailed):
+            identity_services.resolve_active_auth_session(stale_access_token)
     for index, stale_client in enumerate((first_client, second_client), start=1):
         stale_refresh = auth_post(
             stale_client,

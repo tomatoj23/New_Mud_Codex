@@ -11,6 +11,7 @@
 - Redis 与 Celery 不是首发必需项。
 - 未使用 Redis channel layer 时，只运行一个 Daphne / ASGI 游戏进程。
 - 配置通过环境变量或密钥管理注入，不提交真实凭据。
+- verification-delivery 与 security-notification worker 分别以 `python manage.py process_verification_deliveries --watch` 和 `python manage.py process_security_notifications --watch` 长驻运行；`--poll-interval` 必须为正且小于 `NEW_MUD_VERIFICATION_HEARTBEAT_MAX_AGE_SECONDS`。默认 heartbeat freshness/provider cooldown/provider probe lease 分别为 30/30/15 秒；静态 `NEW_MUD_VERIFICATION_WORKER_READY` 与 `NEW_MUD_VERIFICATION_PROVIDER_READY` 只作为 operator kill switch，不得代替 PostgreSQL heartbeat 或 circuit。
 
 ## 2. CI 门禁
 
@@ -51,7 +52,8 @@ PostgreSQL 契约测试和端到端测试必须覆盖：
 - `RequestTerminalRecord` 与 refresh terminal 在重试窗口、active secret reference、family 绝对到期和清理缓冲各边界的保留/清理测试；pending 不得被普通清理器删除。
 - refresh 提交后丢响应并重载时复用持久 key，多标签页保持 single-flight；不确定 cookie 遇 conflict/superseded 时安全 logout，不用新 key 触发误 replay。
 - `VerificationDeliveryOutbox` 覆盖单 claim、lease 到期、同 code 有界重试、provider transient/permanent failure、接受后崩溃、旧 active 保留、新 active 替代与 terminal payload 擦除；默认测试不得连接公网。
-- reset 后每个受保护 HTTP/WebSocket seam 都拒绝预先捕获的 access token 与 refresh Cookie；AuthSession/family/credential 跨实例全部撤销，安全通知失败不回滚密码。
+- `AuthenticationBaselineRuntimeState` 覆盖两个 worker 空轮询 heartbeat、missing/stale freshness、`closed/open/probing` circuit、全局 transient/connect/HELO/auth/sender failure、收件人/DATA 单消息临时或永久失败、cooldown、唯一 probe、probe 成功/失败、lease 到期接管和旧 token 迟到结果；运行门禁关闭时不得 claim 或 terminalize outbox。生产 ASGI 对 missing/stale/open/probing fail closed，fresh+closed 才通过；普通 login 始终保持可用。
+- reset 前捕获的 access token 必须先在统一 `Access Token -> active AuthSession` 领域缝解析成功，reset 后由同一缝拒绝；旧 refresh Cookie 在公开 REST seam 返回 `401 SESSION_REVOKED`，AuthSession/family/credential 跨实例全部撤销，安全通知失败不回滚密码。当前切片没有其他受保护 HTTP/WebSocket 入口；后续每个此类入口都必须调用该领域缝，不得以退役路由的固定 410 冒充 access 撤销证据。
 - 两个 RecoveryCode 兼容端点统一返回 HTTP `410` 与错误码 `RECOVERY_CODE_RETIRED`，不读取或消费旧 code；开发数据撤销 code 但不删除 User/GameAccount。
 - M1 后台账号安全流程覆盖角色权限、重新认证、reason/support case、冻结 / 撤销和脱敏诊断。越权、缺少可靠所有权证明、密码与全部渠道均丢失或事务故障时，不得改密、签发凭据、复活会话或把账号重分配给其他 User。
 

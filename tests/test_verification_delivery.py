@@ -4,22 +4,26 @@ import base64
 import io
 import json
 import smtplib
+import uuid
 from collections.abc import Mapping
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.cache import cache
 from django.core.checks import Tags, run_checks
 from django.core.mail import EmailMessage
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import DatabaseError, IntegrityError, transaction
 from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from new_mud.apps.identity.models import (
+    AuthenticationBaselineRuntimeState,
     GameAccount,
     SecurityAuditEvent,
     SecurityNotificationOutbox,
@@ -35,7 +39,10 @@ from new_mud.apps.identity.security_notifications import (
     deliver_one_security_notification,
 )
 from new_mud.apps.identity.verification import ContactInvalid, normalize_email
-from new_mud.apps.identity.verification_config import verification_keyrings
+from new_mud.apps.identity.verification_config import (
+    VerificationServiceUnavailable,
+    verification_keyrings,
+)
 from new_mud.apps.identity.verification_crypto import (
     EncryptedValue,
     KeyRing,
@@ -49,6 +56,7 @@ from new_mud.apps.identity.verification_crypto import (
 from new_mud.apps.identity.verification_delivery import (
     DeliveryOutcome,
     DeliveryPermanentError,
+    DeliveryTransientError,
     ProviderAcceptedCrash,
     VerificationEmail,
     deliver_one_verification,
@@ -142,6 +150,30 @@ def create_security_notification(
         template_key=template_key,
         next_attempt_at=next_attempt_at,
     )
+
+
+def set_authentication_runtime_state(
+    *,
+    verification_heartbeat_at: datetime | None = None,
+    security_heartbeat_at: datetime | None = None,
+    provider_state: str = AuthenticationBaselineRuntimeState.ProviderState.CLOSED,
+    provider_retry_at: datetime | None = None,
+    provider_probe_token: uuid.UUID | None = None,
+    provider_probe_expires_at: datetime | None = None,
+) -> AuthenticationBaselineRuntimeState:
+    checked_at = timezone.now()
+    state, _ = AuthenticationBaselineRuntimeState.objects.update_or_create(
+        runtime_key="email",
+        defaults={
+            "verification_delivery_heartbeat_at": verification_heartbeat_at or checked_at,
+            "security_notification_heartbeat_at": security_heartbeat_at or checked_at,
+            "provider_state": provider_state,
+            "provider_retry_at": provider_retry_at,
+            "provider_probe_token": provider_probe_token,
+            "provider_probe_expires_at": provider_probe_expires_at,
+        },
+    )
+    return state
 
 
 def create_password_reset_identity(
@@ -865,6 +897,206 @@ def test_verification_dependency_failure_is_global_while_password_login_remains_
     assert get_user_model().objects.get(username=failure_name).email == ""
 
 
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_missing_live_authentication_baseline_closes_verification_but_not_password_login(
+    client,
+) -> None:
+    user = get_user_model().objects.create_user(
+        username="missing_live_baseline",
+        password="safe-example-passphrase-42",
+    )
+    GameAccount.objects.create(user=user, instance_id=settings.CONTENT_INSTANCE_ID)
+    AuthenticationBaselineRuntimeState.objects.all().delete()
+
+    responses = [
+        verification_post(
+            client,
+            {"channel": "email", "destination": "missing-live@example.com"},
+            idempotency_key="missing-live-registration-request",
+        ),
+        password_reset_request_post(
+            client,
+            {"channel": "email", "destination": "missing-live@example.com"},
+            idempotency_key="missing-live-reset-request",
+        ),
+        client.post(
+            reverse("auth-register"),
+            {
+                "username": "missing_live_registration",
+                "password": "safe-example-passphrase-42",
+                "verification": {
+                    "channel": "email",
+                    "destination": "missing-live@example.com",
+                    "code": "123456",
+                },
+            },
+            content_type="application/json",
+            secure=True,
+            headers={"origin": "https://testserver"},
+        ),
+        client.post(
+            reverse("auth-password-reset-confirm"),
+            {
+                "channel": "email",
+                "destination": "missing-live@example.com",
+                "code": "123456",
+                "new_password": "replacement-passphrase-73-safe",
+            },
+            content_type="application/json",
+            secure=True,
+            headers={"origin": "https://testserver"},
+        ),
+    ]
+    login = client.post(
+        reverse("auth-login"),
+        {"username": user.username, "password": "safe-example-passphrase-42"},
+        content_type="application/json",
+        secure=True,
+        headers={"origin": "https://testserver"},
+    )
+
+    assert [response.status_code for response in responses] == [503, 503, 503, 503]
+    assert all(
+        response.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
+        for response in responses
+    )
+    assert VerificationChallenge.objects.count() == 0
+    assert login.status_code == 200
+
+
+@override_settings(
+    AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False,
+    AUTH_REGISTRATION_RATE_LIMIT_ACCOUNT=1,
+    AUTH_REGISTRATION_RATE_LIMIT_IP=1,
+)
+def test_closed_runtime_does_not_consume_final_registration_rate_limits(client) -> None:
+    cache.clear()
+    AuthenticationBaselineRuntimeState.objects.all().delete()
+    payload = {
+        "username": "closed_runtime_registration",
+        "password": "safe-example-passphrase-42",
+        "verification": {
+            "channel": "email",
+            "destination": "closed-runtime-registration@example.com",
+            "code": "123456",
+        },
+    }
+
+    try:
+        responses = [
+            client.post(
+                reverse("auth-register"),
+                payload,
+                content_type="application/json",
+                secure=True,
+                REMOTE_ADDR="192.0.2.44",
+                headers={"origin": "https://testserver"},
+            )
+            for _ in range(2)
+        ]
+    finally:
+        cache.clear()
+
+    assert [response.status_code for response in responses] == [503, 503]
+    assert all(
+        response.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
+        for response in responses
+    )
+
+
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_public_verification_opens_only_after_provider_probe_and_both_worker_heartbeats(
+    client,
+) -> None:
+    AuthenticationBaselineRuntimeState.objects.all().delete()
+    probes: list[str] = []
+
+    assert (
+        deliver_one_verification(
+            worker_id="cutover-verification-worker",
+            provider_probe=lambda: probes.append("probed"),
+        )
+        == DeliveryOutcome.NO_WORK
+    )
+    still_closed = verification_post(
+        client,
+        {"channel": "email", "destination": "cutover-gated@example.com"},
+        idempotency_key="cutover-gated-1",
+    )
+    assert still_closed.status_code == 503
+
+    assert (
+        deliver_one_security_notification(worker_id="cutover-security-worker")
+        == SecurityNotificationOutcome.NO_WORK
+    )
+    registration = verification_post(
+        client,
+        {"channel": "email", "destination": "cutover-registration@example.com"},
+        idempotency_key="cutover-registration-1",
+    )
+    password_reset = password_reset_request_post(
+        client,
+        {"channel": "email", "destination": "cutover-reset@example.com"},
+        idempotency_key="cutover-reset-1",
+    )
+
+    assert probes == ["probed"]
+    assert registration.status_code == 202
+    assert password_reset.status_code == 202
+
+
+@pytest.mark.parametrize(
+    "runtime_failure",
+    ["verification_stale", "security_stale", "open", "probing"],
+)
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_stale_worker_or_unclosed_provider_circuit_closes_public_verification_without_writes(
+    client,
+    runtime_failure: str,
+) -> None:
+    now = timezone.now()
+    defaults: dict[str, object] = {
+        "verification_delivery_heartbeat_at": now,
+        "security_notification_heartbeat_at": now,
+        "provider_state": AuthenticationBaselineRuntimeState.ProviderState.CLOSED,
+        "provider_retry_at": None,
+        "provider_probe_token": None,
+        "provider_probe_expires_at": None,
+    }
+    if runtime_failure == "verification_stale":
+        defaults["verification_delivery_heartbeat_at"] = now - timedelta(minutes=5)
+    elif runtime_failure == "security_stale":
+        defaults["security_notification_heartbeat_at"] = now - timedelta(minutes=5)
+    elif runtime_failure == "open":
+        defaults.update(
+            provider_state=AuthenticationBaselineRuntimeState.ProviderState.OPEN,
+            provider_retry_at=now + timedelta(seconds=30),
+        )
+    else:
+        defaults.update(
+            provider_state=AuthenticationBaselineRuntimeState.ProviderState.PROBING,
+            provider_probe_token=uuid.uuid4(),
+            provider_probe_expires_at=now + timedelta(seconds=15),
+        )
+    AuthenticationBaselineRuntimeState.objects.update_or_create(
+        runtime_key="email",
+        defaults=defaults,
+    )
+
+    response = verification_post(
+        client,
+        {"channel": "email", "destination": "runtime-gated@example.com"},
+        idempotency_key=f"runtime-gated-{runtime_failure}",
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
+    assert VerificationChallenge.objects.count() == 0
+    assert VerificationDeliveryOutbox.objects.count() == 0
+    assert VerificationRequestRecord.objects.count() == 0
+    assert VerificationRateLimitBucket.objects.count() == 0
+
+
 def test_verified_contact_state_requires_matching_lifecycle_time() -> None:
     user = get_user_model().objects.create_user(username="contact_state")
     rings = verification_keyrings()
@@ -1093,6 +1325,10 @@ def test_security_notification_transient_failure_has_bounded_attempts(
         event_type="auth.security_notification.delivery_failed",
         reason_code="transient_failure",
     ).exists()
+    assert (
+        AuthenticationBaselineRuntimeState.objects.get(runtime_key="email").provider_state
+        == AuthenticationBaselineRuntimeState.ProviderState.OPEN
+    )
     assert "security notification delivery failed" in caplog.text
 
 
@@ -1132,6 +1368,181 @@ def test_exhausted_accepted_then_crashed_delivery_is_terminalized_and_erased(cli
     assert outbox.lease_expires_at is None
 
 
+@pytest.mark.parametrize(
+    "failure_settings",
+    [
+        {"AUTH_BASELINE_CUTOVER_ENABLED": False},
+        {"AUTH_VERIFICATION_WORKER_READY": False},
+        {"AUTH_VERIFICATION_PROVIDER_READY": False},
+        {"AUTH_CONTACT_LOOKUP_KEYS": {}},
+    ],
+)
+def test_verification_worker_gate_failure_does_not_terminalize_exhausted_delivery(
+    client,
+    failure_settings: dict[str, object],
+) -> None:
+    assert (
+        verification_post(
+            client,
+            {"channel": "email", "destination": "gated-delivery@example.com"},
+            idempotency_key="gated-delivery-1",
+        ).status_code
+        == 202
+    )
+    now = timezone.now()
+    outbox = VerificationDeliveryOutbox.objects.get()
+    outbox.state = VerificationDeliveryOutbox.State.LEASED
+    outbox.attempt_count = settings.AUTH_VERIFICATION_MAX_DELIVERY_ATTEMPTS
+    outbox.lease_owner = "stopped-worker"
+    outbox.lease_expires_at = now - timedelta(seconds=1)
+    outbox.version += 1
+    outbox.save(
+        update_fields=(
+            "state",
+            "attempt_count",
+            "lease_owner",
+            "lease_expires_at",
+            "version",
+        )
+    )
+    challenge_before = VerificationChallenge.objects.values().get()
+    outbox_before = VerificationDeliveryOutbox.objects.values().get()
+
+    with override_settings(**failure_settings), pytest.raises(VerificationServiceUnavailable):
+        deliver_one_verification(worker_id="gated-worker")
+
+    assert VerificationChallenge.objects.values().get() == challenge_before
+    assert VerificationDeliveryOutbox.objects.values().get() == outbox_before
+
+
+@pytest.mark.parametrize(
+    "failure_settings",
+    [
+        {"AUTH_BASELINE_CUTOVER_ENABLED": False},
+        {"AUTH_VERIFICATION_WORKER_READY": False},
+        {"AUTH_VERIFICATION_PROVIDER_READY": False},
+        {"AUTH_CONTACT_LOOKUP_KEYS": {}},
+    ],
+)
+def test_security_notification_worker_gate_failure_does_not_terminalize_exhausted_notice(
+    failure_settings: dict[str, object],
+) -> None:
+    now = timezone.now()
+    notification = create_security_notification(
+        username="gated_security_notice",
+        destination="gated-security-notice@example.com",
+        next_attempt_at=now - timedelta(minutes=1),
+    )
+    notification.state = SecurityNotificationOutbox.State.LEASED
+    notification.attempt_count = settings.AUTH_VERIFICATION_MAX_DELIVERY_ATTEMPTS
+    notification.lease_owner = "stopped-security-worker"
+    notification.lease_expires_at = now - timedelta(seconds=1)
+    notification.version += 1
+    notification.save(
+        update_fields=(
+            "state",
+            "attempt_count",
+            "lease_owner",
+            "lease_expires_at",
+            "version",
+        )
+    )
+    notification_before = SecurityNotificationOutbox.objects.values().get()
+    audit_count = SecurityAuditEvent.objects.count()
+
+    with override_settings(**failure_settings), pytest.raises(VerificationServiceUnavailable):
+        deliver_one_security_notification(worker_id="gated-security-worker")
+
+    assert SecurityNotificationOutbox.objects.values().get() == notification_before
+    assert SecurityAuditEvent.objects.count() == audit_count
+
+
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_open_provider_circuit_does_not_terminalize_exhausted_verification_delivery(
+    client,
+) -> None:
+    now = timezone.now()
+    state = set_authentication_runtime_state(
+        verification_heartbeat_at=now,
+        security_heartbeat_at=now,
+    )
+    assert (
+        verification_post(
+            client,
+            {"channel": "email", "destination": "open-circuit-delivery@example.com"},
+            idempotency_key="open-circuit-delivery-1",
+        ).status_code
+        == 202
+    )
+    outbox = VerificationDeliveryOutbox.objects.get()
+    outbox.state = VerificationDeliveryOutbox.State.LEASED
+    outbox.attempt_count = settings.AUTH_VERIFICATION_MAX_DELIVERY_ATTEMPTS
+    outbox.lease_owner = "stopped-worker"
+    outbox.lease_expires_at = now - timedelta(seconds=1)
+    outbox.version += 1
+    outbox.save(
+        update_fields=(
+            "state",
+            "attempt_count",
+            "lease_owner",
+            "lease_expires_at",
+            "version",
+        )
+    )
+    state.provider_state = AuthenticationBaselineRuntimeState.ProviderState.OPEN
+    state.provider_retry_at = now + timedelta(seconds=30)
+    state.provider_version += 1
+    state.save(update_fields=("provider_state", "provider_retry_at", "provider_version"))
+    challenge_before = VerificationChallenge.objects.values().get()
+    outbox_before = VerificationDeliveryOutbox.objects.values().get()
+
+    outcome = deliver_one_verification(worker_id="open-circuit-worker")
+
+    assert outcome == DeliveryOutcome.NO_WORK
+    assert VerificationChallenge.objects.values().get() == challenge_before
+    assert VerificationDeliveryOutbox.objects.values().get() == outbox_before
+
+
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_open_provider_circuit_does_not_terminalize_exhausted_security_notice() -> None:
+    now = timezone.now()
+    state = set_authentication_runtime_state(
+        verification_heartbeat_at=now,
+        security_heartbeat_at=now,
+        provider_state=AuthenticationBaselineRuntimeState.ProviderState.OPEN,
+        provider_retry_at=now + timedelta(seconds=30),
+    )
+    notification = create_security_notification(
+        username="open_circuit_security_notice",
+        destination="open-circuit-security-notice@example.com",
+        next_attempt_at=now - timedelta(minutes=1),
+    )
+    notification.state = SecurityNotificationOutbox.State.LEASED
+    notification.attempt_count = settings.AUTH_VERIFICATION_MAX_DELIVERY_ATTEMPTS
+    notification.lease_owner = "stopped-security-worker"
+    notification.lease_expires_at = now - timedelta(seconds=1)
+    notification.version += 1
+    notification.save(
+        update_fields=(
+            "state",
+            "attempt_count",
+            "lease_owner",
+            "lease_expires_at",
+            "version",
+        )
+    )
+    notification_before = SecurityNotificationOutbox.objects.values().get()
+    audit_count = SecurityAuditEvent.objects.count()
+
+    outcome = deliver_one_security_notification(worker_id="open-circuit-security-worker")
+
+    state.refresh_from_db()
+    assert outcome == SecurityNotificationOutcome.NO_WORK
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.OPEN
+    assert SecurityNotificationOutbox.objects.values().get() == notification_before
+    assert SecurityAuditEvent.objects.count() == audit_count
+
+
 def test_email_adapter_converts_network_failure_into_bounded_retry(client, monkeypatch) -> None:
     assert (
         verification_post(
@@ -1162,6 +1573,253 @@ def test_email_adapter_converts_network_failure_into_bounded_retry(client, monke
     assert outbox.lease_expires_at is None
 
 
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_transient_provider_failure_persists_a_shared_circuit_that_closes_verification(
+    client,
+) -> None:
+    class TransientlyFailingSender:
+        def send(self, message: VerificationEmail) -> None:
+            raise DeliveryTransientError
+
+    state = set_authentication_runtime_state()
+    user = get_user_model().objects.create_user(
+        username="provider_circuit_login",
+        password="safe-example-passphrase-42",
+    )
+    GameAccount.objects.create(user=user, instance_id=settings.CONTENT_INSTANCE_ID)
+    accepted = verification_post(
+        client,
+        {"channel": "email", "destination": "provider-circuit@example.com"},
+        idempotency_key="provider-circuit-1",
+    )
+    assert accepted.status_code == 202
+
+    outcome = deliver_one_verification(
+        worker_id="provider-circuit-worker",
+        sender=TransientlyFailingSender(),
+    )
+
+    state.refresh_from_db()
+    assert outcome == DeliveryOutcome.RETRY_SCHEDULED
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.OPEN
+    assert state.provider_retry_at is not None
+    blocked = verification_post(
+        client,
+        {"channel": "email", "destination": "provider-circuit-next@example.com"},
+        idempotency_key="provider-circuit-2",
+    )
+    login = client.post(
+        reverse("auth-login"),
+        {"username": user.username, "password": "safe-example-passphrase-42"},
+        content_type="application/json",
+        secure=True,
+        headers={"origin": "https://testserver"},
+    )
+    assert blocked.status_code == 503
+    assert login.status_code == 200
+
+
+@override_settings(
+    AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False,
+    AUTH_VERIFICATION_PROVIDER_RETRY_SECONDS=30,
+)
+def test_provider_circuit_waits_for_cooldown_then_recovers_through_a_probe() -> None:
+    now = timezone.now()
+    state = set_authentication_runtime_state(
+        verification_heartbeat_at=now,
+        security_heartbeat_at=now,
+        provider_state=AuthenticationBaselineRuntimeState.ProviderState.OPEN,
+        provider_retry_at=now + timedelta(seconds=30),
+    )
+    probes: list[str] = []
+
+    deferred = deliver_one_verification(
+        worker_id="provider-probe-worker",
+        provider_probe=lambda: probes.append("probed"),
+    )
+    state.refresh_from_db()
+    assert deferred == DeliveryOutcome.NO_WORK
+    assert probes == []
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.OPEN
+
+    state.provider_retry_at = timezone.now() - timedelta(seconds=1)
+    state.save(update_fields=("provider_retry_at",))
+    recovered = deliver_one_verification(
+        worker_id="provider-probe-worker",
+        provider_probe=lambda: probes.append("probed"),
+    )
+
+    state.refresh_from_db()
+    assert recovered == DeliveryOutcome.NO_WORK
+    assert probes == ["probed"]
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.CLOSED
+    assert state.provider_retry_at is None
+    assert state.provider_probe_token is None
+    assert state.provider_probe_expires_at is None
+
+
+@override_settings(
+    AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False,
+    AUTH_VERIFICATION_PROVIDER_RETRY_SECONDS=30,
+)
+def test_failed_provider_probe_reopens_the_circuit_without_processing_work() -> None:
+    now = timezone.now()
+    state = set_authentication_runtime_state(
+        verification_heartbeat_at=now,
+        security_heartbeat_at=now,
+        provider_state=AuthenticationBaselineRuntimeState.ProviderState.OPEN,
+        provider_retry_at=now - timedelta(seconds=1),
+    )
+
+    def failed_probe() -> None:
+        raise OSError("provider unavailable")
+
+    outcome = deliver_one_verification(
+        worker_id="failed-provider-probe",
+        provider_probe=failed_probe,
+    )
+
+    state.refresh_from_db()
+    assert outcome == DeliveryOutcome.NO_WORK
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.OPEN
+    assert state.provider_retry_at is not None
+    assert state.provider_retry_at > now
+    assert state.provider_probe_token is None
+    assert state.provider_probe_expires_at is None
+
+
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_permanent_message_failure_does_not_open_the_shared_provider_circuit(client) -> None:
+    state = set_authentication_runtime_state()
+    assert (
+        verification_post(
+            client,
+            {"channel": "email", "destination": "permanent-message@example.com"},
+            idempotency_key="permanent-message-1",
+        ).status_code
+        == 202
+    )
+
+    outcome = deliver_one_verification(
+        worker_id="permanent-message-worker",
+        sender=PermanentlyFailingSender(),
+    )
+
+    state.refresh_from_db()
+    assert outcome == DeliveryOutcome.DELIVERY_FAILED
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.CLOSED
+    assert state.provider_retry_at is None
+
+
+@pytest.mark.parametrize("worker_kind", ["verification", "security_notification"])
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_temporary_recipient_failure_retries_one_message_without_opening_provider_circuit(
+    client,
+    monkeypatch,
+    worker_kind: str,
+) -> None:
+    state = set_authentication_runtime_state()
+    if worker_kind == "verification":
+        assert (
+            verification_post(
+                client,
+                {"channel": "email", "destination": "recipient-retry@example.com"},
+                idempotency_key="recipient-retry-verification",
+            ).status_code
+            == 202
+        )
+    else:
+        create_security_notification(
+            username="recipient_retry_notice",
+            destination="recipient-retry@example.com",
+            next_attempt_at=timezone.now(),
+        )
+
+    def reject_recipient_temporarily(*args, **kwargs):
+        raise smtplib.SMTPRecipientsRefused(
+            {"recipient-retry@example.com": (450, b"mailbox temporarily unavailable")}
+        )
+
+    monkeypatch.setattr(EmailMessage, "send", reject_recipient_temporarily)
+
+    if worker_kind == "verification":
+        verification_outcome = deliver_one_verification(
+            worker_id="recipient-retry-verification-worker"
+        )
+        assert verification_outcome == DeliveryOutcome.RETRY_SCHEDULED
+        assert VerificationDeliveryOutbox.objects.get().state == (
+            VerificationDeliveryOutbox.State.PENDING
+        )
+    else:
+        notification_outcome = deliver_one_security_notification(
+            worker_id="recipient-retry-notice-worker"
+        )
+        assert notification_outcome == SecurityNotificationOutcome.RETRY_SCHEDULED
+        assert SecurityNotificationOutbox.objects.get().state == (
+            SecurityNotificationOutbox.State.PENDING
+        )
+
+    state.refresh_from_db()
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.CLOSED
+    assert state.provider_retry_at is None
+
+
+@pytest.mark.parametrize("worker_kind", ["verification", "security_notification"])
+@pytest.mark.parametrize(
+    "smtp_error_type",
+    [smtplib.SMTPConnectError, smtplib.SMTPHeloError, smtplib.SMTPResponseException],
+)
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_provider_connection_failures_open_circuit_without_terminalizing_message(
+    client,
+    monkeypatch,
+    worker_kind: str,
+    smtp_error_type,
+) -> None:
+    state = set_authentication_runtime_state()
+    if worker_kind == "verification":
+        assert (
+            verification_post(
+                client,
+                {"channel": "email", "destination": "provider-failure@example.com"},
+                idempotency_key=f"provider-failure-{smtp_error_type.__name__}",
+            ).status_code
+            == 202
+        )
+    else:
+        create_security_notification(
+            username=f"provider_failure_{smtp_error_type.__name__.lower()}",
+            destination="provider-failure@example.com",
+            next_attempt_at=timezone.now(),
+        )
+
+    def reject_provider_connection(*args, **kwargs):
+        raise smtp_error_type(550, b"provider connection unavailable")
+
+    monkeypatch.setattr(EmailMessage, "send", reject_provider_connection)
+
+    if worker_kind == "verification":
+        verification_outcome = deliver_one_verification(
+            worker_id="provider-failure-verification-worker"
+        )
+        assert verification_outcome == DeliveryOutcome.RETRY_SCHEDULED
+        assert VerificationDeliveryOutbox.objects.get().state == (
+            VerificationDeliveryOutbox.State.PENDING
+        )
+    else:
+        notification_outcome = deliver_one_security_notification(
+            worker_id="provider-failure-notice-worker"
+        )
+        assert notification_outcome == SecurityNotificationOutcome.RETRY_SCHEDULED
+        assert SecurityNotificationOutbox.objects.get().state == (
+            SecurityNotificationOutbox.State.PENDING
+        )
+
+    state.refresh_from_db()
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.OPEN
+    assert state.provider_retry_at is not None
+
+
 @pytest.mark.parametrize(
     ("smtp_code", "expected_outcome", "expected_state"),
     [
@@ -1186,7 +1844,7 @@ def test_email_adapter_classifies_transient_and_permanent_smtp_failures(
     )
 
     def raise_smtp_error(*args, **kwargs):
-        raise smtplib.SMTPResponseException(smtp_code, b"provider response")
+        raise smtplib.SMTPDataError(smtp_code, b"message data response")
 
     monkeypatch.setattr(EmailMessage, "send", raise_smtp_error)
 
@@ -1202,6 +1860,36 @@ def test_email_adapter_classifies_transient_and_permanent_smtp_failures(
     else:
         assert challenge.state == VerificationChallenge.State.PENDING_DELIVERY
         assert outbox.payload_ciphertext is not None
+
+
+@override_settings(AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=False)
+def test_email_provider_authentication_failure_opens_the_shared_circuit(
+    client,
+    monkeypatch,
+) -> None:
+    state = set_authentication_runtime_state()
+    assert (
+        verification_post(
+            client,
+            {"channel": "email", "destination": "smtp-auth@example.com"},
+            idempotency_key="smtp-auth-1",
+        ).status_code
+        == 202
+    )
+
+    def raise_authentication_error(*args, **kwargs):
+        raise smtplib.SMTPAuthenticationError(535, b"authentication rejected")
+
+    monkeypatch.setattr(EmailMessage, "send", raise_authentication_error)
+
+    outcome = deliver_one_verification(worker_id="smtp-auth-worker")
+
+    state.refresh_from_db()
+    assert outcome == DeliveryOutcome.RETRY_SCHEDULED
+    assert state.provider_state == AuthenticationBaselineRuntimeState.ProviderState.OPEN
+    assert (
+        VerificationDeliveryOutbox.objects.get().state == VerificationDeliveryOutbox.State.PENDING
+    )
 
 
 def test_failed_replacement_preserves_old_active_until_new_delivery_succeeds(client) -> None:
@@ -1350,6 +2038,100 @@ def test_security_notification_management_command_processes_pending_task() -> No
     assert (
         SecurityNotificationOutbox.objects.get().state == SecurityNotificationOutbox.State.DELIVERED
     )
+
+
+def test_verification_worker_watch_keeps_polling_an_empty_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stale = timezone.now() - timedelta(minutes=5)
+    state = set_authentication_runtime_state(
+        verification_heartbeat_at=stale,
+        security_heartbeat_at=stale,
+    )
+    sleep_intervals: list[float] = []
+
+    def stop_after_first_idle_poll(interval: float) -> None:
+        sleep_intervals.append(interval)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        "new_mud.apps.identity.management.commands.process_verification_deliveries.sleep",
+        stop_after_first_idle_poll,
+    )
+    output = io.StringIO()
+
+    call_command(
+        "process_verification_deliveries",
+        "--watch",
+        "--poll-interval",
+        "0.01",
+        stdout=output,
+    )
+
+    state.refresh_from_db()
+    assert sleep_intervals == [0.01]
+    assert state.verification_delivery_heartbeat_at is not None
+    assert state.verification_delivery_heartbeat_at > stale
+    assert output.getvalue() == "processed=0 delivered=0 failed=0 retried=0\n"
+
+
+@pytest.mark.parametrize(
+    "command_name",
+    ["process_verification_deliveries", "process_security_notifications"],
+)
+def test_worker_watch_requires_a_poll_interval_shorter_than_heartbeat_freshness(
+    command_name: str,
+) -> None:
+    with pytest.raises(CommandError):
+        call_command(
+            command_name,
+            "--watch",
+            "--poll-interval",
+            str(settings.AUTH_VERIFICATION_HEARTBEAT_MAX_AGE_SECONDS),
+        )
+
+
+@pytest.mark.parametrize(
+    "command_name",
+    ["process_verification_deliveries", "process_security_notifications"],
+)
+def test_worker_watch_cannot_be_combined_with_single_poll(command_name: str) -> None:
+    with pytest.raises(CommandError):
+        call_command(command_name, "--watch", "--once")
+
+
+def test_empty_verification_worker_poll_refreshes_its_live_heartbeat() -> None:
+    stale = timezone.now() - timedelta(minutes=5)
+    state = set_authentication_runtime_state(
+        verification_heartbeat_at=stale,
+        security_heartbeat_at=stale,
+    )
+    before_poll = timezone.now()
+
+    outcome = deliver_one_verification(worker_id="empty-verification-worker")
+
+    state.refresh_from_db()
+    assert outcome == DeliveryOutcome.NO_WORK
+    assert state.verification_delivery_heartbeat_at is not None
+    assert state.verification_delivery_heartbeat_at >= before_poll
+    assert state.security_notification_heartbeat_at == stale
+
+
+def test_empty_security_notification_worker_poll_refreshes_its_live_heartbeat() -> None:
+    stale = timezone.now() - timedelta(minutes=5)
+    state = set_authentication_runtime_state(
+        verification_heartbeat_at=stale,
+        security_heartbeat_at=stale,
+    )
+    before_poll = timezone.now()
+
+    outcome = deliver_one_security_notification(worker_id="empty-security-worker")
+
+    state.refresh_from_db()
+    assert outcome == SecurityNotificationOutcome.NO_WORK
+    assert state.security_notification_heartbeat_at is not None
+    assert state.security_notification_heartbeat_at >= before_poll
+    assert state.verification_delivery_heartbeat_at == stale
 
 
 def test_startup_check_rejects_enabled_verification_with_missing_keys() -> None:

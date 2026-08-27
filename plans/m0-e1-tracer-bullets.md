@@ -107,7 +107,7 @@
 - [x] #12 交付 email challenge、独立密钥、加密联系方式/lookup、PostgreSQL 持久限流/outbox、worker 与非枚举 request。
 - [x] #13 最终 register 原子消费 challenge，创建 User/GameAccount/VerifiedContactMethod，返回零认证状态，并完成 H5 注册/普通登录文案。
 - [x] #14 password reset 原子撤销跨实例全部 AuthSession/family/credential，旧 access/refresh 立即失败，通知投递失败不回滚密码；Git `638e8cf` 与 `docs/new_engine/18_IMPLEMENTATION_STATUS.md` 保留实现和验证证据。
-- [x] #15 两个旧 RecoveryCode 端点统一 410，现有开发 code 全撤销，注册/reset/退役通过同一受控切换且普通登录保持可用。
+- [x] #15 两个旧 RecoveryCode 端点统一 410，现有开发 code 全撤销；注册/reset 由两类 live worker heartbeat 与共享 provider circuit 原子门禁，生产启动 fail closed，普通登录保持可用。
 - [ ] #16 完成 PostgreSQL 并发、迁移、静态、全量、E2E、秘密扫描、可选 SMTP smoke 和 Standards + Spec 双轴证据。
 - [x] SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 与 takeover 均未提前实现。
 

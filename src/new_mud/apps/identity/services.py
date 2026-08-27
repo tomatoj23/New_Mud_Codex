@@ -5,6 +5,7 @@ import hmac
 import re
 import secrets
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -63,6 +64,10 @@ class RegistrationUnavailable(Exception):
     pass
 
 
+class RegistrationRateLimited(Exception):
+    pass
+
+
 class VerificationCodeInvalid(Exception):
     pass
 
@@ -102,7 +107,11 @@ def register(
     username: object,
     password: object,
     verification: object,
+    consume_request_limit: Callable[[], bool] | None = None,
 ) -> RegistrationResult:
+    keyrings = require_authentication_baseline()
+    if consume_request_limit is not None and not consume_request_limit():
+        raise RegistrationRateLimited
     if not isinstance(username, str) or not isinstance(password, str):
         raise RegistrationInvalid
     normalized_username = username.lower()
@@ -120,7 +129,6 @@ def register(
     except ContactInvalid as error:
         raise VerificationCodeInvalid from error
 
-    keyrings = require_authentication_baseline()
     email_scope = email_contact_scope(
         normalized_email,
         lookup_keyring=keyrings.contact_lookup,
@@ -475,6 +483,38 @@ def _access_claims(session: AuthSession, *, issued_at) -> dict[str, object]:
         "exp": int(issued_at.timestamp()) + expires_in,
         "jti": uuid.uuid4().hex,
     }
+
+
+def resolve_active_auth_session(access_token: object) -> AuthSession:
+    if not isinstance(access_token, str):
+        raise AuthenticationFailed
+    try:
+        claims = decode_access_token(access_token)
+    except RuntimeError as error:
+        raise AuthenticationFailed from error
+    if claims is None:
+        raise AuthenticationFailed
+    try:
+        auth_session_id = uuid.UUID(str(claims["auth_session_id"]))
+        claimed_user_id = str(claims["sub"])
+        claimed_game_account_id = uuid.UUID(str(claims["game_account_id"]))
+    except (KeyError, TypeError, ValueError) as error:
+        raise AuthenticationFailed from error
+    try:
+        session = AuthSession.objects.select_related("user", "game_account").get(pk=auth_session_id)
+    except AuthSession.DoesNotExist as error:
+        raise AuthenticationFailed from error
+    if (
+        session.state != AuthSession.State.ACTIVE
+        or session.absolute_expires_at <= timezone.now()
+        or not session.user.is_active
+        or session.game_account.lifecycle != GameAccount.Lifecycle.ACTIVE
+        or session.game_account.user_id != session.user_id
+        or claimed_user_id != str(session.user_id)
+        or claimed_game_account_id != session.game_account_id
+    ):
+        raise AuthenticationFailed
+    return session
 
 
 def login(*, username: object, password: object) -> AuthenticationResult:
