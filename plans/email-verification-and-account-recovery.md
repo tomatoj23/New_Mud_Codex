@@ -1,6 +1,6 @@
 # 已验证联系方式注册与账号恢复实施方案
 
-**Status**: `completed`（2026-08-27；Issues #11–#16 工程验收完成，`AUTH-005=verified`；#16 待 GitHub 回填/关闭）
+**Status**: `completed`（2026-08-27；Issues #11–#16 已完成并关闭，`AUTH-005=verified`）
 
 **Delivery unit**: 新建 `Engine Stage E1 / Auth Baseline Amendment`，先于 Character Slice 2
 

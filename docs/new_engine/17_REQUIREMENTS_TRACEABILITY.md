@@ -14,7 +14,7 @@
 
 这些值表示需求追踪记录的证据成熟度，不替代 V6 对产品里程碑规定的 `not_started / in_progress / blocked / complete`。因此 `MILESTONE-001=verified` 表示已有证据证明产品里程碑 `M0=complete`；不得把产品 M0 自身写成 `verified`。
 
-当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的历史注册/登录闭环。`AUTH-001`、`AUTH-002` 仍保留 Issue #9 的 PostgreSQL、REST、安全属性和 H5 自动端到端证据；2026-08-26 的产品修订不倒写这些事实，但 RecoveryCode 已不再是现行凭据。Issue #10 建立 `AUTH-005` 的 VerifiedContactMethod/VerificationChallenge 认证权威，Issues #11–#15 已交付权威同步、投递基础、已验证邮箱最终注册、邮箱密码重置、跨实例即时认证撤销、安全通知 outbox、H5、RecoveryCode 不可逆退役和认证基线受控切换；Issue #16 已完成分层验证和无未解决 hard finding 的正式双轴复审，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。`AUTH-005` 已为 `verified`，#16 只待 GitHub 回填/关闭；Character Slice 2 尚未认领或实现。`AUTH-004` 的旧复合语义已退役，User/GameAccount 基数与 PresenceRecovery 分别由 `IDENTITY-001`、`AUTH-006` 追踪。
+当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的历史注册/登录闭环。`AUTH-001`、`AUTH-002` 仍保留 Issue #9 的 PostgreSQL、REST、安全属性和 H5 自动端到端证据；2026-08-26 的产品修订不倒写这些事实，但 RecoveryCode 已不再是现行凭据。Issue #10 建立 `AUTH-005` 的 VerifiedContactMethod/VerificationChallenge 认证权威，Issues #11–#15 已交付权威同步、投递基础、已验证邮箱最终注册、邮箱密码重置、跨实例即时认证撤销、安全通知 outbox、H5、RecoveryCode 不可逆退役和认证基线受控切换；Issue #16 已完成分层验证、无未解决 hard finding 的正式双轴复审及 GitHub 回填关闭，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。`AUTH-005` 已为 `verified`，Character Slice 2 成为下一 frontier，但尚未认领或实现。`AUTH-004` 的旧复合语义已退役，User/GameAccount 基数与 PresenceRecovery 分别由 `IDENTITY-001`、`AUTH-006` 追踪。
 
 browser、capacity、recovery 三份非功能 profile 已批准，但发布级浏览器矩阵、容量、soak 和五范围恢复证据仍未完成，所以 `CLIENT-001`、`NFR-001`、`NFR-002` 与 `RELEASE-001` 继续保持 `blocked`；`MILESTONE-002` 也不因认证权威修订或单一切片完成而提升。
 

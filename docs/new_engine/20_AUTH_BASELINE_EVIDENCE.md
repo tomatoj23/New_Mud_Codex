@@ -9,7 +9,7 @@
 | 记录 | 状态 | 结论 |
 | --- | --- | --- |
 | `AUTH-005` | `verified` | Issues #11–#15 已完成权威与运行实现，Issue #16 的分层验证及正式双轴复审均无未解决 hard finding |
-| Engine Stage E1 / Auth Baseline Amendment | `completed` | 工程与证据验收已完成；#16 只待 GitHub 回填/关闭，Character Slice 2 尚未认领或实现 |
+| Engine Stage E1 / Auth Baseline Amendment | `completed` | 工程与证据验收及 Issue #16 GitHub 回填关闭已完成；Character Slice 2 成为下一 frontier，但尚未认领或实现 |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器矩阵、容量/soak 和发布级五范围恢复证据仍缺失 |
 | `RELEASE-001` / `PublicV1Gate` | `blocked` | 正式邮件运营、公开试运行、ReleaseManifest 和其他发布证据尚未完成 |
 
@@ -81,7 +81,7 @@ migrate
 | `.venv\Scripts\mypy.exe src scripts tests` | Success；94 source files |
 | `.venv\Scripts\python.exe manage.py check` | 0 issues |
 | `.venv\Scripts\python.exe -m pip check` | passed |
-| `.venv\Scripts\python.exe scripts/verify_m0.py` | 57,180 checks、READY |
+| `.venv\Scripts\python.exe scripts/verify_m0.py` | 57,189 checks、READY |
 | `git diff --check` | passed |
 
 pytest 的 2 条 warning 都来自 Daphne 使用将在 Python 3.16 移除的 asyncio policy API；当前 CPython 3.14.2 下不影响测试结论，且执行日没有可用的 Daphne 修复版本。
@@ -130,7 +130,7 @@ rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!ar
 - Standards：0 hard finding；1 个非阻塞 judgement finding，仍是上述状态同步分散风险。`verify_m0.py` 已用必需/淘汰 marker 自动拒绝漂移，本票不在证据收口范围重构现行治理布局。
 - Spec：0 hard finding、0 观察；无 missing/partial、scope creep 或 wrong implementation，首轮两项 hard 均确认解决。
 
-两轴没有未解决 hard finding，因而 `AUTH-005` 可提升为 `verified`，Auth Baseline Amendment 可标记为工程 `completed`。GitHub Issue #16 仍须在最终状态同步提交后回填并关闭；关闭前不认领 Character Slice 2。
+两轴没有未解决 hard finding，因而 `AUTH-005` 已提升为 `verified`，Auth Baseline Amendment 已标记为工程 `completed`。GitHub Issue #16 已使用精确提交、门禁数字、SMTP/gitleaks 边界和双轴结论回填并关闭；Character Slice 2 成为下一 frontier，但尚未认领或实现。
 
 ## 9. 仍然缺失的发布证据
 
@@ -150,7 +150,7 @@ rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!ar
 | --- | --- |
 | PostgreSQL 串行全量 | 285 passed、1 skipped、2 warnings；唯一 skip 为未显式 opt-in 的开发 SMTP smoke |
 | 迁移 | drift none；隔离数据库 `0009 -> 0010 -> 0009 -> 0010 -> latest` 通过；临时数据库已删除 |
-| Python / Django / 合同 | Ruff passed；94 files formatted；mypy 94 source files；Django 0 issues；pip check passed；5 个文档合同 passed；57,180 项 M0 checks READY |
+| Python / Django / 合同 | Ruff passed；94 files formatted；mypy 94 source files；Django 0 issues；pip check passed；5 个文档合同 passed；57,189 项 M0 checks READY |
 | 前端 | Vue typecheck passed；Vitest 12 passed；H5 build passed；隔离数据库 Playwright 13 passed / 8 skipped |
 | 依赖 | npm critical gate 退出 0；0 critical，保留 9 low / 9 moderate / 1 high，未强制破坏性 Vite 8 升级 |
 | 秘密 | 行为与浏览器存储/console/network 扫描通过；tracked 高风险 token 形态与 secret assignment 均为 none；本机 gitleaks 未下载完成，CI 官方 gate 保留 |

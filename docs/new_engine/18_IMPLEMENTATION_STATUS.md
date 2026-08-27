@@ -20,7 +20,7 @@
 | 现行文档一致性复核 | GitHub Issue #7 检查点（2026-08-26） | 已复核领域词汇、工程索引、V6、ADR、冻结合同、计划与现行项目文档；归档、V5 和上游文档不在修改范围 |
 | E0 / Slice 2 验收基线 | GitHub Issue #5 检查点（2026-08-25） | Issues #1–#4 的实现已在 V6 基线上完成真库、服务集成、启动 E2E、全量和静态门禁，`ENGINE-001` 与 `MILESTONE-001` 可验证关闭 |
 | E1 / Slice 1 验收基线 | GitHub Issue #9 检查点（2026-08-26） | 注册、独立登录、refresh/logout、RecoveryCode、认证限流、H5 single-flight 与现代移动/桌面自动 E2E 已通过；未实现 Character、Presence、恢复控角或 takeover |
-| E1 / Auth Baseline Amendment | GitHub Issues #10–#16（2026-08-27） | VerifiedContactMethod 与 VerificationChallenge 已取代 RecoveryCode 成为现行注册/恢复权威；Issues #11–#15 的权威与运行实现、#16 的分层验证与正式双轴复审均已完成，`AUTH-005=verified`；#16 只待 GitHub 回填/关闭 |
+| E1 / Auth Baseline Amendment | GitHub Issues #10–#16（2026-08-27） | VerifiedContactMethod 与 VerificationChallenge 已取代 RecoveryCode 成为现行注册/恢复权威；Issues #11–#15 的权威与运行实现、#16 的分层验证、正式双轴复审及 GitHub 回填关闭均已完成，`AUTH-005=verified` |
 | M0 工程基线 | Git `7bd76a3` | Django/ASGI 骨架、PostgreSQL 初始迁移、机器合同、来源制品、CI 与自动校验已建立 |
 | M0 profile 基线 | Git `97659ce` | browser、capacity、recovery profile 已批准，M0 基础设施恢复报告已绑定 |
 | 实施计划基线 | Git `b4798fb` | 已验证环境与 Engine Stage E0/E1 五切片计划已建立；当前计划已改用命名空间化 Slice |
@@ -140,7 +140,7 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 - Issue #13 已实现最终 register 的 PostgreSQL 原子消费与唯一性重验，创建 User、当前实例 GameAccount 和唯一 verified email，保持零 AuthSession/token/RecoveryCode/Character/Presence；H5 完成邮箱发码、验证码注册、手动重发和成功返回登录入口。跨 lookup key 轮换的新投递会在同一逻辑邮箱锁内替代全部旧 active challenge。
 - Issue #14 已实现 password-reset request/confirm、独立限流与幂等命名空间、固定锁序的 PostgreSQL 原子密码更新和跨实例 AuthSession/family/credential 即时撤销；成功不自动登录、不改变 GameAccount lifecycle。安全通知使用独立持久 outbox，失败只进入审计和告警，不回滚密码事务；H5 完成邮箱发码、手动重发、六位验证码、新密码和返回普通登录入口的闭环，且不持久化恢复秘密。
 - Issue #15 已通过 identity `0009_retire_recovery_codes` 撤销全部 active RecoveryCode，并以数据库约束禁止新增 active；reverse data migration 不复活秘密。`0010_authentication_baseline_runtime_state` 增加可逆、初始 fail-closed 的两类 worker heartbeat 与共享 provider circuit/probe 单例。旧 recover/rotate 兼容路由不解析 body、Origin 或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`。注册和重置只在两个 heartbeat fresh、circuit closed 且静态依赖完整时共同开放，关闭态不消耗最终注册限流；生产启动拒绝不完整运行态及测试邮件 bypass，普通账号名/密码登录保持独立可用。SMTP provider 全局故障与单消息失败分别控制 circuit 和任务重试/终结；统一 access-authentication 领域缝证明 reset 前 token 可解析、reset 后同一 token 被拒绝。
-- 路线与 tracer plan 在原 E1 / Slice 1 与 Character Slice 2 之间插入 `Auth Baseline Amendment`。Issue #16 已完成分层验证并经正式复审确认无未解决 hard finding；只待 GitHub 回填/关闭。Character Slice 2 尚未认领或实现。
+- 路线与 tracer plan 在原 E1 / Slice 1 与 Character Slice 2 之间插入 `Auth Baseline Amendment`。Issue #16 已完成分层验证、正式复审及 GitHub 回填关闭；Character Slice 2 成为下一 frontier，但尚未认领或实现。
 - 新增认证权威文档合同检查，要求 V6、冻结合同、追踪、状态、差异、计划与交接使用同一现行边界，并拒绝旧 RecoveryCode 注册/恢复承诺重新进入活跃权威。
 
 ## 4. 当前状态
@@ -164,11 +164,11 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 | Engine Stage E1 / Slice 1 | `verified` | 8 项切片验收全部通过；范围止于注册与独立登录，不包含 Character、ConnectionSession、Presence、恢复控角或 takeover |
 | `RELEASE-001` / PublicV1Gate | `blocked` | V6 gate 已定义，尚无公开试运行、完整恢复、ReleaseManifest 或公开资料证据；不影响 M1/E0 的内部状态 |
 
-M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issue #9 固定 E1 / Slice 1 的历史注册与登录证据；Auth Baseline Amendment 的运行实现与分层验收已完成，`AUTH-005=verified`。M1 与 `MILESTONE-002` 仍未完成，#16 回填关闭后下一 frontier 才交给尚未认领的 Character Slice 2。
+M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issue #9 固定 E1 / Slice 1 的历史注册与登录证据；Auth Baseline Amendment 的运行实现与分层验收已完成，`AUTH-005=verified`。M1 与 `MILESTONE-002` 仍未完成，下一 frontier 是尚未认领的 Character Slice 2。
 
 浏览器完整矩阵、容量/soak 报告与五个业务恢复范围仍是 `RELEASE-001` 的发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批或 M1 内部抽样而提前转为 `verified`。
 
-经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。两个 E0 切片、E1 / Slice 1 与 Auth Baseline Amendment 的工程验收均已完成并保留为可回查记录；#16 只待 GitHub 回填/关闭，随后 frontier 交给尚未认领的 Character Slice 2 角色、连接、进入与恢复闭环，Slice 3 takeover 仍须独立实施。
+经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。两个 E0 切片、E1 / Slice 1 与 Auth Baseline Amendment 均已完成并保留为可回查记录；frontier 已交给尚未认领的 Character Slice 2 角色、连接、进入与恢复闭环，Slice 3 takeover 仍须独立实施。
 
 ## 5. 证据映射
 

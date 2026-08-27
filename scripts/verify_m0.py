@@ -288,7 +288,7 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "Character Slice 2",
     },
     "docs/new_engine/NEXT_SESSION_HANDOFF.md": {
-        "Auth Baseline Amendment 验收完成",
+        "Auth Baseline Amendment 已完成",
         "Character Slice 2",
         "Issue #16",
         "20_AUTH_BASELINE_EVIDENCE.md",
@@ -333,23 +333,32 @@ OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS = {
     "docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md": {
         "| `AUTH-005` | `implemented` |",
         "分层总证据仍待 #16",
+        "#16 只待 GitHub 回填/关闭",
     },
     "docs/new_engine/18_IMPLEMENTATION_STATUS.md": {
         "| `AUTH-005` | `implemented` |",
         "分层总证据仍待 #16",
         "下一实现入口是 Auth Baseline Amendment 的 Issue #16",
+        "#16 只待 GitHub 回填/关闭",
     },
+    "docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md": {"#16 只待 GitHub 回填/关闭"},
+    "docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md": {"#16 只待 GitHub 回填/关闭"},
     "docs/new_engine/NEXT_SESSION_HANDOFF.md": {
         "下一步 Issue #16",
         "| `AUTH-005` | `implemented` |",
         "Issue #16 的唯一合法启动顺序",
+        "Issue #16 待回填关闭",
+        "Open / 已认领；工程验收与正式双轴复审完成，待回填/关闭",
     },
     "plans/m0-e1-tracer-bullets.md": {
         "**Status**: `in_progress`",
         "当前唯一未认领 frontier 是 #16",
+        "#16 待 GitHub 回填/关闭",
+        "Issue #16 的 GitHub 回填与关闭",
     },
     "plans/email-verification-and-account-recovery.md": {
         "运行实现尚未开始",
+        "#16 待 GitHub 回填/关闭",
     },
 }
 

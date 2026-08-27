@@ -91,15 +91,15 @@
 
 ## Engine Stage E1 / Auth Baseline Amendment: 已验证联系方式注册与账号恢复
 
-**Status**: `completed`（2026-08-27；Issue #10；Issues #11–#16 工程验收完成，#16 待 GitHub 回填/关闭）
+**Status**: `completed`（2026-08-27；Issue #10；Issues #11–#16 已完成并关闭）
 
 **User stories**: 作为新玩家，我先验证邮箱再创建账号；作为忘记密码的玩家，我通过已验证邮箱重置密码并让全部旧认证立即失效；作为普通玩家，我始终使用账号名和密码登录，不需要理解“独立登录”或 RecoveryCode。覆盖 `AUTH-005`、`CLIENT-001`、`MILESTONE-002`。
 
 ### What to build
 
-按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。#16 首轮 hard findings 已修复，正式复审无未解决 hard finding，`AUTH-005=verified`；只待 GitHub 回填/关闭。
+按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。#16 首轮 hard findings 已修复，正式复审无未解决 hard finding 并已回填关闭，`AUTH-005=verified`。
 
-#16 关闭前不认领 Character Slice 2；关闭后它成为下一 frontier，目前尚未认领或实现。
+Character Slice 2 已成为下一 frontier，但尚未认领或实现。
 
 ### Acceptance criteria
 
@@ -115,7 +115,7 @@
 
 ## Engine Stage E1 / Slice 2: Character Slice 2——创建角色、连接、进入与恢复闭环
 
-**Blocked by**: Auth Baseline Amendment Issue #16 的 GitHub 回填与关闭。工程验收已完成；当前切片尚未认领或实现。
+**Blocked by**: 无；Auth Baseline Amendment Issue #16 已关闭。当前切片尚未认领或实现。
 
 **User stories**: 作为已登录玩家，我可以创建唯一角色，建立 WebSocket，进入起始房间并取得完整最小状态；断线后可以在新连接上安全重建。覆盖 `AUTH-003`、`WORLD-001`、`CLIENT-001`、`MILESTONE-002`。
 

@@ -1,8 +1,8 @@
-# 下一会话交接：Auth Baseline Amendment 验收完成，Issue #16 待回填关闭
+# 下一会话交接：Auth Baseline Amendment 已完成，下一步 Character Slice 2
 
 > 快照日期：2026-08-27。
 >
-> 本地交付基线：#14 功能提交 Git `638e8cf`，计划/交接同步提交 Git `28d6715`；#15 最终提交 Git `1e6e930`；#16 首个证据提交 Git `b545ed1`，审查修复与本交接由本文件所在提交继续交付。精确提交在复审通过后由 Issue #16 回填；本次会话未 push。
+> 本地交付基线：#14 功能提交 Git `638e8cf`，计划/交接同步提交 Git `28d6715`；#15 最终提交 Git `1e6e930`；#16 证据提交 Git `b545ed1`、审查修复 Git `4c5a4b3`、复审状态同步 Git `116b4fc`，GitHub Issue 已回填关闭；最终 CLOSED 状态同步由本文件所在提交交付。本次会话未 push。
 >
 > 本文件是无会话记忆时的现行启动入口。它汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序；不创造需求、合同或正式状态。冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
 
@@ -24,8 +24,8 @@ git log -8 --decorate --oneline
 - 分支是 `main`，工作树为空；若不为空，先辨认并保留已有修改。
 - `HEAD` 的历史必须包含 `638e8cf`、`28d6715`、`1e6e930` 与 `b545ed1`。快照时 `origin/main` 是 `5a36979304be7c91d8e9ce50c3873a79cf3291fd`；若远端尚未变化，预期为 behind 0 且存在未推送的本地领先提交。ahead 数量会随后续本地提交增长，不作为固定合同；若出现 behind 或历史不含上述提交，先审计提交来源。
 - Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
-- GitHub 原生子票 #11–#15 已关闭；#16 的工程验收和正式双轴复审已完成，只待提交状态同步并回填/关闭，阻塞链仍为 `#11 -> #12 -> #13 -> #14 -> #15 -> #16`。
-- #16 GitHub 关闭前不认领 Character Slice 2；关闭后它成为下一 frontier。本交接没有认领、创建或实现其 ticket。
+- GitHub 原生子票 #11–#16 与阻塞链 `#11 -> #12 -> #13 -> #14 -> #15 -> #16` 均已关闭。
+- Character Slice 2 已成为下一 frontier；本交接没有认领、创建或实现其 ticket，开始前仍须核对 GitHub 当前 ticket、依赖与 assignee。
 
 若本机 PATH 找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`。当前已验证环境是 Windows 10 `10.0.19045`、仓库 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。
 
@@ -44,7 +44,7 @@ git log -8 --decorate --oneline
 - #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 284 项、认证 API 67 项、运行态/投递 100 项、生产 health 20 项、PostgreSQL identity/migrations 29 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、94 files format、mypy 93 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
 - Issue #16 的 PostgreSQL、迁移往返、Python/前端静态与构建、隔离数据库 H5 E2E、秘密与依赖检查已执行。真实 SMTP 因没有显式 opt-in、收件人和秘密授权准确记录为 1 skipped；本机 gitleaks 因受限网络未完成下载且未声称通过，CI 官方 gate 保留。首轮 Standards 1 hard / 1 judgement 与 Spec 2 hard / 0 scope creep 已由 `4c5a4b3` 修复；正式复审为 Standards 0 hard / 1 judgement、Spec 0 hard / 0 观察，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
-- Auth Baseline Amendment 的运行实现与证据验收均已完成，`AUTH-005=verified`。#16 只待 GitHub 回填/关闭；Character Slice 2 尚未认领或实现。
+- Auth Baseline Amendment 的运行实现、证据验收与 Issue 回填均已完成，`AUTH-005=verified`。Character Slice 2 已成为下一 frontier，但尚未认领或实现。
 
 ### 2.2 Issue 索引
 
@@ -57,7 +57,7 @@ git log -8 --decorate --oneline
 | #13 | 已关闭；已验证邮箱最终注册与 H5 | #12 |
 | #14 | 已关闭；邮箱密码重置、即时认证撤销、安全通知与 H5 | #13 |
 | #15 | 已关闭；RecoveryCode 退役与认证基线原子切换 | #14 |
-| #16 | Open / 已认领；工程验收与正式双轴复审完成，待回填/关闭 | #15 |
+| #16 | 已关闭；分层证据、SMTP opt-in 边界与正式双轴复审 | #15 |
 
 ## 3. 不得混用的状态
 
@@ -104,12 +104,12 @@ git log -8 --decorate --oneline
 - Character、CharacterOwnership、ConnectionSession、Presence、PresenceSnapshot、enter、resume、PresenceRecovery 与 takeover。
 - CAPTCHA provider、完整发布浏览器矩阵、容量/soak 或 PublicV1Gate 完成声明。
 
-## 7. 当前唯一合法启动顺序
+## 7. Character Slice 2 的合法启动顺序
 
-1. 完成第 1 节仓库检查，读取 Issue #16 当前状态、`b545ed1`、`4c5a4b3` 和 `20_AUTH_BASELINE_EVIDENCE.md`。
-2. 提交正式复审结果的状态同步，复核运行门禁、工作树和固定点至 HEAD 的最终 diff。
-3. 在 GitHub 回填精确提交、门禁数字、SMTP/gitleaks 边界和双轴结论，然后关闭 #16。
-4. #16 关闭后，才把 frontier 交给 `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2；开始前从 GitHub 确认实际 ticket、依赖与 assignee，不从本交接推断尚不存在的 Issue 号。
+1. 完成第 1 节仓库检查，读取 Issue #16 关闭评论、`b545ed1`、`4c5a4b3`、`116b4fc` 和 `20_AUTH_BASELINE_EVIDENCE.md`；确认认证基线没有被后续变更降级。
+2. 读取 `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2、V6 第 8 章、CONTEXT、03/08/11/13/15/16 与相关 ADR，确认 GitHub 当前 ticket、依赖和 assignee；不要从本交接推断尚不存在的 Issue 号。
+3. 只有 ticket 已完整指定、没有 open blocker 且无人认领时才认领；按 `/implement` 和预先同意的 TDD seam 实施 Character、CharacterOwnership、ConnectionSession、Presence、PresenceSnapshot、enter、resume 与同 AuthSession PresenceRecovery 的最窄闭环。
+4. 显式跨 AuthSession takeover 继续属于 Slice 3；不得把它、SMS、联系方式换绑、账号重开或 PublicV1Gate 工作塞入 Character Slice 2。
 
 ## 8. 权威来源
 
@@ -123,8 +123,8 @@ git log -8 --decorate --oneline
 | 当前实现与验证结果 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
 | 实施顺序 | `docs/new_engine/10_ROADMAP.md`、`plans/m0-e1-tracer-bullets.md` |
 | 完整批准规格 | GitHub Issue #10 |
-| 当前 ticket | GitHub Issue #16、`docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md` |
-| 后续实施入口 | #16 关闭后使用 `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2；开始前从 GitHub 确认实际 ticket |
+| 最近完成 ticket | GitHub Issue #16、`docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md` |
+| 下一实施入口 | `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2；开始前从 GitHub 确认实际 ticket |
 
 ## 9. 工程与证据边界
 
