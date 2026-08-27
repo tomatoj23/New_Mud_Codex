@@ -1,4 +1,4 @@
-# 下一会话交接：Auth Baseline Amendment 的 Issue #16 正在复审收口
+# 下一会话交接：Auth Baseline Amendment 验收完成，Issue #16 待回填关闭
 
 > 快照日期：2026-08-27。
 >
@@ -24,8 +24,8 @@ git log -8 --decorate --oneline
 - 分支是 `main`，工作树为空；若不为空，先辨认并保留已有修改。
 - `HEAD` 的历史必须包含 `638e8cf`、`28d6715`、`1e6e930` 与 `b545ed1`。快照时 `origin/main` 是 `5a36979304be7c91d8e9ce50c3873a79cf3291fd`；若远端尚未变化，预期为 behind 0 且存在未推送的本地领先提交。ahead 数量会随后续本地提交增长，不作为固定合同；若出现 behind 或历史不含上述提交，先审计提交来源。
 - Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
-- GitHub 原生子票 #11–#15 已关闭；#16 正在修复首轮双轴 findings，阻塞链仍为 `#11 -> #12 -> #13 -> #14 -> #15 -> #16`。
-- #16 正式复审、回填和关闭前，Character Slice 2 仍阻塞；本交接没有认领、创建或实现其 ticket。
+- GitHub 原生子票 #11–#15 已关闭；#16 的工程验收和正式双轴复审已完成，只待提交状态同步并回填/关闭，阻塞链仍为 `#11 -> #12 -> #13 -> #14 -> #15 -> #16`。
+- #16 GitHub 关闭前不认领 Character Slice 2；关闭后它成为下一 frontier。本交接没有认领、创建或实现其 ticket。
 
 若本机 PATH 找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`。当前已验证环境是 Windows 10 `10.0.19045`、仓库 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。
 
@@ -42,9 +42,9 @@ git log -8 --decorate --oneline
 - Issue #14 已由 Git `638e8cf` 交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知投递失败不回滚密码事务。该票交付时 identity 叶节点是 `0008_security_notification_outbox`，安全通知 worker 入口是 `python manage.py process_security_notifications`。
 - Issue #15 已交付 RecoveryCode 不可逆退役与认证基线受控切换：identity `0009_retire_recovery_codes` 撤销全部 active code、保留 User/GameAccount/历史行并禁止新增 active；`0010_authentication_baseline_runtime_state` 可逆增加初始 fail-closed 的 verification-delivery/security-notification heartbeat 与共享 provider circuit/probe；旧 recover/rotate 不解析请求或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`。注册和重置只在两个 heartbeat fresh、circuit closed 且静态 cutover/keyring/operator kill switch 完整时共同开放；生产启动还拒绝测试 bypass，普通密码登录不依赖验证基础设施。
 - #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 284 项、认证 API 67 项、运行态/投递 100 项、生产 health 20 项、PostgreSQL identity/migrations 29 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、94 files format、mypy 93 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
-- Issue #16 的 PostgreSQL、迁移往返、Python/前端静态与构建、隔离数据库 H5 E2E、秘密与依赖检查已执行。真实 SMTP 因没有显式 opt-in、收件人和秘密授权准确记录为 1 skipped；本机 gitleaks 因受限网络未完成下载且未声称通过，CI 官方 gate 保留。首轮 Standards 发现 1 hard / 1 judgement，Spec 发现 2 hard / 0 scope creep；hard findings 正在修复并等待正式复审，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。
+- Issue #16 的 PostgreSQL、迁移往返、Python/前端静态与构建、隔离数据库 H5 E2E、秘密与依赖检查已执行。真实 SMTP 因没有显式 opt-in、收件人和秘密授权准确记录为 1 skipped；本机 gitleaks 因受限网络未完成下载且未声称通过，CI 官方 gate 保留。首轮 Standards 1 hard / 1 judgement 与 Spec 2 hard / 0 scope creep 已由 `4c5a4b3` 修复；正式复审为 Standards 0 hard / 1 judgement、Spec 0 hard / 0 观察，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
-- Auth Baseline Amendment 的运行实现已完成，但证据复审尚未关闭，`AUTH-005=implemented`。Character Slice 2 仍保持阻塞且未认领或实现。
+- Auth Baseline Amendment 的运行实现与证据验收均已完成，`AUTH-005=verified`。#16 只待 GitHub 回填/关闭；Character Slice 2 尚未认领或实现。
 
 ### 2.2 Issue 索引
 
@@ -57,7 +57,7 @@ git log -8 --decorate --oneline
 | #13 | 已关闭；已验证邮箱最终注册与 H5 | #12 |
 | #14 | 已关闭；邮箱密码重置、即时认证撤销、安全通知与 H5 | #13 |
 | #15 | 已关闭；RecoveryCode 退役与认证基线原子切换 | #14 |
-| #16 | Open / 已认领；分层证据、SMTP opt-in 边界与双轴复审修复中 | #15 |
+| #16 | Open / 已认领；工程验收与正式双轴复审完成，待回填/关闭 | #15 |
 
 ## 3. 不得混用的状态
 
@@ -69,7 +69,7 @@ git log -8 --decorate --oneline
 | `AUTH-001`、`AUTH-002` | `verified` | Issue #9 的注册零隐式登录和会话生命周期历史证据仍成立 |
 | `AUTH-004` | `retired` | RecoveryCode + PresenceRecovery 的旧复合追踪项已拆开，ID 不复用 |
 | `IDENTITY-001` | `verified` | 每实例一个 User 永久映射一个 GameAccount 已由 Issue #9 验证 |
-| `AUTH-005` | `implemented` | Issues #11–#15 已交付权威与运行实现；#16 的分层验证已执行，正式双轴复审和 Issue 回填尚未完成 |
+| `AUTH-005` | `verified` | Issues #11–#16 已交付权威、运行实现、分层验证和无未解决 hard finding 的正式双轴复审 |
 | `AUTH-006` | `specified` | PresenceRecovery 属于未来 Character Slice 2，takeover 仍独立 |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器、容量/soak 与发布级恢复证据未完成 |
 | `RELEASE-001` / PublicV1Gate | `blocked` | 尚不具备公开接纳真实玩家的发布证据 |
@@ -106,10 +106,10 @@ git log -8 --decorate --oneline
 
 ## 7. 当前唯一合法启动顺序
 
-1. 完成第 1 节仓库检查，读取 Issue #16 当前状态、`b545ed1` 后续审查修复和 `20_AUTH_BASELINE_EVIDENCE.md`。
-2. 对固定点 `1e6e930` 到修复后 HEAD 重新执行 Standards / Spec 双轴审查；任一 hard finding 未解决时继续修复、复验和重审。
-3. 两轴清零后，把精确结论回填 17/18、计划、本交接和证据账本，提交并在 GitHub 回填/关闭 #16。
-4. 只有 #16 关闭后，才把 frontier 交给 `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2；开始前从 GitHub 确认实际 ticket、依赖与 assignee，不从本交接推断尚不存在的 Issue 号。
+1. 完成第 1 节仓库检查，读取 Issue #16 当前状态、`b545ed1`、`4c5a4b3` 和 `20_AUTH_BASELINE_EVIDENCE.md`。
+2. 提交正式复审结果的状态同步，复核运行门禁、工作树和固定点至 HEAD 的最终 diff。
+3. 在 GitHub 回填精确提交、门禁数字、SMTP/gitleaks 边界和双轴结论，然后关闭 #16。
+4. #16 关闭后，才把 frontier 交给 `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2；开始前从 GitHub 确认实际 ticket、依赖与 assignee，不从本交接推断尚不存在的 Issue 号。
 
 ## 8. 权威来源
 

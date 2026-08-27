@@ -36,7 +36,7 @@ def test_issue_16_closeout_evidence_is_published() -> None:
     assert evidence_path.is_file()
 
     evidence = evidence_path.read_text(encoding="utf-8")
-    assert "`AUTH-005` | `implemented`" in evidence
+    assert "`AUTH-005` | `verified`" in evidence
     assert "1 skipped" in evidence
     assert "PublicV1Gate` | `blocked`" in evidence
 

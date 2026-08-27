@@ -8,8 +8,8 @@
 
 | 记录 | 状态 | 结论 |
 | --- | --- | --- |
-| `AUTH-005` | `implemented` | Issues #11–#15 已完成权威与运行实现，Issue #16 的分层验证已执行；正式双轴复审与 Issue 回填尚未完成 |
-| Engine Stage E1 / Auth Baseline Amendment | `in_progress` | 当前只剩 #16 的审查修复、正式复审和 Issue 回填；Character Slice 2 尚未解除阻塞、认领或实现 |
+| `AUTH-005` | `verified` | Issues #11–#15 已完成权威与运行实现，Issue #16 的分层验证及正式双轴复审均无未解决 hard finding |
+| Engine Stage E1 / Auth Baseline Amendment | `completed` | 工程与证据验收已完成；#16 只待 GitHub 回填/关闭，Character Slice 2 尚未认领或实现 |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器矩阵、容量/soak 和发布级五范围恢复证据仍缺失 |
 | `RELEASE-001` / `PublicV1Gate` | `blocked` | 正式邮件运营、公开试运行、ReleaseManifest 和其他发布证据尚未完成 |
 
@@ -125,7 +125,12 @@ rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!ar
 - Standards：1 hard finding，指出 handoff 在 GitHub Issue 尚未关闭时提前声称“已关闭”；1 个非阻塞 judgement finding，指出状态切换散布在多份治理文档，可能形成 Shotgun Surgery。
 - Spec：2 hard findings，指出秘密扫描没有记录可复现命令，以及状态文件在本节仍待复审时提前宣称 #16/双轴完成；0 个 scope-creep finding。
 
-本次后续修复补入扫描命令，并把状态退回审查与 Issue 回填尚未完成的事实。状态分散属于现行 V6/17/18/计划/交接治理布局，本票以 `verify_m0.py` 的必需/淘汰 marker 自动拒绝漂移，不在证据收口范围重构权威布局。正式复审待修复提交后执行；只有两轴均无未解决 hard finding 才允许提升 `AUTH-005`、解除 Character Slice 2 阻塞并关闭 #16。
+提交 `4c5a4b3` 补入扫描命令，并把状态退回审查与 Issue 回填尚未完成的事实。随后对固定点至 `4c5a4b3` 的完整最终 diff 正式复审：
+
+- Standards：0 hard finding；1 个非阻塞 judgement finding，仍是上述状态同步分散风险。`verify_m0.py` 已用必需/淘汰 marker 自动拒绝漂移，本票不在证据收口范围重构现行治理布局。
+- Spec：0 hard finding、0 观察；无 missing/partial、scope creep 或 wrong implementation，首轮两项 hard 均确认解决。
+
+两轴没有未解决 hard finding，因而 `AUTH-005` 可提升为 `verified`，Auth Baseline Amendment 可标记为工程 `completed`。GitHub Issue #16 仍须在最终状态同步提交后回填并关闭；关闭前不认领 Character Slice 2。
 
 ## 9. 仍然缺失的发布证据
 
@@ -150,4 +155,4 @@ rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!ar
 | 依赖 | npm critical gate 退出 0；0 critical，保留 9 low / 9 moderate / 1 high，未强制破坏性 Vite 8 升级 |
 | 秘密 | 行为与浏览器存储/console/network 扫描通过；tracked 高风险 token 形态与 secret assignment 均为 none；本机 gitleaks 未下载完成，CI 官方 gate 保留 |
 | 清理 | 8000/5173 无残留 listener；无 `new_mud_issue16_e2e_*` 临时数据库 |
-| 双轴审查 | 首审 Standards 1 hard / 1 judgement，Spec 2 hard / 0 scope creep；hard findings 已在后续工作树修复，待提交后正式复审 |
+| 双轴审查 | 首审 Standards 1 hard / 1 judgement、Spec 2 hard / 0 scope creep；`4c5a4b3` 修复后正式复审为 Standards 0 hard / 1 judgement、Spec 0 hard / 0 观察；无未解决 hard finding |

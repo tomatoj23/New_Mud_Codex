@@ -109,12 +109,12 @@ Issue #5 已在 V6 权威基线 `d14ce67` 上完成分层收口：PostgreSQL 合
 - 显式 takeover 原子替换租约与 ticket、保存 outbox，提交后旧连接收到 `presence.taken_over`
 - H5 可完成登录、进入起始 Room、取得完整最小 snapshot、断线恢复和明确失败展示
 
-### 4.1 当前执行顺序（2026-08-27 Auth Baseline Amendment 收口中）
+### 4.1 当前执行顺序（2026-08-27 Auth Baseline Amendment 验收完成）
 
 1. Issue #9 / E1 Slice 1 保持 `verified` 历史检查点，不重写为未完成。
 2. Issue #10 固定新的 `AUTH-005` 规格；Issue #11 已完成 V6、冻结合同、追踪、状态、计划和交接权威修订。
-3. Issues #12–#15 已按原生 blocked-by 链完成 challenge/outbox、已验证邮箱注册、密码重置与即时撤销、RecoveryCode 原子退役；#16 的分层验证已执行，首轮双轴 findings 正在修复，证据见 `20_AUTH_BASELINE_EVIDENCE.md`。
-4. 只有 #16 正式复审无未解决 hard finding 并完成 Issue 回填后，Character Slice 2 才解除阻塞；PresenceRecovery 属于该后续切片，显式 takeover 继续属于 Slice 3。
+3. Issues #12–#16 已按原生 blocked-by 链完成 challenge/outbox、已验证邮箱注册、密码重置与即时撤销、RecoveryCode 原子退役、分层验证与正式双轴复审；`AUTH-005=verified`，证据见 `20_AUTH_BASELINE_EVIDENCE.md`。
+4. #16 只待 GitHub 回填/关闭；关闭后 Character Slice 2 成为下一 frontier，但尚未认领或实现。PresenceRecovery 属于该后续切片，显式 takeover 继续属于 Slice 3。
 
 当前修订不实现 SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 或 takeover。163 SMTP 只用于显式 opt-in 的本机开发 smoke，不能作为 Public V1 provider 证据。
 

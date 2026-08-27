@@ -43,7 +43,7 @@
 
 ## 认证修订同步状态
 
-Issue #16 已执行 Auth Baseline Amendment 的分层验证，首轮双轴 hard findings 正在修复并等待正式复审；该过程没有改变本差异账本中的 V6 语义。`requirements_v6.md`、`CONTEXT.md`、ADR-0004 至 ADR-0008 和 08/13/15/16 的现行认证权威经复核无需修改；完整结果见 `20_AUTH_BASELINE_EVIDENCE.md`。复审和 Issue 回填前 Character Slice 2 仍阻塞，`RELEASE-001 / PublicV1Gate` 也继续为 `blocked`。
+Issue #16 已完成 Auth Baseline Amendment 的分层验证与正式双轴复审，`AUTH-005=verified`；该过程没有改变本差异账本中的 V6 语义。`requirements_v6.md`、`CONTEXT.md`、ADR-0004 至 ADR-0008 和 08/13/15/16 的现行认证权威经复核无需修改；完整结果见 `20_AUTH_BASELINE_EVIDENCE.md`。#16 只待 GitHub 回填/关闭，Character Slice 2 尚未认领或实现，`RELEASE-001 / PublicV1Gate` 继续为 `blocked`。
 
 ## 不在本次实现授权内
 
