@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 from scripts.verify_m0 import (
     VerificationResult,
     validate_authentication_authority,
+    validate_documents,
     validate_recovery_report,
     validate_source_artifacts,
     verify_repository,
@@ -20,6 +23,27 @@ def test_contract_repository_is_ready() -> None:
 
     assert result.errors == []
     assert result.blockers == []
+
+
+def test_document_links_pass_from_tracked_files_only(tmp_path: Path) -> None:
+    tracked_paths = subprocess.check_output(
+        ["git", "ls-files", "-z"],
+        cwd=REPOSITORY_ROOT,
+    ).split(b"\0")
+    for raw_path in tracked_paths:
+        if not raw_path:
+            continue
+        relative = Path(raw_path.decode("utf-8"))
+        source = REPOSITORY_ROOT / relative
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+    result = VerificationResult()
+
+    validate_documents(tmp_path, result)
+
+    assert result.errors == []
 
 
 def test_current_authentication_authority_is_consistent() -> None:

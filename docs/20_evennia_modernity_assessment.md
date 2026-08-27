@@ -28,7 +28,7 @@ Evennia 6.0 **没有整体落后于时代**，但**不适合作为 New_Mud 的�
 | 数据与领域建模 | 灵活但弱 schema | 动态类与 pickle 便于建造，却不利于数据库约束、迁移、审计和类型检查 |
 | 命令、对象与内容抽象 | 仍然优秀 | 值得保留流程和不变量，重新实现接口与持久结构 |
 
-版本与依赖证据见 [`evennia-main/pyproject.toml`](../evennia-main/pyproject.toml) 和 [`CHANGELOG.md`](../evennia-main/CHANGELOG.md)。发布得新并不意味着所有内部设计都面向现代 Web；Evennia 6.0 仍在有意维护传统 MUD 的架构兼容性。
+版本与依赖证据见本地参考快照中的 `evennia-main/pyproject.toml` 和 `evennia-main/CHANGELOG.md`。发布得新并不意味着所有内部设计都面向现代 Web；Evennia 6.0 仍在有意维护传统 MUD 的架构兼容性。
 
 ## 3. 已显陈旧或不适合 New_Mud 的部分
 
@@ -36,7 +36,7 @@ Evennia 6.0 **没有整体落后于时代**，但**不适合作为 New_Mud 的�
 
 Evennia 由 Portal 接入网络协议、Server 承载游戏逻辑，两者通过 AMP 同步 Session 和命令流。
 
-相关实现见 [`server/service.py`](../evennia-main/evennia/server/service.py)、[`portal/service.py`](../evennia-main/evennia/server/portal/service.py) 和 [`portalsessionhandler.py`](../evennia-main/evennia/server/portal/portalsessionhandler.py)。
+相关实现见本地参考快照中的 `evennia-main/evennia/server/service.py`、`evennia-main/evennia/server/portal/service.py` 和 `evennia-main/evennia/server/portal/portalsessionhandler.py`。
 
 它能隔离网络接入、承载多协议，并支持游戏 Server 重载时尽量保留连接，因此不是错误设计。问题在于 New_Mud 只做单实例、单写者和 H5/WebSocket 主通道，这套形状会额外增加：
 
@@ -55,15 +55,15 @@ Evennia Server 创建 WSGI WebServer 和线程池，Portal 再提供内部反向
 
 默认 WebClient 仍使用 jQuery 3.2.1、Bootstrap 4.0.0 beta、全局 JavaScript 插件和 WebSocket/AJAX 兼容层。
 
-对应证据见 [`webclient/base.html`](../evennia-main/evennia/web/templates/webclient/base.html) 与 [`webclient/js/evennia.js`](../evennia-main/evennia/web/static/webclient/js/evennia.js)。
+对应证据见本地参考快照中的 `evennia-main/evennia/web/templates/webclient/base.html` 与 `evennia-main/evennia/web/static/webclient/js/evennia.js`。
 
 它适合传统桌面式 MUD 窗口，但不适合 New_Mud 所需的 Vue 3/TypeScript/Pinia、响应式双端布局、结构化 Action/Snapshot、幂等终结、重连屏障、IME、触控和无障碍验收。前端工程形状不应借鉴。
 
 ### 3.4 动态 Typeclass 与任意 Attribute
 
-Typeclass 通过数据库中的 Python class path 和运行时改写 `self.__class__`，为同一数据库骨架附加行为，见 [`typeclasses/models.py`](../evennia-main/evennia/typeclasses/models.py)。
+Typeclass 通过数据库中的 Python class path 和运行时改写 `self.__class__`，为同一数据库骨架附加行为，见本地参考快照中的 `evennia-main/evennia/typeclasses/models.py`。
 
-Attribute 又允许保存任意可 pickle Python 数据，见 [`typeclasses/attributes.py`](../evennia-main/evennia/typeclasses/attributes.py) 和 [`utils/dbserialize.py`](../evennia-main/evennia/utils/dbserialize.py)。
+Attribute 又允许保存任意可 pickle Python 数据，见本地参考快照中的 `evennia-main/evennia/typeclasses/attributes.py` 和 `evennia-main/evennia/utils/dbserialize.py`。
 
 这对通用框架、在线建造和未知游戏类型非常灵活，但会削弱：
 
@@ -77,13 +77,13 @@ New_Mud 面向明确的 XKX100 领域，应采用显式 ORM 模型、组合式�
 
 ### 3.5 Lockstring 权限 DSL
 
-Evennia 用 `edit:perm(Builder) AND ...` 一类字符串表达权限，见 [`locks/lockhandler.py`](../evennia-main/evennia/locks/lockhandler.py)。它比把权限散落在命令中成熟，但引用和参数藏在字符串里，难以静态检查、重构、跳转、生成权限矩阵和形成审计证据。
+Evennia 用 `edit:perm(Builder) AND ...` 一类字符串表达权限，见本地参考快照中的 `evennia-main/evennia/locks/lockhandler.py`。它比把权限散落在命令中成熟，但引用和参数藏在字符串里，难以静态检查、重构、跳转、生成权限矩阵和形成审计证据。
 
 New_Mud 应保留“主体、目标、上下文共同求值”的思想，改用显式 PermissionPolicy/Rule 定义、固定 schema 和稳定错误码。
 
 ### 3.6 文本命令中心化
 
-Evennia 的主路径是原始字符串、CmdSet 合并、parser 匹配、权限检查、`parse/func` 和前后 Hook，见 [`commands/cmdhandler.py`](../evennia-main/evennia/commands/cmdhandler.py) 与 [`commands/command.py`](../evennia-main/evennia/commands/command.py)。
+Evennia 的主路径是原始字符串、CmdSet 合并、parser 匹配、权限检查、`parse/func` 和前后 Hook，见本地参考快照中的 `evennia-main/evennia/commands/cmdhandler.py` 与 `evennia-main/evennia/commands/command.py`。
 
 该模型非常适合 telnet，但 New_Mud 还需处理按钮、菜单、快捷键、移动端控件、并发版本、`request_id` 和幂等重放。结构化操作不应先翻译成文本；文本解析器只应是统一 Action 总线的一种输入适配器。
 
@@ -95,7 +95,7 @@ Evennia 的主路径是原始字符串、CmdSet 合并、parser 匹配、权限�
 
 ### 4.2 移动、观察与消息 Hook
 
-Evennia 对移动前校验、离开源位置、位置更新、进入目标位置、失败恢复、观察者相关渲染和消息前后处理积累了成熟顺序，见 [`objects/objects.py`](../evennia-main/evennia/objects/objects.py)。New_Mud 可将其转写为领域服务、数据库事务、结构化事件和 RenderPolicy。
+Evennia 对移动前校验、离开源位置、位置更新、进入目标位置、失败恢复、观察者相关渲染和消息前后处理积累了成熟顺序，见本地参考快照中的 `evennia-main/evennia/objects/objects.py`。New_Mud 可将其转写为领域服务、数据库事务、结构化事件和 RenderPolicy。
 
 ### 4.3 连接、账号与角色的问题边界
 
