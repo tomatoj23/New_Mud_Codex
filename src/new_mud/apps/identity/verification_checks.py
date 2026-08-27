@@ -1,35 +1,13 @@
 from __future__ import annotations
 
-from django.conf import settings
 from django.core.checks import Error, Tags, register
 
-from .verification_config import VerificationServiceUnavailable, require_authentication_baseline
+from .verification_config import authentication_baseline_configuration_issue
 
 
 @register(Tags.security)
 def check_verification_configuration(app_configs, **kwargs):
-    if not getattr(settings, "AUTH_BASELINE_CUTOVER_ENABLED", False):
+    issue = authentication_baseline_configuration_issue()
+    if issue is None:
         return []
-    try:
-        require_authentication_baseline()
-    except VerificationServiceUnavailable:
-        return [
-            Error(
-                "Enabled verification delivery configuration is incomplete or not independent.",
-                id="identity.E001",
-            )
-        ]
-    test_backends = {
-        "django.core.mail.backends.filebased.EmailBackend",
-        "django.core.mail.backends.locmem.EmailBackend",
-    }
-    if settings.EMAIL_BACKEND in test_backends and not getattr(
-        settings, "AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND", False
-    ):
-        return [
-            Error(
-                "Enabled verification delivery requires a non-test email backend.",
-                id="identity.E002",
-            )
-        ]
-    return []
+    return [Error(issue.check_message, id=issue.check_id)]

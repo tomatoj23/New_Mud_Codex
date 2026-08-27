@@ -41,7 +41,7 @@ git log -8 --decorate --oneline
 - Issue #13 已交付已验证邮箱最终注册与 H5：register 原子消费权威 challenge，创建 User、当前实例 GameAccount 和唯一 VerifiedContactMethod，保持零认证状态；跨 lookup key 轮换不会复活已替代旧码。
 - Issue #14 已由 Git `638e8cf` 交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知投递失败不回滚密码事务。该票交付时 identity 叶节点是 `0008_security_notification_outbox`，安全通知 worker 入口是 `python manage.py process_security_notifications`。
 - Issue #15 已交付 RecoveryCode 不可逆退役与认证基线受控切换：identity `0009_retire_recovery_codes` 撤销全部 active code、保留 User/GameAccount/历史行并禁止新增 active；旧 recover/rotate 不解析请求或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`；注册、重置、验证 worker 和安全通知 worker 共用 `NEW_MUD_AUTH_BASELINE_CUTOVER_ENABLED`，生产启动预检 keyring/current key IDs、worker、provider 与测试 bypass 禁区，普通密码登录不依赖验证基础设施。
-- #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 234 项、认证专项 63 项、生产启动/配置专项 8 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、90 files format、mypy 90 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
+- #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 239 项、认证专项 67 项、生产启动/配置专项 9 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、90 files format、mypy 90 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - Character Slice 2 被整个 Auth Baseline Amendment 阻塞；只有 Issue #16 完成后才能启动。
 

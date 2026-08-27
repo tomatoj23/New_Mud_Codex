@@ -13,6 +13,14 @@ class VerificationServiceUnavailable(RuntimeError):
 
 
 @dataclass(frozen=True)
+class AuthenticationBaselineConfigurationIssue:
+    check_id: str
+    check_message: str
+    startup_message: str
+    cause: VerificationServiceUnavailable | None = None
+
+
+@dataclass(frozen=True)
 class VerificationKeyRings:
     contact_encryption: KeyRing
     contact_lookup: KeyRing
@@ -104,25 +112,47 @@ def require_authentication_baseline() -> VerificationKeyRings:
     return verification_keyrings()
 
 
-def validate_authentication_baseline_startup() -> None:
-    test_backends = {
+def authentication_baseline_configuration_issue() -> (
+    AuthenticationBaselineConfigurationIssue | None
+):
+    test_email_backends = {
         "django.core.mail.backends.filebased.EmailBackend",
         "django.core.mail.backends.locmem.EmailBackend",
     }
     test_bypass = getattr(settings, "AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND", False)
     if getattr(settings, "AUTH_PRODUCTION_MODE", False) and test_bypass:
-        raise ImproperlyConfigured(
-            "Production authentication baseline cannot enable the test email bypass."
+        return AuthenticationBaselineConfigurationIssue(
+            check_id="identity.E003",
+            check_message="Production authentication baseline cannot enable the test email bypass.",
+            startup_message=(
+                "Production authentication baseline cannot enable the test email bypass."
+            ),
         )
     if not getattr(settings, "AUTH_BASELINE_CUTOVER_ENABLED", False):
-        return
+        return None
     try:
         require_authentication_baseline()
     except VerificationServiceUnavailable as error:
-        raise ImproperlyConfigured(
-            "Authentication baseline cutover dependencies are incomplete or not independent."
-        ) from error
-    if settings.EMAIL_BACKEND in test_backends and not test_bypass:
-        raise ImproperlyConfigured(
-            "Authentication baseline cutover requires a non-test email backend."
+        return AuthenticationBaselineConfigurationIssue(
+            check_id="identity.E001",
+            check_message=(
+                "Enabled verification delivery configuration is incomplete or not independent."
+            ),
+            startup_message=(
+                "Authentication baseline cutover dependencies are incomplete or not independent."
+            ),
+            cause=error,
         )
+    if settings.EMAIL_BACKEND in test_email_backends and not test_bypass:
+        return AuthenticationBaselineConfigurationIssue(
+            check_id="identity.E002",
+            check_message="Enabled verification delivery requires a non-test email backend.",
+            startup_message=("Authentication baseline cutover requires a non-test email backend."),
+        )
+    return None
+
+
+def validate_authentication_baseline_startup() -> None:
+    issue = authentication_baseline_configuration_issue()
+    if issue is not None:
+        raise ImproperlyConfigured(issue.startup_message) from issue.cause

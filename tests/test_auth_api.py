@@ -1554,6 +1554,45 @@ def test_retired_recovery_routes_ignore_credentials_origin_and_body(
     assert response.headers["Cache-Control"] == "no-store"
 
 
+@pytest.mark.parametrize("route_name", ["auth-recover", "auth-recovery-rotate"])
+def test_retired_recovery_routes_ignore_malformed_basic_authentication(
+    client,
+    route_name: str,
+) -> None:
+    response = client.post(
+        reverse(route_name),
+        {},
+        content_type="application/json",
+        secure=True,
+        headers={"authorization": "Basic !!!"},
+    )
+
+    assert response.status_code == 410
+    assert response.json() == {"error": {"code": "RECOVERY_CODE_RETIRED"}}
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("route_name", ["auth-recover", "auth-recovery-rotate"])
+def test_retired_recovery_routes_ignore_authenticated_django_sessions(route_name: str) -> None:
+    user = get_user_model().objects.create_user(
+        username=f"retired_{route_name.replace('-', '_')}",
+        password="safe-example-passphrase-42",
+    )
+    session_client = Client(enforce_csrf_checks=True)
+    session_client.force_login(user)
+
+    response = session_client.post(
+        reverse(route_name),
+        {},
+        content_type="application/json",
+        secure=True,
+    )
+
+    assert response.status_code == 410
+    assert response.json() == {"error": {"code": "RECOVERY_CODE_RETIRED"}}
+    assert response.headers["Cache-Control"] == "no-store"
+
+
 def test_registration_and_login_are_rate_limited_with_stable_errors(client, settings) -> None:
     settings.AUTH_REGISTRATION_RATE_LIMIT_ACCOUNT = 100
     settings.AUTH_REGISTRATION_RATE_LIMIT_IP = 1

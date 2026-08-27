@@ -1363,6 +1363,20 @@ def test_startup_check_rejects_enabled_verification_with_missing_keys() -> None:
     assert "secret" not in str(verification_errors[0]).lower()
 
 
+def test_startup_check_rejects_production_test_bypass_when_cutover_is_disabled() -> None:
+    with override_settings(
+        AUTH_PRODUCTION_MODE=True,
+        AUTH_BASELINE_CUTOVER_ENABLED=False,
+        AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND=True,
+    ):
+        errors = run_checks(tags=[Tags.security])
+
+    verification_errors = [
+        error for error in errors if error.id is not None and error.id.startswith("identity.E")
+    ]
+    assert [error.id for error in verification_errors] == ["identity.E003"]
+
+
 @pytest.mark.parametrize(
     "backend",
     [
