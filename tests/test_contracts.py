@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from scripts.verify_m0 import (
@@ -44,6 +46,25 @@ def test_document_links_pass_from_tracked_files_only(tmp_path: Path) -> None:
     validate_documents(tmp_path, result)
 
     assert result.errors == []
+
+
+def test_test_settings_honor_explicit_postgres_database() -> None:
+    environment = {**os.environ, "POSTGRES_DB": "ci_service_database"}
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            ("from new_mud.settings import test; print(test.DATABASES['default']['NAME'])"),
+        ],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.stdout.strip() == "ci_service_database"
 
 
 def test_current_authentication_authority_is_consistent() -> None:

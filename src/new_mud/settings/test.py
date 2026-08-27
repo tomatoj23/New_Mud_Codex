@@ -1,11 +1,12 @@
 import base64
+import os
 
 from .base import *  # noqa: F403
 
 SECRET_KEY = "test-only-key"
 AUTH_TOKEN_SIGNING_KEY = "test-only-token-signing-key"
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
-DATABASES["default"]["NAME"] = "new_mud_test"  # noqa: F405
+DATABASES["default"]["NAME"] = os.getenv("POSTGRES_DB", "new_mud_test")  # noqa: F405
 DATABASES["default"]["CONN_MAX_AGE"] = 0  # noqa: F405
 CONTENT_STARTUP_ENABLED = False
 AUTH_ALLOWED_ORIGINS = ["https://testserver"]
