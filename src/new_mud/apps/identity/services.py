@@ -529,6 +529,10 @@ def login(*, username: object, password: object) -> AuthenticationResult:
 
     with transaction.atomic():
         try:
+            user = user_model.objects.select_for_update().get(pk=user.pk)
+        except user_model.DoesNotExist as error:
+            raise AuthenticationFailed from error
+        try:
             account = GameAccount.objects.select_for_update().get(
                 user=user,
                 instance_id=settings.CONTENT_INSTANCE_ID,
@@ -536,7 +540,6 @@ def login(*, username: object, password: object) -> AuthenticationResult:
             )
         except GameAccount.DoesNotExist as error:
             raise AuthenticationFailed from error
-        user.refresh_from_db(fields=("password", "is_active"))
         if not user.check_password(password) or not user.is_active:
             raise AuthenticationFailed
         now = timezone.now()
