@@ -15,7 +15,7 @@
 | V6 结果 | 受影响合同 | 同步内容 |
 | --- | --- | --- |
 | 每实例一个 User 永久映射一个 GameAccount | 03、08、13 | 身份不拆分；CharacterOwnership 只承接未来多角色 |
-| `VerifiedContactMethod` 与 `VerificationChallenge` 取代 RecoveryCode | 08、13、15、16、17 | 新注册先验证 email；密码重置使用用途隔离的短期 challenge 并即时撤销全部旧认证；旧 recover/rotate 先统一 410，再于 Public V1 前删除 |
+| `VerifiedContactMethod` 与 `VerificationChallenge` 取代 RecoveryCode | 08、13、15、16、17 | 新注册先验证 email；密码重置使用用途隔离的短期 challenge 并即时撤销全部旧认证；旧 recover/rotate 先统一 410，再于 Public V1 前删除；Issue #16 的验证状态与分层证据见 `20_AUTH_BASELINE_EVIDENCE.md` |
 | 联系方式密文与 keyed lookup digest 分离 | 08、13、16、ADR-0006 | Django `User.email` 保持为空；完整目标应用层加密、精确查询独立摘要、密钥隔离与轮换 |
 | 验证消息使用 PostgreSQL 持久 outbox | 08、13、16、ADR-0007 | HTTP 不同步发 SMTP；非枚举 202、幂等请求、同 code 重试、provider 接受后激活和 terminal payload 擦除 |
 | Access Token 必须解析到 `active` AuthSession | 08、13、16、ADR-0008 | 密码重置提交后旧 access/refresh 跨实例立即失效，注册与重置均不自动登录 |
@@ -41,6 +41,10 @@
 | Public V1 试运行 | 10、16、17 | 7 天、5 名非管理员、20 次核心循环；S0/S1 阻断、受限 S2 记录 |
 | 维护、恢复与公开资料 | 16、15 | 24 小时维护公告、drain / health check / incident、公开状态和恢复 / 举报 / 客服入口 |
 
+## 认证修订同步状态
+
+Issue #16 已完成 Auth Baseline Amendment 的分层证据收口；这只把 `AUTH-005` 的证据成熟度提升为 `verified`，没有改变本差异账本中的 V6 语义。`requirements_v6.md`、`CONTEXT.md`、ADR-0004 至 ADR-0008 和 08/13/15/16 的现行认证权威经复核无需修改；完整结果见 `20_AUTH_BASELINE_EVIDENCE.md`。Character Slice 2 只是下一 frontier，`RELEASE-001 / PublicV1Gate` 仍为 `blocked`。
+
 ## 不在本次实现授权内
 
-Issue #11 只授权 V6、冻结合同、词汇、ADR、需求追踪、状态、计划、差异和交接同步，以及对应文档合同校验。没有授权业务代码、数据库迁移、运行配置、客户端实现或公开部署；SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 和 takeover 均不得提前实现。
+Issue #11 只授权 V6、冻结合同、词汇、ADR、需求追踪、状态、计划、差异和交接同步，以及对应文档合同校验；Issues #12–#15 实现认证修订，Issue #16 只完成证据收口。没有任何一票授权公开部署或提前实现 SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 和 takeover。

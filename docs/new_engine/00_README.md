@@ -42,6 +42,7 @@
 - 协议与会话先读 11、13；Registry 与发布读 12；玩法、H5、运维验收依次读 14、15、16。
 - 从需求定位实施合同、里程碑和证据时，读取 `17_REQUIREMENTS_TRACEABILITY.md`。
 - 核对当前实现、环境、验证结果和阻塞项时，读取 `18_IMPLEMENTATION_STATUS.md`。
+- 核对 `AUTH-005` / Auth Baseline Amendment 的分层关闭命令、结果和保留缺口时，读取 `20_AUTH_BASELINE_EVIDENCE.md`。
 
 ## 3. 本轮源码审计范围
 
@@ -145,6 +146,8 @@ Evennia 6.0 最不适合直接沿用的部分是：
    - 当前实现、环境基线、验证证据、已知警告和阻塞项。
 19. `19_V6_CONTRACT_DIFFERENCES.md`
    - V6 相对 V5 的合同同步差异和对应落点；不取代 11-16 的冻结语义。
+20. `20_AUTH_BASELINE_EVIDENCE.md`
+   - Issue #16 对 `AUTH-005` 的 PostgreSQL、迁移、静态、H5 E2E、秘密、依赖、SMTP opt-in 边界和双轴关闭证据。
 
 ### 5.1 过程与交接文档
 

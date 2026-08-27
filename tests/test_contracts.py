@@ -30,6 +30,17 @@ def test_current_authentication_authority_is_consistent() -> None:
     assert result.errors == []
 
 
+def test_issue_16_closeout_evidence_is_published() -> None:
+    evidence_path = REPOSITORY_ROOT / "docs" / "new_engine" / "20_AUTH_BASELINE_EVIDENCE.md"
+
+    assert evidence_path.is_file()
+
+    evidence = evidence_path.read_text(encoding="utf-8")
+    assert "`AUTH-005` | `verified`" in evidence
+    assert "1 skipped" in evidence
+    assert "PublicV1Gate` | `blocked`" in evidence
+
+
 def test_source_artifact_hash_tampering_is_rejected() -> None:
     artifact_root = REPOSITORY_ROOT / "contracts" / "v1" / "artifacts"
     names = {

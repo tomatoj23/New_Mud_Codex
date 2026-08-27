@@ -12,6 +12,8 @@ const python =
 
 mkdirSync(emailOutboxDirectory, { recursive: true });
 
+const externallyManagedServers = process.env.PLAYWRIGHT_EXTERNAL_SERVERS === "1";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -48,26 +50,28 @@ export default defineConfig({
       },
     },
   ],
-  webServer: [
-    {
-      command: `${python} scripts/run_playwright_backend.py`,
-      cwd: "..",
-      url: "http://127.0.0.1:8000/api/v1/health/live",
-      reuseExistingServer: !process.env.CI,
-      env: {
-        ...process.env,
-        ...verificationTestEnvironment,
-        DJANGO_SETTINGS_MODULE: "new_mud.settings.development",
-      },
-      timeout: 120_000,
-    },
-    {
-      command:
-        "node node_modules/@dcloudio/vite-plugin-uni/bin/uni.js -p h5 --host localhost --port 5173",
-      cwd: ".",
-      url: "http://localhost:5173",
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-    },
-  ],
+  webServer: externallyManagedServers
+    ? undefined
+    : [
+        {
+          command: `${python} scripts/run_playwright_backend.py`,
+          cwd: "..",
+          url: "http://127.0.0.1:8000/api/v1/health/live",
+          reuseExistingServer: !process.env.CI,
+          env: {
+            ...process.env,
+            ...verificationTestEnvironment,
+            DJANGO_SETTINGS_MODULE: "new_mud.settings.development",
+          },
+          timeout: 120_000,
+        },
+        {
+          command:
+            "node node_modules/@dcloudio/vite-plugin-uni/bin/uni.js -p h5 --host localhost --port 5173",
+          cwd: ".",
+          url: "http://localhost:5173",
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      ],
 });

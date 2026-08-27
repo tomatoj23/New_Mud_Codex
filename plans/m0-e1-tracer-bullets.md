@@ -91,15 +91,15 @@
 
 ## Engine Stage E1 / Auth Baseline Amendment: 已验证联系方式注册与账号恢复
 
-**Status**: `in_progress`（工程工作流；Issue #10；Issues #11–#15 已完成，剩余 #16）
+**Status**: `completed`（2026-08-27；Issue #10；Issues #11–#16）
 
 **User stories**: 作为新玩家，我先验证邮箱再创建账号；作为忘记密码的玩家，我通过已验证邮箱重置密码并让全部旧认证立即失效；作为普通玩家，我始终使用账号名和密码登录，不需要理解“独立登录”或 RecoveryCode。覆盖 `AUTH-005`、`CLIENT-001`、`MILESTONE-002`。
 
 ### What to build
 
-按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。该 Amendment 必须完整结束后才能启动 Character Slice 2。
+按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。该 Amendment 已完整结束，`AUTH-005=verified`。
 
-当前唯一未认领 frontier 是 #16；#16 关闭前不启动 Character Slice 2。
+#16 完成后，Character Slice 2 是下一 frontier，但尚未认领或实现。
 
 ### Acceptance criteria
 
@@ -108,14 +108,14 @@
 - [x] #13 最终 register 原子消费 challenge，创建 User/GameAccount/VerifiedContactMethod，返回零认证状态，并完成 H5 注册/普通登录文案。
 - [x] #14 password reset 原子撤销跨实例全部 AuthSession/family/credential，旧 access/refresh 立即失败，通知投递失败不回滚密码；Git `638e8cf` 与 `docs/new_engine/18_IMPLEMENTATION_STATUS.md` 保留实现和验证证据。
 - [x] #15 两个旧 RecoveryCode 端点统一 410，现有开发 code 全撤销；注册/reset 由两类 live worker heartbeat 与共享 provider circuit 原子门禁，生产启动 fail closed，普通登录保持可用。
-- [ ] #16 完成 PostgreSQL 并发、迁移、静态、全量、E2E、秘密扫描、可选 SMTP smoke 和 Standards + Spec 双轴证据。
+- [x] #16 完成 PostgreSQL 并发、迁移、静态、全量、E2E、秘密扫描、可选 SMTP smoke 和 Standards + Spec 双轴证据；SMTP 因未获显式 opt-in/收件人/秘密授权记录为 1 skipped，完整证据见 `docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md`。
 - [x] SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 与 takeover 均未提前实现。
 
 ---
 
 ## Engine Stage E1 / Slice 2: Character Slice 2——创建角色、连接、进入与恢复闭环
 
-**Blocked by**: Auth Baseline Amendment Issue #16。
+**Blocked by**: 无；Auth Baseline Amendment Issue #16 已完成。当前切片尚未认领或实现。
 
 **User stories**: 作为已登录玩家，我可以创建唯一角色，建立 WebSocket，进入起始房间并取得完整最小状态；断线后可以在新连接上安全重建。覆盖 `AUTH-003`、`WORLD-001`、`CLIENT-001`、`MILESTONE-002`。
 

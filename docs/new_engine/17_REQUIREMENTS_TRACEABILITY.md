@@ -14,7 +14,7 @@
 
 这些值表示需求追踪记录的证据成熟度，不替代 V6 对产品里程碑规定的 `not_started / in_progress / blocked / complete`。因此 `MILESTONE-001=verified` 表示已有证据证明产品里程碑 `M0=complete`；不得把产品 M0 自身写成 `verified`。
 
-当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的历史注册/登录闭环。`AUTH-001`、`AUTH-002` 仍保留 Issue #9 的 PostgreSQL、REST、安全属性和 H5 自动端到端证据；2026-08-26 的产品修订不倒写这些事实，但 RecoveryCode 已不再是现行凭据。Issue #10 建立 `AUTH-005` 的 VerifiedContactMethod/VerificationChallenge 认证权威，Issues #11–#14 已交付权威同步、投递基础、已验证邮箱最终注册、邮箱密码重置、跨实例即时认证撤销、安全通知 outbox 与 H5，Issue #15 已交付 RecoveryCode 不可逆退役和认证基线受控切换；仍须由 #16 完成分层总证据后，才能进入 Character Slice 2。`AUTH-004` 的旧复合语义已退役，User/GameAccount 基数与 PresenceRecovery 分别由 `IDENTITY-001`、`AUTH-006` 追踪。
+当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的历史注册/登录闭环。`AUTH-001`、`AUTH-002` 仍保留 Issue #9 的 PostgreSQL、REST、安全属性和 H5 自动端到端证据；2026-08-26 的产品修订不倒写这些事实，但 RecoveryCode 已不再是现行凭据。Issue #10 建立 `AUTH-005` 的 VerifiedContactMethod/VerificationChallenge 认证权威，Issues #11–#15 已交付权威同步、投递基础、已验证邮箱最终注册、邮箱密码重置、跨实例即时认证撤销、安全通知 outbox、H5、RecoveryCode 不可逆退役和认证基线受控切换；Issue #16 已完成分层总证据，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。Auth Baseline Amendment 已关闭，Character Slice 2 成为下一 frontier，但尚未认领或实现。`AUTH-004` 的旧复合语义已退役，User/GameAccount 基数与 PresenceRecovery 分别由 `IDENTITY-001`、`AUTH-006` 追踪。
 
 browser、capacity、recovery 三份非功能 profile 已批准，但发布级浏览器矩阵、容量、soak 和五范围恢复证据仍未完成，所以 `CLIENT-001`、`NFR-001`、`NFR-002` 与 `RELEASE-001` 继续保持 `blocked`；`MILESTONE-002` 也不因认证权威修订或单一切片完成而提升。
 
@@ -46,7 +46,7 @@ browser、capacity、recovery 三份非功能 profile 已批准，但发布级�
 | `ENGINE-001` | `verified` | Engine Stage E0 readiness：真实 seed loading、Registry exact dependencies、并发、审计和 readiness 集成可执行 | V6 15.0、17 | 06、10、12、16 | Engine Stage E0 | Issues #1–#4 实现提交；Issue #5 的 PostgreSQL、服务集成、启动 E2E、全量与静态门禁全部通过 |
 | `AUTH-004` | `retired` | 已退役的复合要求：RecoveryCode 恢复与 PresenceRecovery 曾被放在同一追踪项 | 历史 V6 8.2-8.5、11.13 | ADR-0004（被 ADR-0005 取代） | — | Issue #9 保留 RecoveryCode 哈希/轮换、User 全会话撤销与合并限流的历史证据；ID 不复用 |
 | `IDENTITY-001` | `verified` | 每个实例一个 User 永久映射一个 GameAccount | V6 8.2 | 03、08、ADR-0002 | M1 | Issue #9：数据库唯一约束、迁移与并发证据 |
-| `AUTH-005` | `implemented` | 新注册验证唯一邮箱且零认证状态；邮箱密码重置即时撤销全部旧认证；RecoveryCode 退役 | V6 8.1-8.7、11.2、15.1-15.2 | 08 第 2.2/4.2/4.4 节、13 第 1/10.1 节、15、16 第 2.1 节、ADR-0005 至 0008 | M1、RELEASE-001 | Issue #10 规格、Issue #11 权威同步、Issue #12 challenge/crypto/limiter/outbox/worker、Issue #13 最终注册/H5、Issue #14 邮箱密码重置/即时认证撤销/安全通知/H5、Issue #15 RecoveryCode 退役、live worker heartbeat、共享 provider circuit、受控切换、生产预检与回滚证据；分层总证据仍待 #16 |
+| `AUTH-005` | `verified` | 新注册验证唯一邮箱且零认证状态；邮箱密码重置即时撤销全部旧认证；RecoveryCode 退役 | V6 8.1-8.7、11.2、15.1-15.2 | 08 第 2.2/4.2/4.4 节、13 第 1/10.1 节、15、16 第 2.1 节、ADR-0005 至 0008 | M1、RELEASE-001 | Issue #10 规格、Issues #11–#15 的权威与实现链、Issue #16 的 PostgreSQL/迁移/静态/H5 E2E/秘密/依赖/双轴关闭证据，以及 `20_AUTH_BASELINE_EVIDENCE.md`；该状态不满足独立 `RELEASE-001` 门禁 |
 | `AUTH-006` | `specified` | 同一 AuthSession 可恢复自己的 active/grace PresenceSnapshot；跨 AuthSession 必须显式 takeover | V6 8.6 | 11、13 第 6.4/8 节、15 | M1、RELEASE-001 | Character Slice 2 的 PresenceRecovery 与后续 takeover E2E；不得由 AUTH-005 提前实现 |
 | `CHARACTER-001` | `specified` | CharacterCreationProfile、CharacterDisplayName 与 RetiredCharacter 生命周期可审计且不自助重建 | V6 8.8 | 08 第 4.3 节、12 第 5.15 节、15 | M1、RELEASE-001 | profile hash/exact revision、NFKC/策略测试、GM 审计、关闭恢复 E2E |
 | `WORLD-002` | `specified` | Public V1 完整 Village topology 与逐项交互包络可声明，未验证交互显式不可用 | V6 7.2.1、7.3、11.7 | 04、09、12 | RELEASE-001 | topology / interaction envelope、UnavailableInteraction 报告 |

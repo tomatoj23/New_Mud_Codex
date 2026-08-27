@@ -1,6 +1,6 @@
 # 已验证联系方式注册与账号恢复实施方案
 
-**Status**: `approved`（2026-08-26 产品决策已完成 grilling；Issue #11 已转为 V6/冻结合同权威，运行实现尚未开始）
+**Status**: `completed`（2026-08-27；Issues #11–#16 已完成，`AUTH-005=verified`）
 
 **Delivery unit**: 新建 `Engine Stage E1 / Auth Baseline Amendment`，先于 Character Slice 2
 
@@ -332,7 +332,7 @@ test-first 实现 reset request/confirm、受保护入口 AuthSession 状态校�
 
 **阻塞**：E。
 
-**完成条件**：第 12 节全部有日期、环境、命令与结果；硬 finding 清零；PublicV1Gate 不被提前提升。
+**完成条件**：已完成。第 12 节各层的日期、环境、命令、结果和例外记录在 `docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md`；SMTP 开发 smoke 因没有显式 opt-in、收件人和秘密授权而准确记录为 1 skipped，不伪造公网发送；双轴无未解决 hard finding，PublicV1Gate 未被提升。
 
 每个实现 ticket 在新上下文运行 `/implement`，由其内部逐条 `/tdd` 并以 `/code-review` 收尾。PostgreSQL 测试串行；独立 ticket 不共享未提交工作。
 
@@ -405,15 +405,15 @@ test-first 实现 reset request/confirm、受保护入口 AuthSession 状态校�
 
 ## 15. 最终验收清单
 
-- [ ] V6、ADR、CONTEXT、API/状态机/H5/测试合同和追踪状态一致。
-- [ ] 新注册必须验证唯一邮箱，且注册后零认证状态。
-- [ ] 邮箱密码重置用途隔离、短期、单次，只保存摘要与临时加密投递 payload。
-- [ ] RecoveryCode 不再签发、展示或消费；旧 API 410，测试数据 code 全部撤销。
-- [ ] 旧 access/refresh 在敏感事务提交后立即失效；普通登录不依赖邮件系统。
-- [ ] 联系方式单一真源、密文/lookup 分离、key rotation、terminal 擦除和审计保留通过。
-- [ ] 非枚举202、幂等 request、持久限流、outbox 故障恢复与安全通知通过。
-- [ ] H5 只显示普通“登录”语言，三主视口流程和持久存储秘密扫描通过。
-- [ ] 默认测试零公网；真实163 smoke 显式启用；Public V1 provider 缺口如实保留。
-- [ ] PostgreSQL、迁移、静态、单元、集成、E2E、依赖、秘密扫描和双轴复审全部通过。
-- [ ] Issue #9/E1 Slice 1 历史未被倒写，新的认证基线 tickets 有阻塞边、证据、风险和回滚记录。
-- [ ] Character、Presence、PresenceRecovery、takeover、SMS、换绑和 reopen 均未提前实现。
+- [x] V6、ADR、CONTEXT、API/状态机/H5/测试合同和追踪状态一致。
+- [x] 新注册必须验证唯一邮箱，且注册后零认证状态。
+- [x] 邮箱密码重置用途隔离、短期、单次，只保存摘要与临时加密投递 payload。
+- [x] RecoveryCode 不再签发、展示或消费；旧 API 410，测试数据 code 全部撤销。
+- [x] 旧 access/refresh 在敏感事务提交后立即失效；普通登录不依赖邮件系统。
+- [x] 联系方式单一真源、密文/lookup 分离、key rotation、terminal 擦除和审计保留通过。
+- [x] 非枚举202、幂等 request、持久限流、outbox 故障恢复与安全通知通过。
+- [x] H5 只显示普通“登录”语言，三主视口流程和持久存储秘密扫描通过。
+- [x] 默认测试零公网；真实163 smoke 只可显式启用，本轮准确记录为 1 skipped；Public V1 provider 缺口如实保留。
+- [x] PostgreSQL、迁移、静态、单元、集成、E2E、依赖、秘密扫描和双轴复审全部通过或按门禁准确记录；本机 gitleaks 下载缺口未伪造为通过，CI gate 保留。
+- [x] Issue #9/E1 Slice 1 历史未被倒写，新的认证基线 tickets 有阻塞边、证据、风险和回滚记录。
+- [x] Character、Presence、PresenceRecovery、takeover、SMS、换绑和 reopen 均未提前实现。

@@ -263,32 +263,47 @@ AUTHENTICATION_AUTHORITY_MARKERS = {
         "`RECOVERY_CODE_RETIRED`",
     },
     "docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md": {
-        "| `AUTH-005` | `implemented` |",
+        "| `AUTH-005` | `verified` |",
         "Issue #10",
-        "Issue #11",
+        "Issue #16",
+        "20_AUTH_BASELINE_EVIDENCE.md",
     },
     "docs/new_engine/18_IMPLEMENTATION_STATUS.md": {
         "Auth Baseline Amendment",
-        "`AUTH-005`",
+        "| `AUTH-005` | `verified` |",
         "Issue #10",
-        "Issue #11",
+        "Issue #16",
+        "20_AUTH_BASELINE_EVIDENCE.md",
     },
     "docs/new_engine/19_V6_CONTRACT_DIFFERENCES.md": {
         "`VerifiedContactMethod`",
         "`VerificationChallenge`",
         "ADR-0005",
+        "20_AUTH_BASELINE_EVIDENCE.md",
+    },
+    "docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md": {
+        "`AUTH-005` | `verified`",
+        "`PublicV1Gate` | `blocked`",
+        "1 skipped",
+        "Character Slice 2",
     },
     "docs/new_engine/NEXT_SESSION_HANDOFF.md": {
-        "Auth Baseline Amendment",
+        "Auth Baseline Amendment 已完成",
         "Character Slice 2",
-        "Issue #11",
-        "Issue #12",
+        "Issue #16",
+        "20_AUTH_BASELINE_EVIDENCE.md",
     },
     "plans/m0-e1-tracer-bullets.md": {
+        "**Status**: `completed`",
         "Auth Baseline Amendment",
         "Character Slice 2",
         "Issue #10",
-        "Issue #11",
+        "#16 完成",
+    },
+    "plans/email-verification-and-account-recovery.md": {
+        "**Status**: `completed`",
+        "Issue #16",
+        "20_AUTH_BASELINE_EVIDENCE.md",
     },
 }
 
@@ -314,6 +329,27 @@ OBSOLETE_AUTHENTICATION_AUTHORITY_MARKERS = {
     "docs/new_engine/16_OPERATIONS_TESTING_CONTRACT.md": {
         "M1 后台 RecoveryCode 流程覆盖",
         "register/login/refresh/logout 四个端点都拒绝未允许 Origin",
+    },
+    "docs/new_engine/17_REQUIREMENTS_TRACEABILITY.md": {
+        "| `AUTH-005` | `implemented` |",
+        "分层总证据仍待 #16",
+    },
+    "docs/new_engine/18_IMPLEMENTATION_STATUS.md": {
+        "| `AUTH-005` | `implemented` |",
+        "分层总证据仍待 #16",
+        "下一实现入口是 Auth Baseline Amendment 的 Issue #16",
+    },
+    "docs/new_engine/NEXT_SESSION_HANDOFF.md": {
+        "下一步 Issue #16",
+        "| `AUTH-005` | `implemented` |",
+        "Issue #16 的唯一合法启动顺序",
+    },
+    "plans/m0-e1-tracer-bullets.md": {
+        "**Status**: `in_progress`",
+        "当前唯一未认领 frontier 是 #16",
+    },
+    "plans/email-verification-and-account-recovery.md": {
+        "运行实现尚未开始",
     },
 }
 

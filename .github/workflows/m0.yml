@@ -35,6 +35,7 @@ jobs:
       POSTGRES_PASSWORD: new_mud
       POSTGRES_CONNECT_TIMEOUT: 5
       RUN_POSTGRES_TESTS: 1
+      RUN_SMTP_TESTS: 0
       PLAYWRIGHT_PYTHON: python
 
     steps:
@@ -90,7 +91,12 @@ jobs:
           python manage.py migrate --noinput
           python manage.py migrate content zero --noinput
           python manage.py migrate content 0001 --noinput
-          python manage.py migrate identity 0002 --noinput
+          # Only the 0010 runtime-state structure is reversible. RecoveryCode
+          # retirement in 0009 is exercised separately by the PostgreSQL suite.
+          python manage.py migrate identity 0009 --noinput
+          python manage.py migrate identity 0010 --noinput
+          python manage.py migrate identity 0009 --noinput
+          python manage.py migrate identity 0010 --noinput
           python manage.py migrate --noinput
 
       - name: Tests
