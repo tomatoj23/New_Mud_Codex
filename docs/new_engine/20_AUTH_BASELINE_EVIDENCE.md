@@ -8,8 +8,8 @@
 
 | 记录 | 状态 | 结论 |
 | --- | --- | --- |
-| `AUTH-005` | `verified` | Issues #11–#16 已完成权威同步、持久投递基础、已验证邮箱注册、邮箱密码重置、即时认证撤销、安全通知、RecoveryCode 不可逆退役、受控切换和分层验收 |
-| Engine Stage E1 / Auth Baseline Amendment | `completed` | 后续实现可读取现行认证权威；Character Slice 2 成为下一 frontier，但尚未认领或实现 |
+| `AUTH-005` | `implemented` | Issues #11–#15 已完成权威与运行实现，Issue #16 的分层验证已执行；正式双轴复审与 Issue 回填尚未完成 |
+| Engine Stage E1 / Auth Baseline Amendment | `in_progress` | 当前只剩 #16 的审查修复、正式复审和 Issue 回填；Character Slice 2 尚未解除阻塞、认领或实现 |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器矩阵、容量/soak 和发布级五范围恢复证据仍缺失 |
 | `RELEASE-001` / `PublicV1Gate` | `blocked` | 正式邮件运营、公开试运行、ReleaseManifest 和其他发布证据尚未完成 |
 
@@ -105,19 +105,31 @@ Vue typecheck、Vitest 12 passed、H5 build 均通过。Playwright 使用全新�
 
 ## 7. 秘密与公网边界
 
-自动测试覆盖后端 audit、terminal record、结构化日志、provider 异常与 terminal outbox，以及浏览器 localStorage、sessionStorage、IndexedDB、Cache Storage、Cookie、console 和网络响应；没有发现密码、验证码、完整联系方式、access/refresh 凭据或 RecoveryCode 泄漏。对 `git ls-files` 的高风险 token 形态和硬编码 secret assignment 扫描均为 `none`。CI 继续使用官方 `gitleaks/gitleaks-action@v2`。
+自动测试覆盖后端 audit、terminal record、结构化日志、provider 异常与 terminal outbox，以及浏览器 localStorage、sessionStorage、IndexedDB、Cache Storage、Cookie、console 和网络响应；没有发现密码、验证码、完整联系方式、access/refresh 凭据或 RecoveryCode 泄漏。仓库交付面的高风险 token 形态与认证 secret assignment 使用以下命令扫描；排除 Git 元数据、虚拟环境、依赖、忽略报告和只读上游/来源输入：
 
-本机尝试获取 gitleaks `v8.30.1`，但 `curl`、GitHub release download 与 API asset 下载均在受限网络中途停止或超时；官方 Windows x64 zip 期望 SHA-256 为 `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`，未完成的忽略目录下载从未执行。因此本文件不声称“本机 gitleaks passed”；CI gitleaks 仍是提交进入远端后的独立必经门禁。
+```powershell
+rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!artifacts/reports/**' -g '!evennia-main/**' -g '!xkx100/**' -e '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----' -e 'gh[pousr]_[A-Za-z0-9]{30,}' -e 'AKIA[0-9A-Z]{16}' -e 'sk-[A-Za-z0-9]{32,}' .
+rg -l --hidden -g '!.git/**' -g '!.venv/**' -g '!client/node_modules/**' -g '!artifacts/reports/**' -g '!evennia-main/**' -g '!xkx100/**' -e '(?i)(email_host_password|smtp_password|contact_encryption_key|contact_lookup_key|verification_code_pepper|delivery_payload_encryption_key)\s*[:=]\s*[A-Za-z0-9+/=_-]{16,}' .
+```
+
+两条命令均无匹配，记录为 `none`。CI 继续使用官方 `gitleaks/gitleaks-action@v2`。
+
+本机依次尝试 `curl.exe -L <official-release-asset>`、`gh release download v8.30.1 --pattern gitleaks_8.30.1_windows_x64.zip` 与 `gh api <release-asset> --method GET` 获取 gitleaks `v8.30.1`，但都在受限网络中途停止或超时；官方 Windows x64 zip 期望 SHA-256 为 `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`，未完成的忽略目录下载从未执行。因此本文件不声称“本机 gitleaks passed”；CI gitleaks 仍是提交进入远端后的独立必经门禁。
 
 `tests/test_smtp_smoke.py` 是显式 opt-in 的开发入口，默认结果为 `1 skipped`：本轮没有 `RUN_SMTP_TESTS=1`、显式收件人和本地 SMTP 秘密授权，所以没有向公网或 163 SMTP 发送邮件。该 smoke 还会强制 Django SMTP backend、`smtp.163.com`、发件账号、密码和 `DEFAULT_FROM_EMAIL`，并抑制收件人与 provider 异常细节。跳过不写成通过，163 也不构成 Public V1 provider 证据。
 
 ## 8. 双轴审查
 
-正式 Standards 与 Spec 复审以本文件顶部固定点为基准并覆盖完整 Issue #16 diff。结果在提交前回填；只有两轴均无未解决 hard finding 才允许关闭 #16。
+首次正式审查以本文件顶部固定点为基准并覆盖提交 `b545ed1` 的完整 15-file diff：
+
+- Standards：1 hard finding，指出 handoff 在 GitHub Issue 尚未关闭时提前声称“已关闭”；1 个非阻塞 judgement finding，指出状态切换散布在多份治理文档，可能形成 Shotgun Surgery。
+- Spec：2 hard findings，指出秘密扫描没有记录可复现命令，以及状态文件在本节仍待复审时提前宣称 #16/双轴完成；0 个 scope-creep finding。
+
+本次后续修复补入扫描命令，并把状态退回审查与 Issue 回填尚未完成的事实。状态分散属于现行 V6/17/18/计划/交接治理布局，本票以 `verify_m0.py` 的必需/淘汰 marker 自动拒绝漂移，不在证据收口范围重构权威布局。正式复审待修复提交后执行；只有两轴均无未解决 hard finding 才允许提升 `AUTH-005`、解除 Character Slice 2 阻塞并关闭 #16。
 
 ## 9. 仍然缺失的发布证据
 
-以下项目没有因 `AUTH-005=verified` 而完成：
+以下项目不会因 #16 的内部认证证据而完成：
 
 - 正式邮件 provider、受控域名、SPF、DKIM、DMARC、退信处理、配额、告警和基本送达证据。
 - 完整发布浏览器/输入/无障碍矩阵与实际 `tested_versions`。
@@ -138,4 +150,4 @@ Vue typecheck、Vitest 12 passed、H5 build 均通过。Playwright 使用全新�
 | 依赖 | npm critical gate 退出 0；0 critical，保留 9 low / 9 moderate / 1 high，未强制破坏性 Vite 8 升级 |
 | 秘密 | 行为与浏览器存储/console/network 扫描通过；tracked 高风险 token 形态与 secret assignment 均为 none；本机 gitleaks 未下载完成，CI 官方 gate 保留 |
 | 清理 | 8000/5173 无残留 listener；无 `new_mud_issue16_e2e_*` 临时数据库 |
-| 双轴审查 | 待固定点到 Issue #16 提交的正式 Standards / Spec 审查回填；未完成前不关闭 Issue |
+| 双轴审查 | 首审 Standards 1 hard / 1 judgement，Spec 2 hard / 0 scope creep；hard findings 已在后续工作树修复，待提交后正式复审 |

@@ -1,6 +1,6 @@
 # 已验证联系方式注册与账号恢复实施方案
 
-**Status**: `completed`（2026-08-27；Issues #11–#16 已完成，`AUTH-005=verified`）
+**Status**: `in_progress`（2026-08-27；Issues #11–#15 已完成，#16 正在复审收口，`AUTH-005=implemented`）
 
 **Delivery unit**: 新建 `Engine Stage E1 / Auth Baseline Amendment`，先于 Character Slice 2
 
@@ -332,7 +332,7 @@ test-first 实现 reset request/confirm、受保护入口 AuthSession 状态校�
 
 **阻塞**：E。
 
-**完成条件**：已完成。第 12 节各层的日期、环境、命令、结果和例外记录在 `docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md`；SMTP 开发 smoke 因没有显式 opt-in、收件人和秘密授权而准确记录为 1 skipped，不伪造公网发送；双轴无未解决 hard finding，PublicV1Gate 未被提升。
+**完成条件**：第 12 节各层的日期、环境、命令、结果和例外已记录在 `docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md`；SMTP 开发 smoke 因没有显式 opt-in、收件人和秘密授权而准确记录为 1 skipped，不伪造公网发送。首轮双轴 hard findings 正在修复并等待正式复审；PublicV1Gate 未被提升。
 
 每个实现 ticket 在新上下文运行 `/implement`，由其内部逐条 `/tdd` 并以 `/code-review` 收尾。PostgreSQL 测试串行；独立 ticket 不共享未提交工作。
 
@@ -414,6 +414,6 @@ test-first 实现 reset request/confirm、受保护入口 AuthSession 状态校�
 - [x] 非枚举202、幂等 request、持久限流、outbox 故障恢复与安全通知通过。
 - [x] H5 只显示普通“登录”语言，三主视口流程和持久存储秘密扫描通过。
 - [x] 默认测试零公网；真实163 smoke 只可显式启用，本轮准确记录为 1 skipped；Public V1 provider 缺口如实保留。
-- [x] PostgreSQL、迁移、静态、单元、集成、E2E、依赖、秘密扫描和双轴复审全部通过或按门禁准确记录；本机 gitleaks 下载缺口未伪造为通过，CI gate 保留。
+- [ ] PostgreSQL、迁移、静态、单元、集成、E2E、依赖和秘密扫描已通过或按门禁准确记录；本机 gitleaks 下载缺口未伪造为通过，CI gate 保留；双轴 hard findings 已修复，待正式复审。
 - [x] Issue #9/E1 Slice 1 历史未被倒写，新的认证基线 tickets 有阻塞边、证据、风险和回滚记录。
 - [x] Character、Presence、PresenceRecovery、takeover、SMS、换绑和 reopen 均未提前实现。
