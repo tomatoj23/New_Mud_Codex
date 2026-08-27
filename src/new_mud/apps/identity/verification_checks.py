@@ -3,15 +3,15 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.checks import Error, Tags, register
 
-from .verification_config import VerificationServiceUnavailable, require_verification_service
+from .verification_config import VerificationServiceUnavailable, require_authentication_baseline
 
 
 @register(Tags.security)
 def check_verification_configuration(app_configs, **kwargs):
-    if not getattr(settings, "AUTH_VERIFICATION_ENABLED", False):
+    if not getattr(settings, "AUTH_BASELINE_CUTOVER_ENABLED", False):
         return []
     try:
-        require_verification_service()
+        require_authentication_baseline()
     except VerificationServiceUnavailable:
         return [
             Error(

@@ -436,7 +436,7 @@ def test_auth_session_and_family_must_be_a_symmetric_lifetime_pair() -> None:
         force_deferred_constraints()
 
 
-def test_partial_unique_constraints_reject_second_active_recovery_and_refresh_credentials() -> None:
+def test_retired_recovery_and_active_refresh_credential_constraints() -> None:
     registration = register_verified(
         username="unique_identity",
         password="safe-example-passphrase-42",
@@ -446,11 +446,6 @@ def test_partial_unique_constraints_reject_second_active_recovery_and_refresh_cr
         password="safe-example-passphrase-42",
     )
     account = GameAccount.objects.get(pk=registration.game_account_id)
-    RecoveryCodeCredential.objects.create(
-        game_account=account,
-        generation=1,
-        code_hash="legacy-active-hash",
-    )
     family = RefreshTokenFamily.objects.get(
         auth_session_id=uuid.UUID(authentication.auth_session_id)
     )
@@ -459,8 +454,9 @@ def test_partial_unique_constraints_reject_second_active_recovery_and_refresh_cr
     with pytest.raises(IntegrityError), transaction.atomic():
         RecoveryCodeCredential.objects.create(
             game_account=account,
-            generation=2,
+            generation=1,
             code_hash="not-plaintext",
+            state="active",
         )
 
     with pytest.raises(IntegrityError), transaction.atomic():

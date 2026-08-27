@@ -11,7 +11,7 @@
 - **部署边界**：保持单实例、单写者、单 MUDLib；没有 Redis channel layer 时只运行一个 ASGI 逻辑进程。
 - **持久真源**：PostgreSQL 18 是持久状态权威；连接态 `ConnectionSession` 和活动 `Presence` 留在内存，`AuthSession`、`PresenceSnapshot`、内容 revision 与发布批次按冻结合同持久化。
 - **内容身份**：启动内容只能来自受审计 seed、immutable published revision、exact dependencies 与完整 `ContentReleaseBatch`；新选择读取 active batch，已钉定对象读取 exact historical revision。
-- **REST 路由**：认证基线修订的目标入口包括 registration-verification request、register、login、refresh、logout 与 password-reset request/confirm；Git `638e8cf` 仍保留旧 recover/rotate 行为，#15 负责切换为 410 兼容期。
+- **REST 路由**：认证基线修订的目标入口包括 registration-verification request、register、login、refresh、logout 与 password-reset request/confirm；Issue #15 已把旧 recover/rotate 切换为统一 410 兼容期，兼容路由仍须在 Public V1 前删除。
 - **WebSocket 协议**：连接后依次使用 `session.authenticate`、`presence.enter`、`session.resume`；跨设备替换只能使用显式 `presence.takeover`。
 - **认证边界**：新注册先验证 email 并创建 VerifiedContactMethod，注册与密码重置都不隐式登录；login 创建 AuthSession 与唯一 RefreshTokenFamily；每个受保护入口验证 active AuthSession，access token 只在内存，Refresh Token 只进入受保护 Cookie 与 refresh/logout REST 边界。
 - **账号与角色**：首发每个 GameAccount 最多一个 Character，同时最多一个 `active` 或 `grace_disconnected` PresenceSnapshot 租约。
@@ -91,7 +91,7 @@
 
 ## Engine Stage E1 / Auth Baseline Amendment: 已验证联系方式注册与账号恢复
 
-**Status**: `in_progress`（工程工作流；Issue #10；Issues #11–#14 已完成，剩余 #15–#16）
+**Status**: `in_progress`（工程工作流；Issue #10；Issues #11–#15 已完成，剩余 #16）
 
 **User stories**: 作为新玩家，我先验证邮箱再创建账号；作为忘记密码的玩家，我通过已验证邮箱重置密码并让全部旧认证立即失效；作为普通玩家，我始终使用账号名和密码登录，不需要理解“独立登录”或 RecoveryCode。覆盖 `AUTH-005`、`CLIENT-001`、`MILESTONE-002`。
 
@@ -99,7 +99,7 @@
 
 按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。该 Amendment 必须完整结束后才能启动 Character Slice 2。
 
-当前唯一未认领 frontier 是 #15；#15 关闭前不进入 #16，#16 关闭前不启动 Character Slice 2。
+当前唯一未认领 frontier 是 #16；#16 关闭前不启动 Character Slice 2。
 
 ### Acceptance criteria
 
@@ -107,9 +107,9 @@
 - [x] #12 交付 email challenge、独立密钥、加密联系方式/lookup、PostgreSQL 持久限流/outbox、worker 与非枚举 request。
 - [x] #13 最终 register 原子消费 challenge，创建 User/GameAccount/VerifiedContactMethod，返回零认证状态，并完成 H5 注册/普通登录文案。
 - [x] #14 password reset 原子撤销跨实例全部 AuthSession/family/credential，旧 access/refresh 立即失败，通知投递失败不回滚密码；Git `638e8cf` 与 `docs/new_engine/18_IMPLEMENTATION_STATUS.md` 保留实现和验证证据。
-- [ ] #15 两个旧 RecoveryCode 端点统一 410，现有开发 code 全撤销，注册/reset/退役通过同一受控切换且普通登录保持可用。
+- [x] #15 两个旧 RecoveryCode 端点统一 410，现有开发 code 全撤销，注册/reset/退役通过同一受控切换且普通登录保持可用。
 - [ ] #16 完成 PostgreSQL 并发、迁移、静态、全量、E2E、秘密扫描、可选 SMTP smoke 和 Standards + Spec 双轴证据。
-- [ ] SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 与 takeover 均未提前实现。
+- [x] SMS、联系方式换绑、账号关闭/重开、Character、Presence、PresenceRecovery 与 takeover 均未提前实现。
 
 ---
 

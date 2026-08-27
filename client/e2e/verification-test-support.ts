@@ -16,7 +16,7 @@ export const emailOutboxDirectory = path.resolve(
 );
 
 export const verificationTestEnvironment: NodeJS.ProcessEnv = {
-  NEW_MUD_VERIFICATION_ENABLED: "1",
+  NEW_MUD_AUTH_BASELINE_CUTOVER_ENABLED: "1",
   NEW_MUD_VERIFICATION_WORKER_READY: "1",
   NEW_MUD_VERIFICATION_PROVIDER_READY: "1",
   NEW_MUD_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND: "1",

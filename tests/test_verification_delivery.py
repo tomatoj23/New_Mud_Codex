@@ -761,6 +761,7 @@ def test_registration_verification_rejects_unsupported_request_shapes_without_st
 @pytest.mark.parametrize(
     ("failure_name", "failure_settings"),
     [
+        ("cutover_disabled", {"AUTH_BASELINE_CUTOVER_ENABLED": False}),
         ("provider_unready", {"AUTH_VERIFICATION_PROVIDER_READY": False}),
         ("worker_unready", {"AUTH_VERIFICATION_WORKER_READY": False}),
         ("missing_key", {"AUTH_CONTACT_LOOKUP_KEYS": {}}),
@@ -816,6 +817,33 @@ def test_verification_dependency_failure_is_global_while_password_login_remains_
             {"channel": "email", "destination": "player@example.com"},
             idempotency_key=f"{failure_name}-password-reset",
         )
+        registration = client.post(
+            reverse("auth-register"),
+            {
+                "username": f"{failure_name[:20]}_reg",
+                "password": "safe-example-passphrase-42",
+                "verification": {
+                    "channel": "email",
+                    "destination": "player@example.com",
+                    "code": "123456",
+                },
+            },
+            content_type="application/json",
+            secure=True,
+            headers={"origin": "https://testserver"},
+        )
+        password_reset_confirm = client.post(
+            reverse("auth-password-reset-confirm"),
+            {
+                "channel": "email",
+                "destination": "player@example.com",
+                "code": "123456",
+                "new_password": "replacement-passphrase-73-safe",
+            },
+            content_type="application/json",
+            secure=True,
+            headers={"origin": "https://testserver"},
+        )
         login = client.post(
             reverse("auth-login"),
             {"username": failure_name, "password": "safe-example-passphrase-42"},
@@ -828,6 +856,10 @@ def test_verification_dependency_failure_is_global_while_password_login_remains_
     assert verification.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
     assert password_reset.status_code == 503
     assert password_reset.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
+    assert registration.status_code == 503
+    assert registration.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
+    assert password_reset_confirm.status_code == 503
+    assert password_reset_confirm.json() == {"error": {"code": "VERIFICATION_SERVICE_UNAVAILABLE"}}
     assert VerificationChallenge.objects.count() == 0
     assert login.status_code == 200
     assert get_user_model().objects.get(username=failure_name).email == ""

@@ -18,7 +18,7 @@ from .models import (
     SecurityNotificationOutbox,
     VerifiedContactMethod,
 )
-from .verification_config import require_verification_service
+from .verification_config import require_authentication_baseline
 from .verification_crypto import EncryptedValue, decrypt_value
 
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ def _claim_security_notification(
     worker_id: str,
     now,
 ) -> ClaimedSecurityNotification | SecurityNotificationOutcome | None:
-    keyrings = require_verification_service()
+    keyrings = require_authentication_baseline()
     eligible = models.Q(
         state=SecurityNotificationOutbox.State.PENDING,
         next_attempt_at__lte=now,

@@ -10,7 +10,7 @@ def main() -> None:
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "new_mud.settings.development")
     django.setup()
     call_command("migrate", interactive=False, verbosity=1)
-    call_command("runserver", "127.0.0.1:8000", noreload=True)
+    call_command("runserver", "127.0.0.1:8000", use_reloader=False)
 
 
 if __name__ == "__main__":

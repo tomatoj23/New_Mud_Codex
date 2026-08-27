@@ -2,6 +2,8 @@ from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F403
 
+AUTH_PRODUCTION_MODE = True
+
 if not SECRET_KEY:  # noqa: F405
     raise ImproperlyConfigured("DJANGO_SECRET_KEY is required in production")
 if not AUTH_TOKEN_SIGNING_KEY:  # noqa: F405

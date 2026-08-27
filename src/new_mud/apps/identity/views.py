@@ -14,18 +14,15 @@ from .rate_limits import RateLimitSubject, consume_rate_limit
 from .services import (
     AuthenticationFailed,
     PasswordResetUnavailable,
-    RecoveryFailed,
     RefreshFailed,
     RegistrationInvalid,
     RegistrationUnavailable,
     VerificationCodeInvalid,
     login,
     logout,
-    recover_password_with_code,
     refresh,
     register,
     reset_password_with_verification,
-    rotate_recovery_code,
 )
 from .verification import ContactInvalid
 from .verification_config import VerificationServiceUnavailable
@@ -242,20 +239,6 @@ def _authentication_request_allowed(
     )
 
 
-def _recovery_device_id(request) -> str:
-    return _anonymous_device_id(request, cookie_name="new_mud_recovery_device")
-
-
-def _set_recovery_device_cookie(response: Response, device_id: str) -> None:
-    _set_anonymous_device_cookie(
-        response,
-        device_id,
-        cookie_name="new_mud_recovery_device",
-        max_age=settings.AUTH_RECOVERY_DEVICE_MAX_AGE_SECONDS,
-        path="/api/v1/auth/recover",
-    )
-
-
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register_view(request):
@@ -406,58 +389,10 @@ def logout_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def recover_view(request):
-    if not _origin_allowed(request) or request.headers.get("Authorization"):
-        return _error("ACCOUNT_RECOVERY_UNAVAILABLE", status=403)
-    device_id = _recovery_device_id(request)
-    allowed = consume_rate_limit(
-        namespace="recovery",
-        window_seconds=settings.AUTH_RATE_LIMIT_WINDOW_SECONDS,
-        subjects=(
-            RateLimitSubject(
-                scope="account",
-                value=_account_rate_limit_subject(request.data.get("username")),
-                limit=settings.AUTH_RECOVERY_RATE_LIMIT_ACCOUNT,
-            ),
-            RateLimitSubject(
-                scope="ip",
-                value=_client_ip(request),
-                limit=settings.AUTH_RECOVERY_RATE_LIMIT_IP,
-            ),
-            RateLimitSubject(
-                scope="device",
-                value=device_id,
-                limit=settings.AUTH_RECOVERY_RATE_LIMIT_DEVICE,
-            ),
-        ),
-    )
-    if not allowed:
-        response = _error("RECOVERY_RATE_LIMITED", status=429)
-        _set_recovery_device_cookie(response, device_id)
-        return response
-    try:
-        replacement_code = recover_password_with_code(
-            username=request.data.get("username"),
-            recovery_code=request.data.get("recovery_code"),
-            new_password=request.data.get("new_password"),
-        )
-    except RecoveryFailed as error:
-        response = _error(error.code, status=400)
-        _set_recovery_device_cookie(response, device_id)
-        return response
-    response = _response({"recovery_code": replacement_code}, status=200)
-    _set_recovery_device_cookie(response, device_id)
-    return response
+    return _error("RECOVERY_CODE_RETIRED", status=410)
 
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def recovery_code_rotate_view(request):
-    if not _origin_allowed(request) or request.data != {}:
-        return _error("SESSION_REVOKED", status=403)
-    try:
-        replacement_code = rotate_recovery_code(authorization=request.headers.get("Authorization"))
-    except RecoveryFailed as error:
-        return _error(error.code, status=401)
-    response = _response({"recovery_code": replacement_code}, status=200)
-    _clear_refresh_cookie(response)
-    return response
+    return _error("RECOVERY_CODE_RETIRED", status=410)

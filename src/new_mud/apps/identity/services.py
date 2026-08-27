@@ -10,7 +10,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, models, transaction
@@ -19,7 +18,6 @@ from django.utils import timezone
 from .models import (
     AuthSession,
     GameAccount,
-    RecoveryCodeCredential,
     RefreshRequestTerminalRecord,
     RefreshTokenCredential,
     RefreshTokenFamily,
@@ -44,7 +42,7 @@ from .verification import (
 )
 from .verification_config import (
     VerificationServiceUnavailable,
-    require_verification_service,
+    require_authentication_baseline,
 )
 from .verification_crypto import (
     KeyUnavailable,
@@ -78,12 +76,6 @@ class AuthenticationFailed(Exception):
 
 
 class RefreshFailed(Exception):
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
-        self.code = code
-
-
-class RecoveryFailed(Exception):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
@@ -128,7 +120,7 @@ def register(
     except ContactInvalid as error:
         raise VerificationCodeInvalid from error
 
-    keyrings = require_verification_service()
+    keyrings = require_authentication_baseline()
     email_scope = email_contact_scope(
         normalized_email,
         lookup_keyring=keyrings.contact_lookup,
@@ -260,7 +252,7 @@ def _reset_password_with_verification(
     if not isinstance(new_password, str):
         raise PasswordResetUnavailable
     normalized_email = normalize_email(destination)
-    keyrings = require_verification_service()
+    keyrings = require_authentication_baseline()
     email_scope = email_contact_scope(
         normalized_email,
         lookup_keyring=keyrings.contact_lookup,
@@ -933,147 +925,3 @@ def _revoke_locked_user_sessions(*, sessions: list[AuthSession], reason: str, no
             reason=reason,
             now=now,
         )
-
-
-def _recover_password_with_code(
-    *, username: object, recovery_code: object, new_password: object
-) -> str:
-    if not all(isinstance(value, str) for value in (username, recovery_code, new_password)):
-        raise RecoveryFailed("RECOVERY_CODE_INVALID")
-    normalized_username = str(username).lower()
-    user_model = get_user_model()
-    try:
-        user = user_model.objects.get(username=normalized_username)
-    except user_model.DoesNotExist as error:
-        raise RecoveryFailed("RECOVERY_CODE_INVALID") from error
-
-    replacement_code = secrets.token_urlsafe(24)
-    now = timezone.now()
-    with transaction.atomic():
-        try:
-            accounts = _lock_user_accounts(user_id=user.pk)
-            account = next(
-                candidate
-                for candidate in accounts
-                if candidate.instance_id == settings.CONTENT_INSTANCE_ID
-                and candidate.lifecycle == GameAccount.Lifecycle.ACTIVE
-            )
-            current_code = RecoveryCodeCredential.objects.select_for_update().get(
-                game_account=account,
-                state=RecoveryCodeCredential.State.ACTIVE,
-            )
-        except (StopIteration, RecoveryCodeCredential.DoesNotExist) as error:
-            raise RecoveryFailed("RECOVERY_CODE_INVALID") from error
-        if not current_code.check_code(str(recovery_code)):
-            raise RecoveryFailed("RECOVERY_CODE_INVALID")
-        try:
-            validate_password(str(new_password), user=user)
-        except ValidationError as error:
-            raise RecoveryFailed("ACCOUNT_RECOVERY_UNAVAILABLE") from error
-        sessions = _lock_user_sessions(user_id=user.pk)
-
-        current_code.state = RecoveryCodeCredential.State.USED
-        current_code.used_at = now
-        current_code.version += 1
-        current_code.save(update_fields=("state", "used_at", "version"))
-        RecoveryCodeCredential.objects.create(
-            game_account=account,
-            generation=current_code.generation + 1,
-            code_hash=make_password(replacement_code),
-        )
-        user.set_password(str(new_password))
-        user.save(update_fields=("password",))
-        _revoke_locked_user_sessions(
-            sessions=sessions,
-            reason="RECOVERY_CODE_USED",
-            now=now,
-        )
-        SecurityAuditEvent.objects.create(
-            event_type="auth.recovery.succeeded",
-            user_id_snapshot=str(user.pk),
-            reason_code="RECOVERY_CODE_USED",
-            metadata_json={"revoked_session_count": len(sessions)},
-        )
-    return replacement_code
-
-
-def recover_password_with_code(
-    *, username: object, recovery_code: object, new_password: object
-) -> str:
-    try:
-        return _recover_password_with_code(
-            username=username,
-            recovery_code=recovery_code,
-            new_password=new_password,
-        )
-    except DatabaseError as error:
-        raise RecoveryFailed("ACCOUNT_RECOVERY_UNAVAILABLE") from error
-
-
-def _rotate_recovery_code(*, authorization: object) -> str:
-    session_id = _session_from_access_locator(authorization)
-    if session_id is None:
-        raise RecoveryFailed("SESSION_REVOKED")
-    try:
-        session_locator = AuthSession.objects.only("user_id", "game_account_id").get(pk=session_id)
-    except AuthSession.DoesNotExist as error:
-        raise RecoveryFailed("SESSION_REVOKED") from error
-
-    replacement_code = secrets.token_urlsafe(24)
-    now = timezone.now()
-    with transaction.atomic():
-        try:
-            accounts = _lock_user_accounts(user_id=session_locator.user_id)
-            account = next(
-                candidate
-                for candidate in accounts
-                if candidate.pk == session_locator.game_account_id
-                and candidate.lifecycle == GameAccount.Lifecycle.ACTIVE
-            )
-            current_code = RecoveryCodeCredential.objects.select_for_update().get(
-                game_account=account,
-                state=RecoveryCodeCredential.State.ACTIVE,
-            )
-            sessions = _lock_user_sessions(user_id=session_locator.user_id)
-            session = next(candidate for candidate in sessions if candidate.pk == session_id)
-        except (
-            StopIteration,
-            RecoveryCodeCredential.DoesNotExist,
-        ) as error:
-            raise RecoveryFailed("SESSION_REVOKED") from error
-        if (
-            session.state != AuthSession.State.ACTIVE
-            or session.absolute_expires_at <= now
-            or session.game_account_id != account.pk
-        ):
-            raise RecoveryFailed("SESSION_REVOKED")
-
-        current_code.state = RecoveryCodeCredential.State.REVOKED
-        current_code.revoked_at = now
-        current_code.version += 1
-        current_code.save(update_fields=("state", "revoked_at", "version"))
-        RecoveryCodeCredential.objects.create(
-            game_account=account,
-            generation=current_code.generation + 1,
-            code_hash=make_password(replacement_code),
-        )
-        _revoke_locked_user_sessions(
-            sessions=sessions,
-            reason="RECOVERY_CODE_ROTATED",
-            now=now,
-        )
-        SecurityAuditEvent.objects.create(
-            event_type="auth.recovery_code.rotated",
-            user_id_snapshot=str(session.user_id),
-            auth_session_id_snapshot=str(session.pk),
-            reason_code="RECOVERY_CODE_ROTATED",
-            metadata_json={"revoked_session_count": len(sessions)},
-        )
-    return replacement_code
-
-
-def rotate_recovery_code(*, authorization: object) -> str:
-    try:
-        return _rotate_recovery_code(authorization=authorization)
-    except DatabaseError as error:
-        raise RecoveryFailed("SESSION_REVOKED") from error

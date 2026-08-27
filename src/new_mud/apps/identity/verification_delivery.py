@@ -19,7 +19,7 @@ from .verification import (
     lock_email_contact_scope,
     normalize_email,
 )
-from .verification_config import require_verification_service
+from .verification_config import require_authentication_baseline
 from .verification_crypto import EncryptedValue, decrypt_value
 
 
@@ -180,7 +180,7 @@ def _message_from_payload(payload: dict[str, str]) -> VerificationEmail:
 
 
 def _claim_delivery(*, worker_id: str, now) -> ClaimedDelivery | None:
-    keyrings = require_verification_service()
+    keyrings = require_authentication_baseline()
     eligible = models.Q(
         state=VerificationDeliveryOutbox.State.PENDING,
         next_attempt_at__lte=now,
@@ -240,7 +240,7 @@ def _claim_delivery(*, worker_id: str, now) -> ClaimedDelivery | None:
 
 def _finish_delivery(claim: ClaimedDelivery, *, now) -> DeliveryOutcome:
     normalized = normalize_email(claim.payload["destination"])
-    keyrings = require_verification_service()
+    keyrings = require_authentication_baseline()
     email_scope = email_contact_scope(normalized, lookup_keyring=keyrings.contact_lookup)
     with transaction.atomic():
         lock_email_contact_scope(email_scope)

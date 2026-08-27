@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 from .verification_crypto import KeyRing, KeyUnavailable
 
@@ -91,13 +92,37 @@ def verification_keyrings() -> VerificationKeyRings:
     return rings
 
 
-def require_verification_service() -> VerificationKeyRings:
+def require_authentication_baseline() -> VerificationKeyRings:
     if not all(
         (
-            getattr(settings, "AUTH_VERIFICATION_ENABLED", False),
+            getattr(settings, "AUTH_BASELINE_CUTOVER_ENABLED", False),
             getattr(settings, "AUTH_VERIFICATION_WORKER_READY", False),
             getattr(settings, "AUTH_VERIFICATION_PROVIDER_READY", False),
         )
     ):
         raise VerificationServiceUnavailable
     return verification_keyrings()
+
+
+def validate_authentication_baseline_startup() -> None:
+    test_backends = {
+        "django.core.mail.backends.filebased.EmailBackend",
+        "django.core.mail.backends.locmem.EmailBackend",
+    }
+    test_bypass = getattr(settings, "AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND", False)
+    if getattr(settings, "AUTH_PRODUCTION_MODE", False) and test_bypass:
+        raise ImproperlyConfigured(
+            "Production authentication baseline cannot enable the test email bypass."
+        )
+    if not getattr(settings, "AUTH_BASELINE_CUTOVER_ENABLED", False):
+        return
+    try:
+        require_authentication_baseline()
+    except VerificationServiceUnavailable as error:
+        raise ImproperlyConfigured(
+            "Authentication baseline cutover dependencies are incomplete or not independent."
+        ) from error
+    if settings.EMAIL_BACKEND in test_backends and not test_bypass:
+        raise ImproperlyConfigured(
+            "Authentication baseline cutover requires a non-test email backend."
+        )

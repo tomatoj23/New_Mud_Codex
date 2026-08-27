@@ -101,7 +101,7 @@ def request_delivered_verification_code(
     assert (
         deliver_one_verification(worker_id=f"test-{idempotency_key}") == DeliveryOutcome.DELIVERED
     )
-    match = re.search(r"(?<!\d)\d{6}(?!\d)", mail.outbox[-1].body)
+    match = re.search(r"(?<!\d)\d{6}(?!\d)", str(mail.outbox[-1].body))
     assert match is not None
     return match.group()
 
@@ -165,12 +165,14 @@ def post_registration_with_fresh_verified_email(
 
 
 def create_legacy_recovery_code(*, game_account_id: str) -> str:
-    # Issue #13 stops new issuance; Issue #15 owns removal of the legacy endpoints.
+    # Historical fixture: Issue #15 permits only already-revoked audit records.
     code = secrets.token_urlsafe(24)
     RecoveryCodeCredential.objects.create(
         game_account_id=game_account_id,
         generation=1,
         code_hash=make_password(code),
+        state=RecoveryCodeCredential.State.REVOKED,
+        revoked_at=timezone.now(),
     )
     return code
 
@@ -332,7 +334,6 @@ def test_password_reset_immediately_revokes_cross_instance_access_and_refresh() 
         },
     )
     assert registration.status_code == 201
-    create_legacy_recovery_code(game_account_id=registration.json()["game_account_id"])
     first_login = auth_post(
         first_client,
         "auth-login",
@@ -344,7 +345,6 @@ def test_password_reset_immediately_revokes_cross_instance_access_and_refresh() 
         password=old_password,
     )
     assert first_login.status_code == second_login.status_code == 200
-    first_access = first_login.json()["access_token"]
     reset_code = request_delivered_password_reset_code(
         recovery_client,
         destination=destination,
@@ -379,14 +379,6 @@ def test_password_reset_immediately_revokes_cross_instance_access_and_refresh() 
         )
         assert stale_refresh.status_code == 401
         assert stale_refresh.json() == {"error": {"code": "SESSION_REVOKED"}}
-    stale_access = auth_post(
-        first_client,
-        "auth-recovery-rotate",
-        {},
-        authorization=f"Bearer {first_access}",
-    )
-    assert stale_access.status_code == 401
-    assert stale_access.json() == {"error": {"code": "SESSION_REVOKED"}}
 
 
 def test_password_reset_cancels_unfinished_reset_deliveries(client) -> None:
@@ -697,7 +689,7 @@ def test_password_reset_code_locks_after_five_failures_with_one_stable_error(cli
         idempotency_key="password-reset-attempt-code",
     )
     incorrect_code = "999999" if delivered_code != "999999" else "000000"
-    payload = {
+    payload: dict[str, object] = {
         "channel": "email",
         "destination": destination,
         "code": incorrect_code,
@@ -1501,7 +1493,7 @@ def test_logout_converges_cookie_and_bearer_sessions_idempotently(client) -> Non
     assert repeated.cookies["new_mud_refresh"]["max-age"] == 0
 
 
-def test_recovery_code_replaces_password_and_revokes_all_authentication(client) -> None:
+def test_recovery_code_routes_are_permanently_retired_without_consuming_credentials(client) -> None:
     registration = post_registration_with_fresh_verified_email(
         client,
         {"username": "recover_player", "password": "safe-example-passphrase-42"},
@@ -1509,25 +1501,14 @@ def test_recovery_code_replaces_password_and_revokes_all_authentication(client) 
     original_code = create_legacy_recovery_code(
         game_account_id=registration.json()["game_account_id"]
     )
-    for _ in range(2):
-        assert (
-            auth_post(
-                client,
-                "auth-login",
-                {"username": "recover_player", "password": "safe-example-passphrase-42"},
-            ).status_code
-            == 200
-        )
-    assert (
-        login_in_additional_instance(
-            client,
-            username="recover_player",
-            password="safe-example-passphrase-42",
-        ).status_code
-        == 200
+    login_response = auth_post(
+        client,
+        "auth-login",
+        {"username": "recover_player", "password": "safe-example-passphrase-42"},
     )
+    assert login_response.status_code == 200
 
-    response = auth_post(
+    recover_response = auth_post(
         client,
         "auth-recover",
         {
@@ -1536,143 +1517,41 @@ def test_recovery_code_replaces_password_and_revokes_all_authentication(client) 
             "new_password": "replacement-passphrase-73-safe",
         },
     )
+    rotate_response = auth_post(
+        client,
+        "auth-recovery-rotate",
+        {},
+        authorization=f"Bearer {login_response.json()['access_token']}",
+    )
 
-    assert response.status_code == 200
-    assert set(response.json()) == {"recovery_code"}
-    replacement_code = response.json()["recovery_code"]
-    assert replacement_code != original_code
+    for response in (recover_response, rotate_response):
+        assert response.status_code == 410
+        assert response.json() == {"error": {"code": "RECOVERY_CODE_RETIRED"}}
+        assert response.headers["Cache-Control"] == "no-store"
     account = GameAccount.objects.get(pk=registration.json()["game_account_id"])
-    assert list(
-        account.recovery_codes.order_by("generation").values_list("generation", "state")
-    ) == [(1, "used"), (2, "active")]
-    assert account.recovery_codes.get(generation=2).check_code(replacement_code)
-    assert set(account.auth_sessions.values_list("state", flat=True)) == {"revoked"}
-    assert not RefreshTokenFamily.objects.filter(state="active").exists()
-    assert not RefreshTokenCredential.objects.filter(state="active").exists()
-
-    old_password = auth_post(
-        client,
-        "auth-login",
-        {"username": "recover_player", "password": "safe-example-passphrase-42"},
-    )
-    assert old_password.json() == {"error": {"code": "AUTH_CREDENTIALS_INVALID"}}
-    new_password = auth_post(
-        client,
-        "auth-login",
-        {"username": "recover_player", "password": "replacement-passphrase-73-safe"},
-    )
-    assert new_password.status_code == 200
+    assert list(account.recovery_codes.values_list("generation", "state")) == [(1, "revoked")]
+    assert account.auth_sessions.get().state == AuthSession.State.ACTIVE
+    user = get_user_model().objects.get(username="recover_player")
+    assert user.check_password("safe-example-passphrase-42")
+    assert not user.check_password("replacement-passphrase-73-safe")
 
 
-@pytest.mark.parametrize("limited_subject", ["account", "ip", "device"])
-def test_recovery_combines_account_ip_and_device_rate_limits(
+@pytest.mark.parametrize("route_name", ["auth-recover", "auth-recovery-rotate"])
+def test_retired_recovery_routes_ignore_credentials_origin_and_body(
     client,
-    settings,
-    limited_subject: str,
+    route_name: str,
 ) -> None:
-    settings.AUTH_RECOVERY_RATE_LIMIT_ACCOUNT = 2 if limited_subject == "account" else 100
-    settings.AUTH_RECOVERY_RATE_LIMIT_IP = 2 if limited_subject == "ip" else 100
-    settings.AUTH_RECOVERY_RATE_LIMIT_DEVICE = 2 if limited_subject == "device" else 100
-
-    responses = []
-    for attempt in range(3):
-        username = "same_account" if limited_subject == "account" else f"account_{attempt}"
-        remote_addr = "192.0.2.10" if limited_subject == "ip" else f"192.0.2.{attempt + 1}"
-        device_id = "same-device" if limited_subject == "device" else f"device-{attempt}"
-        client.cookies["new_mud_recovery_device"] = device_id
-        responses.append(
-            auth_post(
-                client,
-                "auth-recover",
-                {
-                    "username": username,
-                    "recovery_code": "invalid-code",
-                    "new_password": "replacement-passphrase-73-safe",
-                },
-                remote_addr=remote_addr,
-            )
-        )
-
-    assert [response.status_code for response in responses] == [400, 400, 429]
-    assert responses[-1].json() == {"error": {"code": "RECOVERY_RATE_LIMITED"}}
-    device_cookie = responses[0].cookies["new_mud_recovery_device"]
-    assert device_cookie["secure"]
-    assert device_cookie["httponly"]
-    assert device_cookie["samesite"] == "Strict"
-    assert device_cookie["domain"] == ""
-
-
-def test_recovery_rate_limit_does_not_lock_password_login(client, settings) -> None:
-    settings.AUTH_RECOVERY_RATE_LIMIT_ACCOUNT = 1
-    settings.AUTH_RECOVERY_RATE_LIMIT_IP = 100
-    settings.AUTH_RECOVERY_RATE_LIMIT_DEVICE = 100
-    registration = post_registration_with_fresh_verified_email(
-        client,
-        {"username": "rate_limited_recovery", "password": "safe-example-passphrase-42"},
-    )
-    account = GameAccount.objects.get(pk=registration.json()["game_account_id"])
-    recovery_code = create_legacy_recovery_code(game_account_id=str(account.pk))
-
-    first = auth_post(
-        client,
-        "auth-recover",
-        {
-            "username": "rate_limited_recovery",
-            "recovery_code": "invalid-code",
-            "new_password": "replacement-passphrase-73-safe",
-        },
-    )
-    limited = auth_post(
-        client,
-        "auth-recover",
-        {
-            "username": "rate_limited_recovery",
-            "recovery_code": recovery_code,
-            "new_password": "replacement-passphrase-73-safe",
-        },
+    response = client.post(
+        reverse(route_name),
+        data=b'{"broken":',
+        content_type="application/json",
+        secure=True,
+        headers={"authorization": "Bearer invalid-retired-credential"},
     )
 
-    assert first.status_code == 400
-    assert limited.status_code == 429
-    assert account.recovery_codes.get().state == RecoveryCodeCredential.State.ACTIVE
-    login_response = auth_post(
-        client,
-        "auth-login",
-        {
-            "username": "rate_limited_recovery",
-            "password": "safe-example-passphrase-42",
-        },
-    )
-    assert login_response.status_code == 200
-
-
-def test_recovery_does_not_reveal_account_existence_before_code_validation(client) -> None:
-    post_registration_with_fresh_verified_email(
-        client,
-        {"username": "existing_recovery", "password": "safe-example-passphrase-42"},
-    )
-
-    existing = auth_post(
-        client,
-        "auth-recover",
-        {
-            "username": "existing_recovery",
-            "recovery_code": "invalid-code",
-            "new_password": "short",
-        },
-    )
-    missing = auth_post(
-        client,
-        "auth-recover",
-        {
-            "username": "missing_recovery",
-            "recovery_code": "invalid-code",
-            "new_password": "short",
-        },
-    )
-
-    assert existing.status_code == missing.status_code == 400
-    assert existing.json() == missing.json() == {"error": {"code": "RECOVERY_CODE_INVALID"}}
+    assert response.status_code == 410
+    assert response.json() == {"error": {"code": "RECOVERY_CODE_RETIRED"}}
+    assert response.headers["Cache-Control"] == "no-store"
 
 
 def test_registration_and_login_are_rate_limited_with_stable_errors(client, settings) -> None:
@@ -1863,49 +1742,6 @@ def test_refresh_same_key_with_a_different_credential_is_a_conflict(client) -> N
     family = RefreshTokenFamily.objects.get()
     assert family.state == "active"
     assert family.current_generation == 2
-
-
-def test_recovery_code_rotation_revokes_the_calling_session(client) -> None:
-    registration = post_registration_with_fresh_verified_email(
-        client,
-        {"username": "rotate_player", "password": "safe-example-passphrase-42"},
-    )
-    original_code = create_legacy_recovery_code(
-        game_account_id=registration.json()["game_account_id"]
-    )
-    login_response = auth_post(
-        client,
-        "auth-login",
-        {"username": "rotate_player", "password": "safe-example-passphrase-42"},
-    )
-    assert (
-        login_in_additional_instance(
-            client,
-            username="rotate_player",
-            password="safe-example-passphrase-42",
-        ).status_code
-        == 200
-    )
-
-    response = auth_post(
-        client,
-        "auth-recovery-rotate",
-        {},
-        authorization=f"Bearer {login_response.json()['access_token']}",
-    )
-
-    assert response.status_code == 200
-    assert set(response.json()) == {"recovery_code"}
-    replacement_code = response.json()["recovery_code"]
-    assert replacement_code != original_code
-    account = GameAccount.objects.get(pk=registration.json()["game_account_id"])
-    assert list(
-        account.recovery_codes.order_by("generation").values_list("generation", "state")
-    ) == [(1, "revoked"), (2, "active")]
-    assert account.recovery_codes.get(generation=2).check_code(replacement_code)
-    assert set(AuthSession.objects.values_list("state", flat=True)) == {"revoked"}
-    assert not RefreshTokenFamily.objects.filter(state="active").exists()
-    assert not RefreshTokenCredential.objects.filter(state="active").exists()
 
 
 @pytest.mark.parametrize(

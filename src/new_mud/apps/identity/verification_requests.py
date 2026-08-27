@@ -22,7 +22,7 @@ from .models import (
 from .verification import normalize_email
 from .verification_config import (
     VerificationServiceUnavailable,
-    require_verification_service,
+    require_authentication_baseline,
 )
 from .verification_crypto import (
     CiphertextInvalid,
@@ -133,7 +133,7 @@ def request_registration_verification(
     ):
         raise VerificationRequestInvalid
     normalized = normalize_email(destination)
-    keyrings = require_verification_service()
+    keyrings = require_authentication_baseline()
     request_hash = _request_hash(
         purpose=VerificationChallenge.Purpose.REGISTRATION,
         channel=VerificationChallenge.Channel.EMAIL,
@@ -256,7 +256,7 @@ def request_password_reset_verification(
     ):
         raise VerificationRequestInvalid
     normalized = normalize_email(destination)
-    keyrings = require_verification_service()
+    keyrings = require_authentication_baseline()
     request_hash = _request_hash(
         purpose=VerificationChallenge.Purpose.PASSWORD_RESET,
         channel=VerificationChallenge.Channel.EMAIL,

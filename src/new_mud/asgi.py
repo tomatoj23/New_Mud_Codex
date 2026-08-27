@@ -14,9 +14,13 @@ def create_application():
     http_application = get_asgi_application()
 
     from new_mud.apps.content.runtime import ContentRuntimeStatus, get_content_runtime
+    from new_mud.apps.identity.verification_config import (
+        validate_authentication_baseline_startup,
+    )
     from new_mud.process_guard import acquire_single_process_lease
     from new_mud.routing import websocket_urlpatterns
 
+    validate_authentication_baseline_startup()
     if settings.CONTENT_STARTUP_ENABLED:
         acquire_single_process_lease()
     runtime = get_content_runtime(settings.CONTENT_INSTANCE_ID)

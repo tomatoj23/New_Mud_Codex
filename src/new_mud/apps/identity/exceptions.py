@@ -13,8 +13,8 @@ AUTH_ENDPOINT_ERROR_CODES = {
     "/api/v1/auth/login": "AUTH_CREDENTIALS_INVALID",
     "/api/v1/auth/refresh": "REFRESH_UNAVAILABLE",
     "/api/v1/auth/logout": "AUTH_CREDENTIALS_INVALID",
-    "/api/v1/auth/recover": "ACCOUNT_RECOVERY_UNAVAILABLE",
-    "/api/v1/auth/recovery-code/rotate": "SESSION_REVOKED",
+    "/api/v1/auth/recover": "RECOVERY_CODE_RETIRED",
+    "/api/v1/auth/recovery-code/rotate": "RECOVERY_CODE_RETIRED",
 }
 
 

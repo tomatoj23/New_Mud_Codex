@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 
 from django.conf import settings
-from django.contrib.auth.hashers import check_password
 from django.db import models
 from django.db.models import Q
 
@@ -46,7 +45,6 @@ class GameAccount(models.Model):
 
 class RecoveryCodeCredential(models.Model):
     class State(models.TextChoices):
-        ACTIVE = "active"
         USED = "used"
         REVOKED = "revoked"
 
@@ -58,14 +56,11 @@ class RecoveryCodeCredential(models.Model):
     )
     generation = models.PositiveIntegerField()
     code_hash = models.CharField(max_length=256)
-    state = models.CharField(max_length=16, choices=State.choices, default=State.ACTIVE)
+    state = models.CharField(max_length=16, choices=State.choices, default=State.REVOKED)
     issued_at = models.DateTimeField(auto_now_add=True)
     used_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
     version = models.PositiveBigIntegerField(default=1)
-
-    def check_code(self, plaintext: str) -> bool:
-        return check_password(plaintext, self.code_hash)
 
     class Meta:
         constraints = [
@@ -73,10 +68,9 @@ class RecoveryCodeCredential(models.Model):
                 fields=("game_account", "generation"),
                 name="identity_recovery_account_generation_uniq",
             ),
-            models.UniqueConstraint(
-                fields=("game_account",),
-                condition=Q(state="active"),
-                name="identity_recovery_one_active",
+            models.CheckConstraint(
+                condition=Q(state__in=("used", "revoked")),
+                name="identity_recovery_retired",
             ),
             models.CheckConstraint(
                 condition=Q(generation__gte=1),

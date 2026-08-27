@@ -238,8 +238,8 @@ test("forgot password resets through email and invalidates the old browser sessi
     return { status: response.status, payload: await response.json() };
   }, accessToken);
   expect(protectedResult).toEqual({
-    status: 401,
-    payload: { error: { code: "SESSION_REVOKED" } },
+    status: 410,
+    payload: { error: { code: "RECOVERY_CODE_RETIRED" } },
   });
   await page.getByTestId("refresh").click();
   await expect(page.getByTestId("session-panel")).toHaveCount(0);

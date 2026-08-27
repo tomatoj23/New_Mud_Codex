@@ -4,8 +4,10 @@ import os
 from datetime import timedelta
 
 import pytest
+from django.apps.registry import Apps
 from django.contrib.auth import get_user_model
-from django.db import DatabaseError, connection, transaction
+from django.contrib.auth.hashers import make_password
+from django.db import DatabaseError, IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.utils import timezone
 
@@ -67,19 +69,85 @@ def verification_guard_triggers() -> set[str]:
         return {row[0] for row in cursor.fetchall()}
 
 
-def test_verification_migrations_round_trip_from_0003_to_0008() -> None:
+def migration_apps_at(name: str) -> Apps:
+    executor = MigrationExecutor(connection)
+    executor.migrate([("identity", name)])
+    return executor.loader.project_state([("identity", name)]).apps
+
+
+def test_recovery_code_retirement_is_irreversible_across_migration_rollback() -> None:
+    try:
+        old_apps = migration_apps_at("0008_security_notification_outbox")
+        User = old_apps.get_model("auth", "User")
+        GameAccount = old_apps.get_model("identity", "GameAccount")
+        RecoveryCodeCredential = old_apps.get_model("identity", "RecoveryCodeCredential")
+        user = User.objects.create(username="migration_recovery_retirement")
+        account = GameAccount.objects.create(user=user, instance_id="default")
+        active = RecoveryCodeCredential.objects.create(
+            game_account=account,
+            generation=1,
+            code_hash=make_password("active-code"),
+        )
+        used = RecoveryCodeCredential.objects.create(
+            game_account=account,
+            generation=2,
+            code_hash=make_password("used-code"),
+            state="used",
+            used_at=timezone.now(),
+        )
+        revoked = RecoveryCodeCredential.objects.create(
+            game_account=account,
+            generation=3,
+            code_hash=make_password("revoked-code"),
+            state="revoked",
+            revoked_at=timezone.now(),
+        )
+
+        retired_apps = migration_apps_at("0009_retire_recovery_codes")
+        RetiredCode = retired_apps.get_model("identity", "RecoveryCodeCredential")
+        assert list(RetiredCode.objects.order_by("generation").values_list("state", flat=True)) == [
+            "revoked",
+            "used",
+            "revoked",
+        ]
+        assert retired_apps.get_model("auth", "User").objects.filter(pk=user.pk).exists()
+        assert (
+            retired_apps.get_model("identity", "GameAccount").objects.filter(pk=account.pk).exists()
+        )
+        retired_at = RetiredCode.objects.get(pk=active.pk).revoked_at
+        assert retired_at is not None
+        assert RetiredCode.objects.get(pk=used.pk).used_at is not None
+        assert RetiredCode.objects.get(pk=revoked.pk).revoked_at is not None
+        with pytest.raises(IntegrityError), transaction.atomic():
+            RetiredCode.objects.create(
+                game_account_id=account.pk,
+                generation=4,
+                code_hash=make_password("new-active-code"),
+                state="active",
+            )
+
+        migration_apps_at("0008_security_notification_outbox")
+        reapplied_apps = migration_apps_at("0009_retire_recovery_codes")
+        ReappliedCode = reapplied_apps.get_model("identity", "RecoveryCodeCredential")
+        assert ReappliedCode.objects.get(pk=active.pk).state == "revoked"
+        assert ReappliedCode.objects.get(pk=active.pk).revoked_at == retired_at
+    finally:
+        migrate_identity_to("0009_retire_recovery_codes")
+
+
+def test_verification_migrations_round_trip_from_0003_to_0009() -> None:
     try:
         migrate_identity_to("0003_identity_immutability_guards")
         assert VERIFICATION_TABLES.isdisjoint(connection.introspection.table_names())
 
-        migrate_identity_to("0008_security_notification_outbox")
+        migrate_identity_to("0009_retire_recovery_codes")
         assert set(connection.introspection.table_names()) >= VERIFICATION_TABLES
         assert verification_guard_triggers() == VERIFICATION_GUARD_TRIGGERS
 
         migrate_identity_to("0003_identity_immutability_guards")
         assert VERIFICATION_TABLES.isdisjoint(connection.introspection.table_names())
     finally:
-        migrate_identity_to("0008_security_notification_outbox")
+        migrate_identity_to("0009_retire_recovery_codes")
 
     assert set(connection.introspection.table_names()) >= VERIFICATION_TABLES
     assert verification_guard_triggers() == VERIFICATION_GUARD_TRIGGERS

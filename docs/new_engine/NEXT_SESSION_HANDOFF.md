@@ -1,8 +1,8 @@
-# 下一会话交接：邮箱密码重置与即时认证撤销已完成，下一步 Issue #15
+# 下一会话交接：RecoveryCode 退役与认证原子切换已完成，下一步 Issue #16
 
 > 快照日期：2026-08-27。
 >
-> 本地交付基线：#14 功能提交 Git `638e8cf`，计划/交接同步提交 Git `28d6715`。当前 `main` 必须包含两者；本次会话未 push。
+> 本地交付基线：#14 功能提交 Git `638e8cf`，计划/交接同步提交 Git `28d6715`；#15 功能、测试、计划与本交接由本文件所在提交共同交付，精确 Git 由 Issue #15 关闭评论回填。当前 `main` 必须包含这些交付；本次会话未 push。
 >
 > 本文件是无会话记忆时的现行启动入口。它汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序；不创造需求、合同或正式状态。冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
 
@@ -22,10 +22,10 @@ git log -8 --decorate --oneline
 期望结果：
 
 - 分支是 `main`，工作树为空；若不为空，先辨认并保留已有修改。
-- `HEAD` 的历史必须包含 `638e8cf` 与 `28d6715`。快照时 `origin/main` 是 `5a36979304be7c91d8e9ce50c3873a79cf3291fd`；若远端尚未变化，预期为 behind 0 且存在未推送的本地领先提交。ahead 数量会随后续本地提交增长，不作为固定合同；若出现 behind 或历史不含上述提交，先审计提交来源。
+- `HEAD` 的历史必须包含 `638e8cf`、`28d6715` 与 Issue #15 关闭评论记录的交付提交。快照时 `origin/main` 是 `5a36979304be7c91d8e9ce50c3873a79cf3291fd`；若远端尚未变化，预期为 behind 0 且存在未推送的本地领先提交。ahead 数量会随后续本地提交增长，不作为固定合同；若出现 behind 或历史不含上述提交，先审计提交来源。
 - Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
 - GitHub 原生子票顺序为 #11–#16，阻塞链为 `#11 -> #12 -> #13 -> #14 -> #15 -> #16`。
-- #14 关闭后，唯一未认领 frontier 是 #15；不要提前进入 #16 或 Character Slice 2。
+- #15 关闭后，唯一未认领 frontier 是 #16；不要提前进入 Character Slice 2。
 
 若本机 PATH 找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`。当前已验证环境是 Windows 10 `10.0.19045`、仓库 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。
 
@@ -39,8 +39,9 @@ git log -8 --decorate --oneline
 - Issue #11 已把 V6、冻结合同、追踪、状态、差异、路线、tracer plan 和本交接统一到新认证权威；本票没有修改数据库、运行配置或业务行为。
 - Issue #12 已交付 registration-verification REST、应用层 crypto/lookup、PostgreSQL 持久合并限流、加密 outbox 与独立 worker。
 - Issue #13 已交付已验证邮箱最终注册与 H5：register 原子消费权威 challenge，创建 User、当前实例 GameAccount 和唯一 VerifiedContactMethod，保持零认证状态；跨 lookup key 轮换不会复活已替代旧码。
-- Issue #14 已由 Git `638e8cf` 交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知投递失败不回滚密码事务。identity 当前迁移叶节点是 `0008_security_notification_outbox`，安全通知 worker 入口是 `python manage.py process_security_notifications`。
-- #14 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 全量 231 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、mypy、Django check、migration drift、4 项认证合同与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
+- Issue #14 已由 Git `638e8cf` 交付邮箱密码重置、即时认证撤销、安全通知 outbox 与 H5：request 保持非枚举且只为合格身份产生 challenge/outbox，confirm 原子消费 challenge、更新密码并撤销 User 跨实例全部旧认证；成功不自动登录、不改变 GameAccount lifecycle，通知投递失败不回滚密码事务。该票交付时 identity 叶节点是 `0008_security_notification_outbox`，安全通知 worker 入口是 `python manage.py process_security_notifications`。
+- Issue #15 已交付 RecoveryCode 不可逆退役与认证基线受控切换：identity `0009_retire_recovery_codes` 撤销全部 active code、保留 User/GameAccount/历史行并禁止新增 active；旧 recover/rotate 不解析请求或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`；注册、重置、验证 worker 和安全通知 worker 共用 `NEW_MUD_AUTH_BASELINE_CUTOVER_ENABLED`，生产启动预检 keyring/current key IDs、worker、provider 与测试 bypass 禁区，普通密码登录不依赖验证基础设施。
+- #15 关闭基线已通过 `RUN_POSTGRES_TESTS=1` 串行全量 234 项、认证专项 63 项、生产启动/配置专项 8 项、Vue typecheck、Vitest 12 项、H5 build、Playwright 13 passed/8 skipped、Ruff、90 files format、mypy 90 source files、Django check、migration drift、`pip check`、npm critical audit 与 57,156 项 M0 合同；默认自动邮件测试保持零公网。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - Character Slice 2 被整个 Auth Baseline Amendment 阻塞；只有 Issue #16 完成后才能启动。
 
@@ -54,8 +55,8 @@ git log -8 --decorate --oneline
 | #12 | 已关闭；challenge、crypto、持久限流、outbox 与 worker 投递 tracer | #11 |
 | #13 | 已关闭；已验证邮箱最终注册与 H5 | #12 |
 | #14 | 已关闭；邮箱密码重置、即时认证撤销、安全通知与 H5 | #13 |
-| #15 | 当前 frontier；RecoveryCode 退役与原子切换 | #14 |
-| #16 | 分层证据、SMTP opt-in smoke 与双轴复审 | #15 |
+| #15 | 已关闭；RecoveryCode 退役与认证基线原子切换 | #14 |
+| #16 | 当前 frontier；分层证据、SMTP opt-in smoke 与双轴复审 | #15 |
 
 ## 3. 不得混用的状态
 
@@ -67,7 +68,7 @@ git log -8 --decorate --oneline
 | `AUTH-001`、`AUTH-002` | `verified` | Issue #9 的注册零隐式登录和会话生命周期历史证据仍成立 |
 | `AUTH-004` | `retired` | RecoveryCode + PresenceRecovery 的旧复合追踪项已拆开，ID 不复用 |
 | `IDENTITY-001` | `verified` | 每实例一个 User 永久映射一个 GameAccount 已由 Issue #9 验证 |
-| `AUTH-005` | `implemented` | #12–#14 已交付投递基础、最终注册、邮箱密码重置、即时认证撤销、安全通知与 H5；RecoveryCode 退役、受控切换与总证据仍待 #15–#16 |
+| `AUTH-005` | `implemented` | #12–#15 已交付投递基础、最终注册、邮箱密码重置、即时认证撤销、安全通知、RecoveryCode 退役、受控切换与 H5；分层总证据仍待 #16 |
 | `AUTH-006` | `specified` | PresenceRecovery 属于未来 Character Slice 2，takeover 仍独立 |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器、容量/soak 与发布级恢复证据未完成 |
 | `RELEASE-001` / PublicV1Gate | `blocked` | 尚不具备公开接纳真实玩家的发布证据 |
@@ -79,7 +80,7 @@ git log -8 --decorate --oneline
 - 登录仍只使用账号名和密码；邮箱、未来手机号不是登录名、passwordless 或 MFA。
 - 新注册必须先验证 email，最终事务创建 User、当前实例 GameAccount 与 VerifiedContactMethod，但创建零 AuthSession/token/Character/Presence。
 - password reset 只使用 purpose 隔离的短期 VerificationChallenge，成功后撤销 User 跨实例全部 AuthSession/family/credential，不改变 GameAccount lifecycle，也不自动登录。
-- #15 必须落地的冻结目标是停止 RecoveryCode 的签发、展示与消费，让旧 recover/rotate 统一返回 `410 RECOVERY_CODE_RETIRED`，并在 Public V1 前删除兼容路由。Git `638e8cf` 仍保留旧端点与既有 code，不能把目标合同误报为当前运行事实。
+- RecoveryCode 已停止签发、展示与消费，旧 recover/rotate 统一返回 `410 RECOVERY_CODE_RETIRED`；兼容路由仍须在 Public V1 前删除，该后续要求不得因 #15 关闭而丢失。
 - 完整联系方式只保存应用层密文；精确查询和唯一性只使用独立 keyed lookup digest；Django `User.email` 保持为空。
 - HTTP 不同步发送 SMTP。VerificationDeliveryOutbox 与独立 worker 负责验证码投递、同 code 重试、provider 接受后激活和 terminal payload 擦除；密码重置成功通知使用独立 SecurityNotificationOutbox，投递失败不回滚已提交的密码事务。
 - 格式有效的 request 返回非枚举 202；request 需要 `Idempotency-Key`，限流状态持久化到 PostgreSQL，并合并联系方式、IP 和匿名设备维度。
@@ -102,15 +103,15 @@ git log -8 --decorate --oneline
 - Character、CharacterOwnership、ConnectionSession、Presence、PresenceSnapshot、enter、resume、PresenceRecovery 与 takeover。
 - CAPTCHA provider、完整发布浏览器矩阵、容量/soak 或 PublicV1Gate 完成声明。
 
-## 7. Issue #15 的唯一合法启动顺序
+## 7. Issue #16 的唯一合法启动顺序
 
-1. 完成第 1 节仓库与 Issue 检查，确认 #14 已关闭、#15 无其他 open blocker 且未被他人认领。
-2. 阅读 Issue #10、#15、`CONTEXT.md`、ADR-0004 至 ADR-0008，以及 V6 第 8 章和 08/13/15/16 的认证修订段落。
-3. 认领 #15；按 `/implement` 内部逐条 `/tdd`，先确认公开 seam：RecoveryCode 数据迁移与两个旧 REST 端点、H5 遗留文案/卡片、认证功能开关、生产启动校验和回滚边界。
-4. 只实现 #15 的 RecoveryCode 退役与原子切换：迁移撤销所有 active code，旧 recover/rotate 统一返回 `410 RECOVERY_CODE_RETIRED`，停止全部新签发/展示/消费并移除 H5 遗留入口；验证注册、密码重置、worker readiness 与 provider circuit 必须由同一受控开关保持全开或全关。
-5. 普通账号名/密码登录在开关关闭、邮件 provider 或 worker 故障期间必须继续可用；回滚不得复活已撤销 code、已擦除 payload、旧密码或旧认证状态。不得实现 SMS、联系方式换绑、账号关闭/重开、Character、PresenceRecovery、takeover 或 #16 的发布级总证据。
-6. PostgreSQL 测试串行运行；默认测试零公网，不使用真实 SMTP 作为必需门禁。
-7. 完成受影响测试、H5 E2E、全量/静态门禁和 Standards + Spec 双轴复审后提交、回填并关闭 #15；随后 frontier 才是 #16，Character Slice 2 仍继续阻塞。
+1. 完成第 1 节仓库与 Issue 检查，确认 #15 已关闭、#16 无其他 open blocker 且未被他人认领。
+2. 阅读 Issue #10、#16、Issue #15 的关闭证据、`CONTEXT.md`、ADR-0004 至 ADR-0008，以及 V6 第 8 章和 08/13/15/16 的认证修订段落。
+3. 认领 #16；按 `/implement` 执行证据收口，不再新增认证运行能力。先固定 PostgreSQL、迁移、静态/类型、前端构建、H5 E2E、秘密扫描、故障矩阵和双轴审查的分层命令与证据路径。
+4. PostgreSQL 全量严格串行；分别记录可逆结构 forward/backward/forward 与 RecoveryCode 撤销不可逆边界。默认测试保持零公网，163 SMTP 只允许显式 opt-in、显式收件人和本地秘密注入的开发 smoke，且不是必做门禁。
+5. 同步 V6、ADR、领域词汇、08/13/15/16、17/18、差异账本、计划与本交接的实际结果；正式邮件 provider、受控域名、SPF/DKIM/DMARC、退信、配额、告警、完整浏览器/容量/恢复与试运行缺口必须继续保留。
+6. 不得新增 Character、Presence、PresenceRecovery、takeover、SMS、联系方式换绑或账号重开能力，也不得改写 Issue #9 历史或提升 PublicV1Gate。
+7. Standards 与 Spec 双轴审查无未解决硬 finding 后提交、回填并关闭 #16；随后才可把 frontier 交给 Character Slice 2。
 
 ## 8. 权威来源
 
@@ -124,7 +125,7 @@ git log -8 --decorate --oneline
 | 当前实现与验证结果 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
 | 实施顺序 | `docs/new_engine/10_ROADMAP.md`、`plans/m0-e1-tracer-bullets.md` |
 | 完整批准规格 | GitHub Issue #10 |
-| 当前 ticket | GitHub Issue #15 |
+| 当前 ticket | GitHub Issue #16 |
 
 ## 9. 工程与证据边界
 

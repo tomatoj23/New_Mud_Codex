@@ -5,6 +5,7 @@ import psycopg
 import pytest
 from channels.db import database_sync_to_async
 from channels.testing import HttpCommunicator, WebsocketCommunicator
+from django.core.exceptions import ImproperlyConfigured
 from django.db import connections
 from django.test import override_settings
 from django.urls import reverse
@@ -29,6 +30,31 @@ def test_liveness(client):
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "new-mud", "version": "1"}
+
+
+@pytest.mark.parametrize(
+    "failure_settings",
+    [
+        {"AUTH_VERIFICATION_WORKER_READY": False},
+        {"AUTH_VERIFICATION_PROVIDER_READY": False},
+        {"AUTH_CONTACT_LOOKUP_KEYS": {}},
+        {"AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND": True},
+        {
+            "AUTH_BASELINE_CUTOVER_ENABLED": False,
+            "AUTH_VERIFICATION_ALLOW_TEST_EMAIL_BACKEND": True,
+        },
+    ],
+)
+@override_settings(
+    AUTH_PRODUCTION_MODE=True,
+    AUTH_BASELINE_CUTOVER_ENABLED=True,
+    CONTENT_STARTUP_ENABLED=False,
+)
+def test_production_startup_rejects_incomplete_authentication_cutover(
+    failure_settings: dict[str, object],
+) -> None:
+    with override_settings(**failure_settings), pytest.raises(ImproperlyConfigured):
+        create_application()
 
 
 @pytest.mark.django_db(transaction=True)
