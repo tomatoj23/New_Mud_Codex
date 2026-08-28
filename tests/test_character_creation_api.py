@@ -6,7 +6,9 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
 
+from new_mud.apps.characters import services as character_services
 from new_mud.apps.characters.models import Character
+from new_mud.apps.content.registry import RegistryCatalog
 from new_mud.apps.content.runtime import ContentRuntimeStatus, get_content_runtime
 from new_mud.apps.identity.models import GameAccount
 from new_mud.apps.identity.services import login
@@ -160,6 +162,7 @@ def test_character_creation_rejects_client_supplied_initial_state_without_partia
         "侠\n客",
         "侠\u202e客",
         "侠😀客",
+        "\U0002ffff\U0002ffff",
         "１２３",
         "ＧＭ",
         "Ж侠",
@@ -291,6 +294,47 @@ def test_character_creation_replays_same_request_and_rejects_rebuild(client: Cli
     )
     assert rebuild.status_code == 409
     assert rebuild.json() == {"error": {"code": "CHARACTER_ALREADY_EXISTS"}}
+
+
+def test_character_creation_replay_survives_profile_becoming_inactive(
+    client: Client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    start_content()
+    authenticated_client(client, username="inactive_profile_replay_player")
+    payload = {
+        "creation_profile_key": "default-v1",
+        "creation_profile_version": "1.0.0",
+        "display_name": "旧谱客",
+        "gender": "unspecified",
+        "pronouns": "unspecified",
+    }
+
+    first = client.post(
+        reverse("character-list"),
+        payload,
+        content_type="application/json",
+        secure=True,
+        headers={"idempotency-key": "character-create-inactive-profile-replay"},
+    )
+    assert first.status_code == 201
+
+    inactive_catalog = RegistryCatalog.from_definitions(())
+    monkeypatch.setattr(
+        character_services,
+        "build_character_registry_catalog",
+        lambda: inactive_catalog,
+    )
+    replay = client.post(
+        reverse("character-list"),
+        payload,
+        content_type="application/json",
+        secure=True,
+        headers={"idempotency-key": "character-create-inactive-profile-replay"},
+    )
+
+    assert replay.status_code == 201
+    assert replay.json() == first.json()
 
 
 def test_invalid_profile_and_display_options_use_stable_profile_error(client: Client) -> None:

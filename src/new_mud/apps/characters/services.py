@@ -102,7 +102,7 @@ def list_selectable_character_creation_profiles(
 
 def _is_cjk(value: str) -> bool:
     codepoint = ord(value)
-    return (
+    return unicodedata.category(value) != "Cn" and (
         0x3400 <= codepoint <= 0x4DBF
         or 0x4E00 <= codepoint <= 0x9FFF
         or 0xF900 <= codepoint <= 0xFAFF
@@ -252,15 +252,6 @@ def create_character(
 ) -> dict[str, object]:
     if not isinstance(idempotency_key, str) or not IDEMPOTENCY_KEY.fullmatch(idempotency_key):
         raise CharacterCreationUnavailable
-    profile = _creation_profile(key=creation_profile_key, version=creation_profile_version)
-    normalized_display_name = normalize_character_display_name(display_name)
-    if (
-        not isinstance(gender, str)
-        or gender not in profile.declaration["gender_options"]
-        or not isinstance(pronouns, str)
-        or pronouns not in profile.declaration["pronoun_options"]
-    ):
-        raise CharacterProfileInvalid
     request_payload = {
         "creation_profile_key": creation_profile_key,
         "creation_profile_version": creation_profile_version,
@@ -290,6 +281,15 @@ def create_character(
                 return dict(existing_request.response_json)
             if CharacterOwnership.objects.filter(game_account=account).exists():
                 raise CharacterAlreadyExists
+            profile = _creation_profile(key=creation_profile_key, version=creation_profile_version)
+            normalized_display_name = normalize_character_display_name(display_name)
+            if (
+                not isinstance(gender, str)
+                or gender not in profile.declaration["gender_options"]
+                or not isinstance(pronouns, str)
+                or pronouns not in profile.declaration["pronoun_options"]
+            ):
+                raise CharacterProfileInvalid
             try:
                 release_head = ContentReleaseHead.objects.select_for_update().get(
                     instance_id=settings.CONTENT_INSTANCE_ID,
