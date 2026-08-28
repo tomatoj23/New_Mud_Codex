@@ -59,40 +59,16 @@ export function createCharacterStore(
         try {
           const result = await api.createCharacter(accessToken, input, this.pendingCreationKey);
           this.character = result;
-          const alreadyInRoster = this.roster.some(
-            (character) => character.character_id === result.character_id,
-          );
-          if (!alreadyInRoster) {
-            this.roster.push({
-              character_id: result.character_id,
-              display_name: result.display_name,
-              gender: result.gender,
-              pronouns: result.pronouns,
-              lifecycle: "active",
-            });
-          }
-          if (this.creationCapacity !== null) {
-            const used = Math.max(
-              this.roster.length,
-              this.creationCapacity.used + (alreadyInRoster ? 0 : 1),
-            );
-            this.creationCapacity = {
-              ...this.creationCapacity,
-              used,
-              remaining: Math.max(0, this.creationCapacity.limit - used),
-            };
-          }
+          await this.loadRoster(accessToken);
           this.clearPendingCreation();
           return result;
         } catch (error) {
           if (error instanceof CharacterApiError && error.status !== 0) {
             if (error.code === "CHARACTER_ALREADY_EXISTS") {
-              if (this.creationCapacity !== null) {
-                this.creationCapacity = {
-                  ...this.creationCapacity,
-                  used: this.creationCapacity.limit,
-                  remaining: 0,
-                };
+              try {
+                await this.loadRoster(accessToken);
+              } catch {
+                // Preserve the stable creation error when the follow-up read is unavailable.
               }
             }
             this.clearPendingCreation();

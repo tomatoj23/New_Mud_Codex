@@ -15,11 +15,14 @@ export interface CharacterCreationInput {
   pronouns: string;
 }
 
-export interface CharacterCreationResult {
+export interface CharacterSummary {
   character_id: string;
   display_name: string;
   gender: string;
   pronouns: string;
+}
+
+export interface CharacterCreationResult extends CharacterSummary {
   creation_profile: {
     key: string;
     version: string;
@@ -34,11 +37,7 @@ export interface CharacterCreationResult {
   };
 }
 
-export interface CharacterRosterEntry {
-  character_id: string;
-  display_name: string;
-  gender: string;
-  pronouns: string;
+export interface CharacterRosterEntry extends CharacterSummary {
   lifecycle: "active" | "retired";
 }
 

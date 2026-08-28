@@ -55,6 +55,19 @@ const emptyRoster: CharacterRoster = {
   creation_capacity: { limit: 1, used: 0, remaining: 1 },
 };
 
+const createdRoster: CharacterRoster = {
+  characters: [
+    {
+      character_id: creationResult.character_id,
+      display_name: creationResult.display_name,
+      gender: creationResult.gender,
+      pronouns: creationResult.pronouns,
+      lifecycle: "active",
+    },
+  ],
+  creation_capacity: { limit: 1, used: 1, remaining: 0 },
+};
+
 
 describe("characterStore", () => {
   beforeEach(() => {
@@ -64,7 +77,10 @@ describe("characterStore", () => {
   it("loads selectable profiles and keeps only the server creation result", async () => {
     const api: CharacterApi = {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
-      listCharacters: vi.fn().mockResolvedValue(emptyRoster),
+      listCharacters: vi
+        .fn()
+        .mockResolvedValueOnce(emptyRoster)
+        .mockResolvedValueOnce(createdRoster),
       createCharacter: vi.fn().mockResolvedValue(creationResult),
     };
     const store = createCharacterStore(api, () => "character-request-1")();
@@ -75,7 +91,9 @@ describe("characterStore", () => {
     await store.createCharacter("access-token", creationInput);
 
     expect(api.listProfiles).toHaveBeenCalledWith("access-token");
-    expect(api.listCharacters).toHaveBeenCalledWith("access-token");
+    expect(api.listCharacters).toHaveBeenCalledTimes(2);
+    expect(api.listCharacters).toHaveBeenNthCalledWith(1, "access-token");
+    expect(api.listCharacters).toHaveBeenNthCalledWith(2, "access-token");
     expect(api.createCharacter).toHaveBeenCalledWith(
       "access-token",
       creationInput,
@@ -83,16 +101,8 @@ describe("characterStore", () => {
     );
     expect(store.profiles).toEqual([profile]);
     expect(store.character).toEqual(creationResult);
-    expect(store.roster).toEqual([
-      {
-        character_id: creationResult.character_id,
-        display_name: creationResult.display_name,
-        gender: creationResult.gender,
-        pronouns: creationResult.pronouns,
-        lifecycle: "active",
-      },
-    ]);
-    expect(store.creationCapacity).toEqual({ limit: 1, used: 1, remaining: 0 });
+    expect(store.roster).toEqual(createdRoster.characters);
+    expect(store.creationCapacity).toEqual(createdRoster.creation_capacity);
     expect(store.canCreate).toBe(false);
     expect(JSON.stringify(store.$state)).not.toContain("access-token");
   });
@@ -104,7 +114,7 @@ describe("characterStore", () => {
       .mockResolvedValueOnce(creationResult);
     const api: CharacterApi = {
       listProfiles: vi.fn(),
-      listCharacters: vi.fn(),
+      listCharacters: vi.fn().mockResolvedValue(createdRoster),
       createCharacter: createRequest,
     };
     const keyFactory = vi
@@ -124,6 +134,43 @@ describe("characterStore", () => {
     expect(createRequest.mock.calls[0][2]).toBe("character-request-retry");
     expect(createRequest.mock.calls[1][2]).toBe("character-request-retry");
     expect(keyFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it("reloads authoritative roster after a duplicate creation response", async () => {
+    const duplicateError = new CharacterApiError("CHARACTER_ALREADY_EXISTS", 409);
+    const api: CharacterApi = {
+      listProfiles: vi.fn(),
+      listCharacters: vi.fn().mockResolvedValue(createdRoster),
+      createCharacter: vi.fn().mockRejectedValue(duplicateError),
+    };
+    const store = createCharacterStore(api, () => "character-request-duplicate")();
+
+    await expect(store.createCharacter("access-token", creationInput)).rejects.toBe(
+      duplicateError,
+    );
+
+    expect(api.listCharacters).toHaveBeenCalledTimes(1);
+    expect(store.roster).toEqual(createdRoster.characters);
+    expect(store.creationCapacity).toEqual(createdRoster.creation_capacity);
+    expect(store.canCreate).toBe(false);
+  });
+
+  it("preserves a duplicate error when the authoritative roster refresh fails", async () => {
+    const duplicateError = new CharacterApiError("CHARACTER_ALREADY_EXISTS", 409);
+    const rosterError = new CharacterApiError("CHARACTER_REQUEST_FAILED", 503);
+    const api: CharacterApi = {
+      listProfiles: vi.fn(),
+      listCharacters: vi.fn().mockRejectedValue(rosterError),
+      createCharacter: vi.fn().mockRejectedValue(duplicateError),
+    };
+    const store = createCharacterStore(api, () => "character-request-duplicate-refresh")();
+
+    await expect(store.createCharacter("access-token", creationInput)).rejects.toBe(
+      duplicateError,
+    );
+
+    expect(store.pendingCreationHash).toBeNull();
+    expect(store.pendingCreationKey).toBeNull();
   });
 
   it("keeps active profiles independent from an exhausted account capacity", async () => {
