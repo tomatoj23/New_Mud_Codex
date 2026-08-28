@@ -356,6 +356,15 @@ class RegistryCatalog:
                 "help",
             ),
             "behavior_profile": ("entity_kinds",),
+            "character_creation_profile": (
+                "display_name",
+                "gender_options",
+                "pronoun_options",
+                "initial_state_schema_version",
+                "initial_state",
+                "start_room_ref",
+                "source_ref",
+            ),
             "effect_type": (
                 "payload_schema",
                 "stacking_policy",
@@ -470,6 +479,54 @@ class RegistryCatalog:
                     code=RegistryErrorsRegistry.REGISTRY_SCHEMA_INVALID,
                     message="behavior_profile entity_kinds must be a string array",
                 )
+        if definition.registry_kind == "character_creation_profile":
+            declaration = definition.declaration
+            gender_options = declaration.get("gender_options")
+            pronoun_options = declaration.get("pronoun_options")
+            initial_state = declaration.get("initial_state")
+            start_room_ref = declaration.get("start_room_ref")
+            if (
+                not isinstance(declaration.get("display_name"), str)
+                or not declaration["display_name"]
+                or not isinstance(gender_options, list)
+                or not gender_options
+                or not all(isinstance(value, str) and value for value in gender_options)
+                or len(set(gender_options)) != len(gender_options)
+                or "unspecified" not in gender_options
+                or not isinstance(pronoun_options, list)
+                or not pronoun_options
+                or not all(isinstance(value, str) and value for value in pronoun_options)
+                or len(set(pronoun_options)) != len(pronoun_options)
+                or "unspecified" not in pronoun_options
+            ):
+                raise RegistryError(
+                    code=RegistryErrorsRegistry.REGISTRY_SCHEMA_INVALID,
+                    message="character creation profile display options are invalid",
+                )
+            if (
+                declaration.get("initial_state_schema_version") != "character-initial-state/1"
+                or not isinstance(initial_state, Mapping)
+                or set(initial_state) != {"stats", "resources", "skill_grants", "item_grants"}
+                or not isinstance(initial_state.get("stats"), Mapping)
+                or not isinstance(initial_state.get("resources"), Mapping)
+                or not isinstance(initial_state.get("skill_grants"), list)
+                or not isinstance(initial_state.get("item_grants"), list)
+            ):
+                raise RegistryError(
+                    code=RegistryErrorsRegistry.REGISTRY_SCHEMA_INVALID,
+                    message="character creation profile initial state is invalid",
+                )
+            if (
+                not isinstance(start_room_ref, Mapping)
+                or set(start_room_ref) != {"blueprint_key", "expected_kind"}
+                or not isinstance(start_room_ref.get("blueprint_key"), str)
+                or start_room_ref.get("expected_kind") != "room"
+                or not isinstance(declaration.get("source_ref"), Mapping)
+            ):
+                raise RegistryError(
+                    code=RegistryErrorsRegistry.REGISTRY_SCHEMA_INVALID,
+                    message="character creation profile source references are invalid",
+                )
 
     @property
     def definitions(self) -> tuple[RegistryDefinition, ...]:
@@ -481,6 +538,18 @@ class RegistryCatalog:
                     definition.registry_key,
                     definition.registry_version,
                 ),
+            )
+        )
+
+    def active_definitions(self, registry_kind: str) -> tuple[RegistryDefinition, ...]:
+        return tuple(
+            sorted(
+                (
+                    definition
+                    for (kind, _key), definition in self._active.items()
+                    if kind == registry_kind
+                ),
+                key=lambda definition: definition.registry_key,
             )
         )
 

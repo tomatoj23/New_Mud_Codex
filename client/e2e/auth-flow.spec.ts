@@ -274,6 +274,45 @@ test("stable machine errors become explicit user-facing states", async ({ page }
   await expect(error).toContainText("AUTH_CREDENTIALS_INVALID");
 });
 
+test("authenticated player creates one versioned character and sees the result", async ({
+  page,
+}, testInfo) => {
+  const project = testInfo.project.name.replace(/\W/g, "_").slice(0, 8);
+  const username = `e1_char_${project}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  const password = "safe-e2e-character-passphrase-42";
+  await registerAndLogin(page, username, password);
+
+  const profile = page.getByTestId("character-profile");
+  await expect(profile).toContainText("江湖新秀");
+  const submittedName = `Ａ${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  await nativeInput(page, "character-display-name").fill(submittedName);
+  await page.getByTestId("character-gender").selectOption("female");
+  await page.getByTestId("character-pronouns").selectOption("she");
+
+  const requestPromise = page.waitForRequest("**/api/v1/characters");
+  await page.getByTestId("create-character").click();
+  const request = await requestPromise;
+  expect(request.headers()["idempotency-key"]).toMatch(/^character-[0-9a-f-]{36}$/);
+  expect(request.postDataJSON()).toEqual({
+    creation_profile_key: "default-v1",
+    creation_profile_version: "1.0.0",
+    display_name: submittedName,
+    gender: "female",
+    pronouns: "she",
+  });
+
+  const result = page.getByTestId("character-result");
+  await expect(result).toContainText(submittedName.normalize("NFKC"));
+  await expect(result).toContainText("江湖新秀");
+  await expect(page.getByTestId("character-create-form")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /改名|删除|重建/ })).toHaveCount(0);
+
+  await page.getByTestId("logout").click();
+  await login(page, username, password);
+  await expect(page.getByTestId("character-existing")).toContainText("当前账号已有角色");
+  await expect(page.getByTestId("character-create-form")).toHaveCount(0);
+});
+
 test("minimum 360 by 640 CSS viewport remains a no-overflow guard", async ({
   page,
 }, testInfo) => {

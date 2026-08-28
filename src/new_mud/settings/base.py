@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "new_mud.apps.health",
     "new_mud.apps.content",
     "new_mud.apps.identity",
+    "new_mud.apps.characters",
 ]
 
 MIDDLEWARE = [

@@ -29,7 +29,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -39,7 +40,8 @@ button {
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid #e1b761;
   outline-offset: 3px;
 }
@@ -197,7 +199,8 @@ label {
   font-size: 0.9rem;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 52px;
   padding: 0 16px;
@@ -209,6 +212,18 @@ input {
 
 input::placeholder {
   color: #747d78;
+}
+
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #d9a95c 50%),
+    linear-gradient(135deg, #d9a95c 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 22px,
+    calc(100% - 12px) 22px;
+  background-repeat: no-repeat;
+  background-size: 6px 6px;
 }
 
 .text-action {
@@ -283,6 +298,51 @@ button:disabled {
   border: 1px solid #68776f;
   color: #eee7d9;
   background: transparent;
+}
+
+.character-panel {
+  margin-top: 28px;
+  padding-top: 28px;
+  border-top: 1px solid #39443f;
+}
+
+.character-panel h3 {
+  margin: 0 0 20px;
+  font-size: 1.6rem;
+  font-weight: 500;
+}
+
+.profile-card,
+.character-result {
+  padding: 18px;
+  border: 1px solid #4a5751;
+  background: #101613;
+}
+
+.profile-card {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-card span,
+.character-result p {
+  margin: 0;
+  color: #aaa99f;
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 0.84rem;
+  line-height: 1.7;
+}
+
+.character-result {
+  display: grid;
+  gap: 8px;
+  border-left: 3px solid #d9a95c;
+}
+
+.character-result .character-name {
+  color: #fff1c7;
+  font-family: inherit;
+  font-size: 1.35rem;
 }
 
 .error-message {
