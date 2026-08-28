@@ -97,9 +97,12 @@ function handleCharacterBusy(value: boolean) {
   busy.value = value;
 }
 
-async function loadCharacterProfiles() {
+async function loadCharacterWorkspace() {
   if (auth.accessToken === null) return;
-  const profiles = await characters.loadProfiles(auth.accessToken);
+  await Promise.all([
+    characters.loadProfiles(auth.accessToken),
+    characters.loadRoster(auth.accessToken),
+  ]);
 }
 
 async function requestVerificationCode() {
@@ -174,7 +177,7 @@ async function submit() {
     } else {
       characters.clearCharacterState();
       await auth.login(username.value, password.value);
-      await loadCharacterProfiles();
+      await loadCharacterWorkspace();
       announcement.value = "登录成功。认证会话已建立。";
     }
   } catch (error) {
@@ -218,7 +221,7 @@ onMounted(async () => {
   busy.value = true;
   try {
     if (await auth.retryPendingRefresh()) {
-      await loadCharacterProfiles();
+      await loadCharacterWorkspace();
       announcement.value = "未确认的会话刷新已安全重试。";
     }
   } catch (error) {

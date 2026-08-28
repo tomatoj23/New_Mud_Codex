@@ -194,7 +194,7 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 - registration-verification request、register、login、refresh、logout、password-reset request/confirm 的精确路径、跨源拒绝、no-store 与 refresh Cookie 强制属性测试
 - 发码 request 使用 `Idempotency-Key`、只手动重发，并对未知/占用/不可恢复地址显示同一 accepted 文案；客户端不轮询投递状态
 - 注册成功后无 token、Cookie 或 AuthSession，且不显示或持久化 RecoveryCode；重复账号名、联系方式占用、验证码与密码策略失败只返回稳定错误码
-- 角色创建覆盖 profile 版本、NFKC 名称策略、名称占用的统一错误、幂等重试、RetiredCharacter 不可自助重建及账号最多一个 Character
+- 角色创建覆盖 profile 版本、独立 roster/creation capacity、NFKC 名称策略、名称占用的统一错误、幂等重试、RetiredCharacter 不可自助重建及账号最多一个 Character
 - 邮箱密码重置成功后返回普通登录入口、不自动登录；旧 access/refresh 立即失败，通知投递失败不把 UI 伪装成密码事务失败
 - PlayerBlock、ChannelMute、消息举报、一次申诉、GM 处罚时限和系统/安全/GM 通知不可屏蔽的端到端测试
 - logout 覆盖损坏 Cookie + 有效 access、Cookie/Bearer 指向不同会话和零 locator 三种路径；客户端始终完成本地清理
@@ -209,7 +209,7 @@ M0 的 browser matrix 先从官方版本源冻结精确 `target_versions`，用�
 
 H5 注册先调用 `POST /api/v1/auth/registration-verification/request`，显示非枚举 accepted 文案与 60 秒手动重发倒计时，再提交邮箱、验证码、账号名和密码；成功后显示“注册成功，请登录”。“忘记密码”调用 `POST /api/v1/auth/password-reset/request` 与 `POST /api/v1/auth/password-reset/confirm`，成功后返回普通登录入口。界面只使用“注册”“登录”“邮箱验证码”“忘记密码”等用户语言，不展示“独立登录”、RecoveryCode、challenge identity、投递状态或内部恢复术语。
 
-Public V1 H5 还必须提供 PlayerBlock / ChannelMute、消息举报和统一支持入口；举报提交只携带不可变消息 ID，服务器负责取证上下文。角色创建页先调用 `GET /api/v1/character-creation-profiles` 获取当前 profile identity 与展示选项，再调用 `POST /api/v1/characters`，显式提交 `creation_profile_key / creation_profile_version`、`display_name`、展示性别和代词，并展示稳定策略错误；不得缓存或自行构造内部初始状态，同一 GameAccount 已有 Character 时不得显示可重建入口。账号关闭/重开与联系方式换绑页面由后续独立规格定义；当前修订不创建这些页面，也不自动恢复旧 Presence。UI 与内容为简体中文，Unicode 输入与显示完整支持；没有支付、订阅、付费 Item 或真实货币界面。
+Public V1 H5 还必须提供 PlayerBlock / ChannelMute、消息举报和统一支持入口；举报提交只携带不可变消息 ID，服务器负责取证上下文。角色创建页分别调用 `GET /api/v1/character-creation-profiles` 获取当前 profile identity 与展示选项、调用 `GET /api/v1/characters` 获取账号 roster 与服务端 creation capacity，再调用 `POST /api/v1/characters`，显式提交 `creation_profile_key / creation_profile_version`、`display_name`、展示性别和代词，并展示稳定策略错误。客户端不得用 profile 空集推断已有角色或容量耗尽，只按 `creation_capacity.remaining` 决定是否显示创建表单；因此未来容量大于一时可以同时展示已有 roster 与继续创建入口。客户端不得缓存或自行构造内部初始状态，容量耗尽时不得显示可重建入口。账号关闭/重开与联系方式换绑页面由后续独立规格定义；当前修订不创建这些页面，也不自动恢复旧 Presence。UI 与内容为简体中文，Unicode 输入与显示完整支持；没有支付、订阅、付费 Item 或真实货币界面。
 
 H5 的全局导航必须提供公开 status 入口，展示服务端提供的当前健康摘要、计划维护窗口、drain 状态、活动 incident 与最后更新时间，不能由客户端自行推断服务健康。`system.maintenance` 与 `SystemNotice` 必须在 PC / 移动端一致显示；进入 drain 后客户端停止发起新的 enter 和 IC action、保留已提交请求的终结处理，并按服务器指令完成离场 / 重连。紧急 incident 更新和恢复通知必须可在未进入 Presence 时读取，且不得被 PlayerBlock 或 ChannelMute 屏蔽。
 

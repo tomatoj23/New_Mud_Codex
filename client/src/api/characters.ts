@@ -34,8 +34,28 @@ export interface CharacterCreationResult {
   };
 }
 
+export interface CharacterRosterEntry {
+  character_id: string;
+  display_name: string;
+  gender: string;
+  pronouns: string;
+  lifecycle: "active" | "retired";
+}
+
+export interface CharacterCreationCapacity {
+  limit: number;
+  used: number;
+  remaining: number;
+}
+
+export interface CharacterRoster {
+  characters: CharacterRosterEntry[];
+  creation_capacity: CharacterCreationCapacity;
+}
+
 export interface CharacterApi {
   listProfiles(accessToken: string): Promise<{ profiles: CharacterCreationProfile[] }>;
+  listCharacters(accessToken: string): Promise<CharacterRoster>;
   createCharacter(
     accessToken: string,
     input: CharacterCreationInput,
@@ -93,6 +113,9 @@ export const characterApi: CharacterApi = {
       "/api/v1/character-creation-profiles",
       accessToken,
     );
+  },
+  listCharacters(accessToken) {
+    return characterRequest<CharacterRoster>("/api/v1/characters", accessToken);
   },
   createCharacter(accessToken, input, idempotencyKey) {
     return characterRequest<CharacterCreationResult>("/api/v1/characters", accessToken, {

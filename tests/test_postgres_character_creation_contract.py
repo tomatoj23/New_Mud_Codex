@@ -16,7 +16,7 @@ from new_mud.apps.characters.models import (
     CharacterOwnership,
 )
 from new_mud.apps.characters.services import (
-    CharacterAlreadyExists,
+    CharacterCreationLimitReached,
     CharacterCreationUnavailable,
     CharacterDisplayNameInvalid,
     create_character,
@@ -88,7 +88,7 @@ def create_character_from_thread(
             pronouns="unspecified",
         )
         return "created", result
-    except CharacterAlreadyExists:
+    except CharacterCreationLimitReached:
         return "already-exists", None
     except CharacterDisplayNameInvalid:
         return "display-name-invalid", None

@@ -266,10 +266,13 @@ refresh 对外只使用 `REFRESH_IDEMPOTENCY_KEY_INVALID`、`REFRESH_IDEMPOTENCY
 
 ```text
 GET  /api/v1/character-creation-profiles
+GET  /api/v1/characters
 POST /api/v1/characters
 ```
 
-`GET` 只返回当前可选择的 profile identity、玩家可见名称以及 gender/pronoun 选项：`key / version / definition_hash / display_name / gender_options / pronoun_options`。它不得返回内部初始 stats、资源、技能、物品授予或来源材料。Profile 的 schema、SemVer、definition hash、兼容目录、内容批次固定和不可变创建记录以 `12_REGISTRY_BLUEPRINT_CONTRACT.md` 5.15 节为准。
+profile `GET` 只返回当前可选择的 profile identity、玩家可见名称以及 gender/pronoun 选项：`key / version / definition_hash / display_name / gender_options / pronoun_options`。它不得返回内部初始 stats、资源、技能、物品授予或来源材料，也不得根据当前 GameAccount 已有 Character 数量过滤 profile；profile 可用性属于内容目录，不承载账号容量状态。Profile 的 schema、SemVer、definition hash、兼容目录、内容批次固定和不可变创建记录以 `12_REGISTRY_BLUEPRINT_CONTRACT.md` 5.15 节为准。
+
+characters `GET` 独立返回当前 GameAccount 的 Character roster，以及服务端计算的 `creation_capacity.limit / used / remaining`。首发 `limit = 1`，`active` 与 `retired` Character 都占用该容量；客户端只按 `remaining` 决定是否显示创建表单。未来一账号多角色必须通过显式 CharacterOwnership 数据库迁移与容量策略变更放宽，不能修改 profile 列表语义或只改客户端。
 
 请求必须携带合法的 `Idempotency-Key`，并包含：
 

@@ -4,9 +4,11 @@ import {
   CharacterApiError,
   characterApi,
   type CharacterApi,
+  type CharacterCreationCapacity,
   type CharacterCreationInput,
   type CharacterCreationProfile,
   type CharacterCreationResult,
+  type CharacterRosterEntry,
 } from "../api/characters";
 
 
@@ -27,17 +29,26 @@ export function createCharacterStore(
   return defineStore("characters", {
     state: () => ({
       profiles: [] as CharacterCreationProfile[],
+      roster: [] as CharacterRosterEntry[],
+      creationCapacity: null as CharacterCreationCapacity | null,
       character: null as CharacterCreationResult | null,
-      creationBlocked: false,
       pendingCreationHash: null as string | null,
       pendingCreationKey: null as string | null,
     }),
+    getters: {
+      canCreate: (state) => (state.creationCapacity?.remaining ?? 0) > 0,
+    },
     actions: {
       async loadProfiles(accessToken: string) {
         const result = await api.listProfiles(accessToken);
         this.profiles = result.profiles;
-        this.creationBlocked = result.profiles.length === 0;
         return result.profiles;
+      },
+      async loadRoster(accessToken: string) {
+        const result = await api.listCharacters(accessToken);
+        this.roster = result.characters;
+        this.creationCapacity = result.creation_capacity;
+        return result;
       },
       async createCharacter(accessToken: string, input: CharacterCreationInput) {
         const inputHash = canonicalInput(input);
@@ -48,13 +59,41 @@ export function createCharacterStore(
         try {
           const result = await api.createCharacter(accessToken, input, this.pendingCreationKey);
           this.character = result;
-          this.creationBlocked = true;
+          const alreadyInRoster = this.roster.some(
+            (character) => character.character_id === result.character_id,
+          );
+          if (!alreadyInRoster) {
+            this.roster.push({
+              character_id: result.character_id,
+              display_name: result.display_name,
+              gender: result.gender,
+              pronouns: result.pronouns,
+              lifecycle: "active",
+            });
+          }
+          if (this.creationCapacity !== null) {
+            const used = Math.max(
+              this.roster.length,
+              this.creationCapacity.used + (alreadyInRoster ? 0 : 1),
+            );
+            this.creationCapacity = {
+              ...this.creationCapacity,
+              used,
+              remaining: Math.max(0, this.creationCapacity.limit - used),
+            };
+          }
           this.clearPendingCreation();
           return result;
         } catch (error) {
           if (error instanceof CharacterApiError && error.status !== 0) {
             if (error.code === "CHARACTER_ALREADY_EXISTS") {
-              this.creationBlocked = true;
+              if (this.creationCapacity !== null) {
+                this.creationCapacity = {
+                  ...this.creationCapacity,
+                  used: this.creationCapacity.limit,
+                  remaining: 0,
+                };
+              }
             }
             this.clearPendingCreation();
           }
@@ -67,8 +106,9 @@ export function createCharacterStore(
       },
       clearCharacterState() {
         this.profiles = [];
+        this.roster = [];
+        this.creationCapacity = null;
         this.character = null;
-        this.creationBlocked = false;
         this.clearPendingCreation();
       },
     },

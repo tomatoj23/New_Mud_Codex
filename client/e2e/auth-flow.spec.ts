@@ -308,7 +308,9 @@ test("authenticated player creates one versioned character and sees the result",
   await expect(page.getByRole("button", { name: /改名|删除|重建/ })).toHaveCount(0);
 
   await page.getByTestId("logout").click();
+  const profilesAfterRelogin = page.waitForResponse("**/api/v1/character-creation-profiles");
   await login(page, username, password);
+  expect(((await (await profilesAfterRelogin).json()) as { profiles: unknown[] }).profiles).toHaveLength(1);
   await expect(page.getByTestId("character-existing")).toContainText("当前账号已有角色");
   await expect(page.getByTestId("character-create-form")).toHaveCount(0);
 });

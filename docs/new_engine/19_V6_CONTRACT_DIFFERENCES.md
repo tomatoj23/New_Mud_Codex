@@ -21,7 +21,7 @@
 | Access Token 必须解析到 `active` AuthSession | 08、13、16、ADR-0008 | 密码重置提交后旧 access/refresh 跨实例立即失效，注册与重置均不自动登录 |
 | ADR-0005 取代 ADR-0004 的 RecoveryCode 决策 | CONTEXT、ADR-0004 至 0008、17 | RecoveryCode 只保留历史 provenance；PresenceRecovery、账号重新启用与 takeover 继续是独立概念和后续切片 |
 | `presence.recover` | 11、13、15、16 | 同 AuthSession 恢复自身 active/grace PresenceSnapshot 租约并创建新一代运行时 Presence，递增 generation、旋转 ticket；跨会话仍需 takeover |
-| CharacterCreationProfile / CharacterDisplayName / RetiredCharacter | 04、08、12、15 | typed-registry profile definition、精确版本/hash、内容批次与起始 revision 固定、`GET /api/v1/character-creation-profiles`、`POST /api/v1/characters`、NFKC 名称规则、展示性别、幂等创建、GM 审计和不可自助重建 |
+| CharacterCreationProfile / CharacterDisplayName / RetiredCharacter | 04、08、12、15 | typed-registry profile definition、精确版本/hash、内容批次与起始 revision 固定、独立的 profile 目录与 Character roster/creation capacity、`GET /api/v1/character-creation-profiles`、`GET/POST /api/v1/characters`、NFKC 名称规则、展示性别、幂等创建、GM 审计和不可自助重建 |
 
 ## 世界、战斗与物品
 

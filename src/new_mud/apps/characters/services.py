@@ -26,6 +26,7 @@ from .models import (
 )
 
 IDEMPOTENCY_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+SELF_SERVICE_CHARACTER_LIMIT = 1
 RESERVED_DISPLAY_NAMES = frozenset(
     {
         "admin",
@@ -51,7 +52,7 @@ class CharacterDisplayNameInvalid(Exception):
     pass
 
 
-class CharacterAlreadyExists(Exception):
+class CharacterCreationLimitReached(Exception):
     pass
 
 
@@ -79,11 +80,42 @@ class SelectableCharacterCreationProfile:
         }
 
 
-def list_selectable_character_creation_profiles(
-    *, game_account_id: uuid.UUID
-) -> tuple[SelectableCharacterCreationProfile, ...]:
-    if CharacterOwnership.objects.filter(game_account_id=game_account_id).exists():
-        return ()
+@dataclass(frozen=True, slots=True)
+class CharacterRosterEntry:
+    character_id: uuid.UUID
+    display_name: str
+    gender: str
+    pronouns: str
+    lifecycle: str
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "character_id": str(self.character_id),
+            "display_name": self.display_name,
+            "gender": self.gender,
+            "pronouns": self.pronouns,
+            "lifecycle": self.lifecycle,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CharacterRoster:
+    characters: tuple[CharacterRosterEntry, ...]
+    limit: int
+
+    def as_payload(self) -> dict[str, object]:
+        used = len(self.characters)
+        return {
+            "characters": [character.as_payload() for character in self.characters],
+            "creation_capacity": {
+                "limit": self.limit,
+                "used": used,
+                "remaining": max(0, self.limit - used),
+            },
+        }
+
+
+def list_active_character_creation_profiles() -> tuple[SelectableCharacterCreationProfile, ...]:
     definitions = build_character_registry_catalog().active_definitions(
         "character_creation_profile"
     )
@@ -98,6 +130,23 @@ def list_selectable_character_creation_profiles(
         )
         for definition in definitions
     )
+
+
+def get_character_roster(*, game_account_id: uuid.UUID) -> CharacterRoster:
+    ownerships = CharacterOwnership.objects.select_related("character").filter(
+        game_account_id=game_account_id
+    )
+    characters = tuple(
+        CharacterRosterEntry(
+            character_id=ownership.character_id,
+            display_name=ownership.character.display_name,
+            gender=ownership.character.gender,
+            pronouns=ownership.character.pronouns,
+            lifecycle=ownership.character.lifecycle,
+        )
+        for ownership in ownerships.order_by("created_at", "ownership_id")
+    )
+    return CharacterRoster(characters=characters, limit=SELF_SERVICE_CHARACTER_LIMIT)
 
 
 def _is_cjk(value: str) -> bool:
@@ -279,8 +328,9 @@ def create_character(
                 if existing_request.canonical_request_hash != request_hash:
                     raise CharacterCreationUnavailable
                 return dict(existing_request.response_json)
-            if CharacterOwnership.objects.filter(game_account=account).exists():
-                raise CharacterAlreadyExists
+            owned_character_count = CharacterOwnership.objects.filter(game_account=account).count()
+            if owned_character_count >= SELF_SERVICE_CHARACTER_LIMIT:
+                raise CharacterCreationLimitReached
             profile = _creation_profile(key=creation_profile_key, version=creation_profile_version)
             normalized_display_name = normalize_character_display_name(display_name)
             if (
@@ -356,7 +406,7 @@ def create_character(
             "characters_game_account_one_character_uniq",
             "characters_characterownership_character_id_key",
         }:
-            raise CharacterAlreadyExists from error
+            raise CharacterCreationLimitReached from error
         raise CharacterCreationUnavailable from error
     except DatabaseError as error:
         raise CharacterCreationUnavailable from error

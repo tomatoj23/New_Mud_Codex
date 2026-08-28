@@ -7,12 +7,13 @@ from rest_framework.response import Response
 from new_mud.apps.identity.services import AuthenticationFailed, resolve_active_auth_session
 
 from .services import (
-    CharacterAlreadyExists,
+    CharacterCreationLimitReached,
     CharacterCreationUnavailable,
     CharacterDisplayNameInvalid,
     CharacterProfileInvalid,
     create_character,
-    list_selectable_character_creation_profiles,
+    get_character_roster,
+    list_active_character_creation_profiles,
 )
 
 
@@ -33,22 +34,23 @@ def _authenticated(request):
 @permission_classes([AllowAny])
 def character_creation_profile_list_view(request):
     try:
-        auth_session = _authenticated(request)
+        _authenticated(request)
     except AuthenticationFailed:
         return _response({"error": {"code": "AUTH_REQUIRED"}}, status=401)
-    profiles = list_selectable_character_creation_profiles(
-        game_account_id=auth_session.game_account_id
-    )
+    profiles = list_active_character_creation_profiles()
     return _response({"profiles": [profile.as_payload() for profile in profiles]}, status=200)
 
 
-@api_view(["POST"])
+@api_view(["GET", "POST"])
 @permission_classes([AllowAny])
 def character_list_view(request):
     try:
         auth_session = _authenticated(request)
     except AuthenticationFailed:
         return _response({"error": {"code": "AUTH_REQUIRED"}}, status=401)
+    if request.method == "GET":
+        roster = get_character_roster(game_account_id=auth_session.game_account_id)
+        return _response(roster.as_payload(), status=200)
     if set(request.data) != {
         "creation_profile_key",
         "creation_profile_version",
@@ -71,7 +73,7 @@ def character_list_view(request):
         return _response({"error": {"code": "CHARACTER_PROFILE_INVALID"}}, status=400)
     except CharacterDisplayNameInvalid:
         return _response({"error": {"code": "CHARACTER_DISPLAY_NAME_INVALID"}}, status=400)
-    except CharacterAlreadyExists:
+    except CharacterCreationLimitReached:
         return _response({"error": {"code": "CHARACTER_ALREADY_EXISTS"}}, status=409)
     except CharacterCreationUnavailable:
         return _response({"error": {"code": "CHARACTER_CREATION_UNAVAILABLE"}}, status=409)

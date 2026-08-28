@@ -6,6 +6,7 @@ import {
   type CharacterApi,
   type CharacterCreationInput,
   type CharacterCreationResult,
+  type CharacterRoster,
 } from "../src/api/characters";
 import { createCharacterStore } from "../src/stores/characters";
 
@@ -49,6 +50,11 @@ const creationResult: CharacterCreationResult = {
   },
 };
 
+const emptyRoster: CharacterRoster = {
+  characters: [],
+  creation_capacity: { limit: 1, used: 0, remaining: 1 },
+};
+
 
 describe("characterStore", () => {
   beforeEach(() => {
@@ -58,14 +64,18 @@ describe("characterStore", () => {
   it("loads selectable profiles and keeps only the server creation result", async () => {
     const api: CharacterApi = {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
+      listCharacters: vi.fn().mockResolvedValue(emptyRoster),
       createCharacter: vi.fn().mockResolvedValue(creationResult),
     };
     const store = createCharacterStore(api, () => "character-request-1")();
 
     await store.loadProfiles("access-token");
+    await store.loadRoster("access-token");
+    expect(store.canCreate).toBe(true);
     await store.createCharacter("access-token", creationInput);
 
     expect(api.listProfiles).toHaveBeenCalledWith("access-token");
+    expect(api.listCharacters).toHaveBeenCalledWith("access-token");
     expect(api.createCharacter).toHaveBeenCalledWith(
       "access-token",
       creationInput,
@@ -73,6 +83,17 @@ describe("characterStore", () => {
     );
     expect(store.profiles).toEqual([profile]);
     expect(store.character).toEqual(creationResult);
+    expect(store.roster).toEqual([
+      {
+        character_id: creationResult.character_id,
+        display_name: creationResult.display_name,
+        gender: creationResult.gender,
+        pronouns: creationResult.pronouns,
+        lifecycle: "active",
+      },
+    ]);
+    expect(store.creationCapacity).toEqual({ limit: 1, used: 1, remaining: 0 });
+    expect(store.canCreate).toBe(false);
     expect(JSON.stringify(store.$state)).not.toContain("access-token");
   });
 
@@ -83,6 +104,7 @@ describe("characterStore", () => {
       .mockResolvedValueOnce(creationResult);
     const api: CharacterApi = {
       listProfiles: vi.fn(),
+      listCharacters: vi.fn(),
       createCharacter: createRequest,
     };
     const keyFactory = vi
@@ -104,16 +126,31 @@ describe("characterStore", () => {
     expect(keyFactory).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks the creation form when the account has no selectable profiles", async () => {
+  it("keeps active profiles independent from an exhausted account capacity", async () => {
+    const retiredRoster: CharacterRoster = {
+      characters: [
+        {
+          character_id: creationResult.character_id,
+          display_name: creationResult.display_name,
+          gender: creationResult.gender,
+          pronouns: creationResult.pronouns,
+          lifecycle: "retired",
+        },
+      ],
+      creation_capacity: { limit: 1, used: 1, remaining: 0 },
+    };
     const api: CharacterApi = {
-      listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
+      listCharacters: vi.fn().mockResolvedValue(retiredRoster),
       createCharacter: vi.fn(),
     };
     const store = createCharacterStore(api)();
 
-    await expect(store.loadProfiles("access-token")).resolves.toEqual([]);
+    await expect(store.loadProfiles("access-token")).resolves.toEqual([profile]);
+    await expect(store.loadRoster("access-token")).resolves.toEqual(retiredRoster);
 
-    expect(store.creationBlocked).toBe(true);
-    expect(store.profiles).toEqual([]);
+    expect(store.profiles).toEqual([profile]);
+    expect(store.roster).toEqual(retiredRoster.characters);
+    expect(store.canCreate).toBe(false);
   });
 });

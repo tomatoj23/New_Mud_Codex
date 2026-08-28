@@ -33,6 +33,21 @@ def start_content() -> None:
     assert snapshot.status is ContentRuntimeStatus.READY
 
 
+@pytest.mark.parametrize(
+    "url_name",
+    ("character-creation-profile-list", "character-list"),
+)
+def test_character_catalog_and_roster_require_authentication(
+    client: Client,
+    url_name: str,
+) -> None:
+    response = client.get(reverse(url_name), secure=True)
+
+    assert response.status_code == 401
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json() == {"error": {"code": "AUTH_REQUIRED"}}
+
+
 def test_authenticated_player_reads_only_selectable_character_creation_profile_fields(
     client: Client,
 ) -> None:
@@ -67,6 +82,14 @@ def test_authenticated_player_reads_only_selectable_character_creation_profile_f
         "start_room_ref",
     ):
         assert internal_field not in serialized
+
+    roster_response = client.get(reverse("character-list"), secure=True)
+    assert roster_response.status_code == 200
+    assert roster_response.headers["Cache-Control"] == "no-store"
+    assert roster_response.json() == {
+        "characters": [],
+        "creation_capacity": {"limit": 1, "used": 0, "remaining": 1},
+    }
 
 
 def test_authenticated_player_creates_character_from_exact_profile(client: Client) -> None:
@@ -284,7 +307,23 @@ def test_character_creation_replays_same_request_and_rejects_rebuild(client: Cli
         secure=True,
     )
     assert profiles_after_retirement.status_code == 200
-    assert profiles_after_retirement.json() == {"profiles": []}
+    assert [profile["key"] for profile in profiles_after_retirement.json()["profiles"]] == [
+        "default-v1"
+    ]
+    roster_after_retirement = client.get(reverse("character-list"), secure=True)
+    assert roster_after_retirement.status_code == 200
+    assert roster_after_retirement.json() == {
+        "characters": [
+            {
+                "character_id": first.json()["character_id"],
+                "display_name": "重来客",
+                "gender": "nonbinary",
+                "pronouns": "they",
+                "lifecycle": "retired",
+            }
+        ],
+        "creation_capacity": {"limit": 1, "used": 1, "remaining": 0},
+    }
     rebuild = client.post(
         reverse("character-list"),
         {**payload, "display_name": "再来客"},

@@ -95,7 +95,7 @@ watch(
 <template>
   <section class="character-panel" aria-labelledby="character-title">
     <p class="section-kicker">江湖身份</p>
-    <h3 id="character-title">创建角色</h3>
+    <h3 id="character-title">角色</h3>
 
     <div v-if="characters.character" class="character-result" data-testid="character-result">
       <p class="character-name">{{ characters.character.display_name }}</p>
@@ -105,15 +105,25 @@ watch(
     </div>
 
     <div
-      v-else-if="characters.creationBlocked"
+      v-else-if="characters.roster.length > 0"
       class="character-result"
       data-testid="character-existing"
     >
-      <p class="character-name">当前账号已有角色</p>
-      <p>为保护角色身份与历史关系，当前不提供自助重建。</p>
+      <p>当前账号已有角色</p>
+      <div v-for="character in characters.roster" :key="character.character_id">
+        <p class="character-name">{{ character.display_name }}</p>
+        <p>状态：{{ character.lifecycle === "retired" ? "已退隐" : "活跃" }}</p>
+      </div>
+      <p v-if="!characters.canCreate">
+        当前账号的自助创建名额已用完；已有角色不会被删除或替换。
+      </p>
     </div>
 
-    <form v-else data-testid="character-create-form" @submit.prevent="createCharacter">
+    <form
+      v-if="characters.canCreate"
+      data-testid="character-create-form"
+      @submit.prevent="createCharacter"
+    >
       <div v-if="selectedProfile" class="profile-card" data-testid="character-profile">
         <strong>{{ selectedProfile.display_name }}</strong>
         <span>{{ selectedProfile.key }} · {{ selectedProfile.version }}</span>
@@ -166,5 +176,8 @@ watch(
         {{ props.busy ? "创建中…" : "创建角色" }}
       </button>
     </form>
+    <p v-else-if="characters.creationCapacity === null" class="verification-hint">
+      正在读取角色与创建名额…
+    </p>
   </section>
 </template>
