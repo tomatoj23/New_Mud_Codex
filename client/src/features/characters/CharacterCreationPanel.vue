@@ -158,9 +158,10 @@ watch(
       </p>
       <button
         class="primary-action"
-        type="submit"
+        type="button"
         :disabled="props.busy || selectedProfile === null || characterDisplayName.length === 0"
         data-testid="create-character"
+        @click="createCharacter"
       >
         {{ props.busy ? "创建中…" : "创建角色" }}
       </button>
