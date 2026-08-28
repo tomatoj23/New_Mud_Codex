@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 import { useCharacterStore } from "../../stores/characters";
 import type { CharacterCreationResult } from "../../api/characters";
@@ -81,7 +81,15 @@ async function createCharacter() {
   }
 }
 
-onMounted(initializeSelection);
+watch(
+  () => characters.profiles,
+  (profiles) => {
+    if (profiles.length > 0 && selectedProfileKey.value === "") {
+      initializeSelection();
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
