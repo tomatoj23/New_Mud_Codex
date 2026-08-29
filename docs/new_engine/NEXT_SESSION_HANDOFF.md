@@ -1,8 +1,8 @@
-# 下一会话交接：Auth Baseline Amendment 已完成；Issue #17 已验证，等待获批后回填关闭
+# 下一会话交接：Auth Baseline Amendment 已完成；Issue #17 已关闭，下一入口 #18
 
 > 快照日期：2026-08-29。
 >
-> 当前本地基线：`main` 已包含 Issue #17 的实现链及收尾提交 `b52da13`、复审修复 `0858610`、证据同步 `03340a8`；快照时 `origin/main=59fe7bf`，本地提交尚未 push。Issue #17 的八项验收和最终双轴复审均已通过，但 GitHub 回填/关闭因外部写入审批要求用户显式授权而尚未执行。
+> 当前本地基线：`main` 已包含 Issue #17 的实现链及收尾提交 `b52da13`、复审修复 `0858610`、证据同步 `03340a8` 与本交接的前一版 `e48694e`；快照时 `origin/main=59fe7bf`，本地提交尚未 push。Issue #17 的八项验收、最终双轴复审、GitHub 证据回填和关闭均已完成。
 >
 > 本文件是无会话记忆时的现行启动入口。它汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序；不创造需求、合同或正式状态。冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
 
@@ -25,8 +25,8 @@ git log -8 --decorate --oneline
 - `HEAD` 必须至少包含 `03340a8`，并保留 #17 的 `21449cf`、`ba80f9d`、`2e119d5`、`f615d08`、`ee2b023`、`7266fd8`、`b52da13` 与 `0858610`。快照时 `origin/main` 是 `59fe7bf`；本地 ahead 会随本交接提交增长，不作为固定合同。出现 behind 或关键提交缺失时先审计提交来源。
 - Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
 - GitHub 原生子票 #11–#16 与阻塞链 `#11 -> #12 -> #13 -> #14 -> #15 -> #16` 均已关闭。
-- Character Slice 2 已拆为 #17–#20：#17 Character 创建、#18 ConnectionSession/`session.authenticate`、#19 `presence.enter`/最小 snapshot、#20 `session.resume`/`presence.recover`。#17 已由当前执行者认领且本地验收完成，但远端仍 OPEN；#19 声明阻塞于 #17/#18，#20 声明阻塞于 #19。
-- 当前工作入口只等待对 #17 GitHub 回填/关闭的显式授权。关闭前不启动 #18；父级 Slice 2 清单只追踪贡献与防止越界。
+- Character Slice 2 已拆为 #17–#20：#17 Character 创建、#18 ConnectionSession/`session.authenticate`、#19 `presence.enter`/最小 snapshot、#20 `session.resume`/`presence.recover`。#17 已关闭；#19 声明阻塞于 #17/#18，#20 声明阻塞于 #19。
+- 当前工作入口是 #18。父级 Slice 2 清单只追踪贡献与防止越界，不把 #19/#20 验收并入 #18。
 
 若本机 PATH 找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`；先重新读取 Issues #17–#20 及评论，远端状态覆盖本快照。当前已验证环境是 Windows 10 `10.0.19045`、仓库 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。
 
@@ -63,7 +63,7 @@ git log -8 --decorate --oneline
 | #14 | 已关闭；邮箱密码重置、即时认证撤销、安全通知与 H5 | #13 |
 | #15 | 已关闭；RecoveryCode 退役与认证基线原子切换 | #14 |
 | #16 | 已关闭；分层证据、SMTP opt-in 边界与正式双轴复审 | #15 |
-| #17 | OPEN；本地实现、全量验证与双轴复审已完成，只待用户显式授权 GitHub 回填/关闭 | 无 |
+| #17 | CLOSED；版本化 Character 创建、全量验证、双轴复审与 GitHub 回填均已完成 | 无 |
 | #18 | OPEN；ConnectionSession 与 `session.authenticate` | 无 |
 | #19 | OPEN；`presence.enter` 与最小场景 snapshot | #17、#18 |
 | #20 | OPEN；`session.resume` 与 `presence.recover` | #19 |
@@ -118,9 +118,9 @@ git log -8 --decorate --oneline
 
 ## 7. 下一步
 
-1. 获得用户对“将详细提交/环境/测试/复审数据发布到 GitHub 并关闭 Issue #17”的显式授权。
-2. 授权后把第 2.1 节证据回填 Issue #17 并关闭；不 push，除非用户另行授权。
-3. 复核工作树仍只保留 Presence 模型与 migration `0005` WIP，然后再按依赖认领 #18。#19 等 #17/#18，#20 等 #19；不得把它们的验收并入 #17。
+1. 复核工作树仍只保留 Presence 模型与 migration `0005` WIP。
+2. 读取 Issue #18 正文/评论和实时 blocker/assignee，按 issue tracker 约定认领后使用 `/implement #18`。
+3. #19 等 #17/#18，#20 等 #19；每张票只按自身验收推进，父级 Slice 2 仅在 #17–#20 的共同证据齐备后提升。
 
 ## 8. 权威来源
 
@@ -134,8 +134,8 @@ git log -8 --decorate --oneline
 | 当前实现与验证结果 | `docs/new_engine/18_IMPLEMENTATION_STATUS.md` |
 | 实施顺序 | `docs/new_engine/10_ROADMAP.md`、`plans/m0-e1-tracer-bullets.md` |
 | 已关闭认证修订规格 | GitHub Issue #10 |
-| 最近完成 ticket | GitHub Issue #16、`docs/new_engine/20_AUTH_BASELINE_EVIDENCE.md` |
-| 当前实施与关闭入口 | GitHub Issue #17；父级追踪见 `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2 |
+| 最近完成 ticket | GitHub Issue #17、`docs/new_engine/18_IMPLEMENTATION_STATUS.md` 第 3.10 节 |
+| 当前实施入口 | GitHub Issue #18；父级追踪见 `plans/m0-e1-tracer-bullets.md` 的 Character Slice 2 |
 | 后续 Slice 2 票据 | GitHub Issues #18、#19、#20，按各自 `Blocked by` 推进 |
 
 ## 9. 工程与证据边界
@@ -146,4 +146,4 @@ git log -8 --decorate --oneline
 - PostgreSQL 测试与全量 pytest 严格串行，避免数据库和临时目录竞争。
 - 结构检查、局部测试、内部候选或 163 smoke 都不能提升 PublicV1Gate。
 - 现行事实只更新本入口、17/18、计划或对应权威文档；归档只用于历史追溯。
-- 当前本地 #17 提交尚未 push；GitHub 回填/关闭也尚未获显式授权。关闭授权与 push 授权彼此独立，只有用户分别明确授权后才执行。
+- 当前本地 #17 提交尚未 push；本次关闭授权不包含 push，只有用户另行明确授权后才推送。

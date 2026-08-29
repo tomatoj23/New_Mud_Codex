@@ -148,7 +148,7 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 - Issue #17 已交付版本化 `CharacterCreationProfile`、独立 `CharacterOwnership`、每 GameAccount 首发单 Character 容量、不可变创建证据和幂等重放记录，以及 active/retired roster、REST profile/roster/create 与 H5 创建/重登展示。
 - `CharacterDisplayName` 按 NFKC、2–12 个 Unicode code points、实例内唯一、保留词、控制/双向控制、emoji、纯数字和 Unicode 16 CJK Extension H 策略校验；H5 按 code point 限制输入，不再由 UTF-16 `maxlength` 提前截断补充平面 CJK。
 - 隔离提交树 `b52da13` 的 PostgreSQL 串行全量为 315 passed、1 个未 opt-in SMTP skipped、2 条既知 Daphne warning；Ruff、108 files format、mypy 108 source files、Django check、migration drift、Vue typecheck、Vitest 17、H5 build 与三视口 Playwright 断言通过。正式复审在 `0858610` 修复领域词汇后为 Standards 0 hard / 4 judgement、Spec 0 findings。
-- #17 只完成 Character 创建；ConnectionSession、Presence enter/snapshot、resume/recover 仍分别属于 #18–#20。`CHARACTER-001` 因已有运行实现和分层证据提升为 `implemented`，但 GM 审计、账号退休与发布级证据未齐，不提升为 `verified`；父级 Character Slice 2、M1 与 PublicV1Gate 均未完成。
+- #17 只完成 Character 创建；ConnectionSession、Presence enter/snapshot、resume/recover 仍分别属于 #18–#20。`CHARACTER-001` 因已有运行实现和分层证据提升为 `implemented`，但 GM 审计、账号退休与发布级证据未齐，不提升为 `verified`；父级 Character Slice 2、M1 与 PublicV1Gate 均未完成。GitHub Issue #17 已回填提交、环境、测试与正式复审结论并关闭。
 
 ## 4. 当前状态
 
