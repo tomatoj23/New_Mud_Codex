@@ -53,6 +53,8 @@ def _resolve_session(token: object) -> tuple[AuthSession | None, str]:
         # ever included in a response.
         try:
             encoded_header, encoded_claims, provided_signature = token.split(".")
+            header_padding = "=" * (-len(encoded_header) % 4)
+            header = json.loads(base64.urlsafe_b64decode(encoded_header + header_padding))
             signing_input = f"{encoded_header}.{encoded_claims}"
             signing_key = hmac.new(
                 settings.AUTH_TOKEN_SIGNING_KEY.encode("utf-8"),
@@ -67,8 +69,12 @@ def _resolve_session(token: object) -> tuple[AuthSession | None, str]:
             padding = "=" * (-len(encoded_claims) % 4)
             parsed = json.loads(base64.urlsafe_b64decode(encoded_claims + padding))
             if (
-                isinstance(parsed, dict)
+                isinstance(header, dict)
+                and header.get("alg") == "HS256"
+                and header.get("typ") == "JWT"
+                and isinstance(parsed, dict)
                 and isinstance(parsed.get("exp"), int)
+                and parsed.get("aud") == "new-mud-h5"
                 and parsed["exp"] <= int(datetime.now(UTC).timestamp())
             ):
                 return None, "TOKEN_EXPIRED"
