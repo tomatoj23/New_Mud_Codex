@@ -147,19 +147,19 @@ def test_database_rejects_creation_evidence_bound_to_another_game_account() -> N
     )
     assert release_head.active_batch_id is not None
     existing = create_default_character(
-        username="evidence_template",
+        username="evidence_source",
         display_name="证据样本",
-        idempotency_key="evidence-template-create",
+        idempotency_key="evidence-source-create",
     )
-    template = Character.objects.get(pk=existing["character_id"])
+    source_character = Character.objects.get(pk=existing["character_id"])
     character = Character.objects.create(
         instance_id=settings.CONTENT_INSTANCE_ID,
         display_name="错绑客",
         normalized_display_name="错绑客",
         gender="unspecified",
         pronouns="unspecified",
-        initial_state=template.initial_state,
-        start_room_revision=template.start_room_revision,
+        initial_state=source_character.initial_state,
+        start_room_revision=source_character.start_room_revision,
     )
     CharacterOwnership.objects.create(
         game_account_id=owner_session.game_account_id,
@@ -174,7 +174,7 @@ def test_database_rejects_creation_evidence_bound_to_another_game_account() -> N
             profile_version="1.0.0",
             profile_definition_hash="a" * 64,
             content_release_batch_id=release_head.active_batch_id,
-            start_room_revision=template.start_room_revision,
+            start_room_revision=source_character.start_room_revision,
             normalized_display_name=character.normalized_display_name,
             gender=character.gender,
             pronouns=character.pronouns,
