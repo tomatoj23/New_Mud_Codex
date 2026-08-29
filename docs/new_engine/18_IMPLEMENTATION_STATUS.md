@@ -140,8 +140,15 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 - Issue #13 已实现最终 register 的 PostgreSQL 原子消费与唯一性重验，创建 User、当前实例 GameAccount 和唯一 verified email，保持零 AuthSession/token/RecoveryCode/Character/Presence；H5 完成邮箱发码、验证码注册、手动重发和成功返回登录入口。跨 lookup key 轮换的新投递会在同一逻辑邮箱锁内替代全部旧 active challenge。
 - Issue #14 已实现 password-reset request/confirm、独立限流与幂等命名空间、固定锁序的 PostgreSQL 原子密码更新和跨实例 AuthSession/family/credential 即时撤销；成功不自动登录、不改变 GameAccount lifecycle。安全通知使用独立持久 outbox，失败只进入审计和告警，不回滚密码事务；H5 完成邮箱发码、手动重发、六位验证码、新密码和返回普通登录入口的闭环，且不持久化恢复秘密。
 - Issue #15 已通过 identity `0009_retire_recovery_codes` 撤销全部 active RecoveryCode，并以数据库约束禁止新增 active；reverse data migration 不复活秘密。`0010_authentication_baseline_runtime_state` 增加可逆、初始 fail-closed 的两类 worker heartbeat 与共享 provider circuit/probe 单例。旧 recover/rotate 兼容路由不解析 body、Origin 或凭据，统一返回 `410 RECOVERY_CODE_RETIRED`。注册和重置只在两个 heartbeat fresh、circuit closed 且静态依赖完整时共同开放，关闭态不消耗最终注册限流；生产启动拒绝不完整运行态及测试邮件 bypass，普通账号名/密码登录保持独立可用。SMTP provider 全局故障与单消息失败分别控制 circuit 和任务重试/终结；统一 access-authentication 领域缝证明 reset 前 token 可解析、reset 后同一 token 被拒绝。
-- 路线与 tracer plan 在原 E1 / Slice 1 与 Character Slice 2 之间插入 `Auth Baseline Amendment`。Issue #16 已完成分层验证、正式复审及 GitHub 回填关闭；Character Slice 2 成为下一 frontier，但尚未认领或实现。
+- 路线与 tracer plan 在原 E1 / Slice 1 与 Character Slice 2 之间插入 `Auth Baseline Amendment`。Issue #16 已完成分层验证、正式复审及 GitHub 回填关闭；Issue #17 随后交付 Character 创建，父级 Character Slice 2 仍等待 #18–#20。
 - 新增认证权威文档合同检查，要求 V6、冻结合同、追踪、状态、差异、计划与交接使用同一现行边界，并拒绝旧 RecoveryCode 注册/恢复承诺重新进入活跃权威。
+
+### 3.10 Engine Stage E1 / Slice 2：Issue #17 Character 创建
+
+- Issue #17 已交付版本化 `CharacterCreationProfile`、独立 `CharacterOwnership`、每 GameAccount 首发单 Character 容量、不可变创建证据和幂等重放记录，以及 active/retired roster、REST profile/roster/create 与 H5 创建/重登展示。
+- `CharacterDisplayName` 按 NFKC、2–12 个 Unicode code points、实例内唯一、保留词、控制/双向控制、emoji、纯数字和 Unicode 16 CJK Extension H 策略校验；H5 按 code point 限制输入，不再由 UTF-16 `maxlength` 提前截断补充平面 CJK。
+- 隔离提交树 `b52da13` 的 PostgreSQL 串行全量为 315 passed、1 个未 opt-in SMTP skipped、2 条既知 Daphne warning；Ruff、108 files format、mypy 108 source files、Django check、migration drift、Vue typecheck、Vitest 17、H5 build 与三视口 Playwright 断言通过。正式复审在 `0858610` 修复领域词汇后为 Standards 0 hard / 4 judgement、Spec 0 findings。
+- #17 只完成 Character 创建；ConnectionSession、Presence enter/snapshot、resume/recover 仍分别属于 #18–#20。`CHARACTER-001` 因已有运行实现和分层证据提升为 `implemented`，但 GM 审计、账号退休与发布级证据未齐，不提升为 `verified`；父级 Character Slice 2、M1 与 PublicV1Gate 均未完成。
 
 ## 4. 当前状态
 
@@ -161,14 +168,15 @@ pytest 仍报告 Daphne 对 Python 3.16 将移除的 asyncio policy API 的两�
 | `IDENTITY-001` | `verified` | Issue #9 已验证每实例一个 User 永久映射一个 GameAccount 的数据库、迁移与并发边界 |
 | `AUTH-005` | `verified` | Issue #10 已批准，Issues #11–#15 已交付权威与完整实现链，Issue #16 已完成 PostgreSQL、迁移、静态/构建、H5 E2E、秘密、依赖与双轴验证；正式复审无未解决 hard finding，见 `20_AUTH_BASELINE_EVIDENCE.md` |
 | `AUTH-006` | `specified` | PresenceRecovery 继续属于未来 Character Slice 2，跨 AuthSession takeover 仍为后续独立切片 |
+| `CHARACTER-001` | `implemented` | Issue #17 已完成版本化 Character 创建、名称策略、幂等/并发、REST 与 H5 证据；GM 审计、账号退休和发布级关闭恢复证据仍待后续工作 |
 | Engine Stage E1 / Slice 1 | `verified` | 8 项切片验收全部通过；范围止于注册与独立登录，不包含 Character、ConnectionSession、Presence、恢复控角或 takeover |
 | `RELEASE-001` / PublicV1Gate | `blocked` | V6 gate 已定义，尚无公开试运行、完整恢复、ReleaseManifest 或公开资料证据；不影响 M1/E0 的内部状态 |
 
-M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issue #9 固定 E1 / Slice 1 的历史注册与登录证据；Auth Baseline Amendment 的运行实现与分层验收已完成，`AUTH-005=verified`。M1 与 `MILESTONE-002` 仍未完成，下一 frontier 是尚未认领的 Character Slice 2。
+M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `complete`，其追踪记录 `MILESTONE-001` 与 `ENGINE-001 / Engine Stage E0` 均为 `verified`。Issue #9 固定 E1 / Slice 1 的历史注册与登录证据；Auth Baseline Amendment 的运行实现与分层验收已完成，`AUTH-005=verified`。Issue #17 已交付 Character 创建且 `CHARACTER-001=implemented`；M1、`MILESTONE-002` 与父级 Character Slice 2 仍未完成，下一 frontier 是 Issue #18。
 
 浏览器完整矩阵、容量/soak 报告与五个业务恢复范围仍是 `RELEASE-001` 的发布候选证据，因此 `CLIENT-001`、`NFR-001` 和 `NFR-002` 保持 `blocked`，不因 M0 目标获批或 M1 内部抽样而提前转为 `verified`。
 
-经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。两个 E0 切片、E1 / Slice 1 与 Auth Baseline Amendment 均已完成并保留为可回查记录；frontier 已交给尚未认领的 Character Slice 2 角色、连接、进入与恢复闭环，Slice 3 takeover 仍须独立实施。
+经确认的下一步纵向实施计划见 `plans/m0-e1-tracer-bullets.md`。两个 E0 切片、E1 / Slice 1、Auth Baseline Amendment 与 Issue #17 Character 创建均保留为可回查记录；frontier 已交给 Issue #18 的 ConnectionSession/`session.authenticate`，随后 #19/#20 完成进入与恢复，Slice 3 takeover 仍须独立实施。
 
 ## 5. 证据映射
 
@@ -181,7 +189,8 @@ M0 机器合同当前通过且没有 profile blocker；产品里程碑 M0 已 `c
 | `AUTH-004` | Issue #9 的 RecoveryCode/合并限流/User 全会话撤销历史证据；ADR-0005 与 Issue #10 记录有意退役，ID 不复用 |
 | `IDENTITY-001` | Issue #9 的 User/GameAccount 数据库唯一约束、迁移与并发证据 |
 | `AUTH-005` | Issue #10、CONTEXT/ADR-0005 至 0008、V6/08/13/15/16 权威与认证文档合同；Issues #11–#15 的权威和实现链；Issue #16 与 `20_AUTH_BASELINE_EVIDENCE.md` 的分层验证和正式双轴复审 |
-| `AUTH-006` | 11/13/15 的 PresenceRecovery 与 takeover 分离合同；Character Slice 2 尚未实现 |
+| `AUTH-006` | 11/13/15 的 PresenceRecovery 与 takeover 分离合同；#17 未实现恢复，仍等待 #20 与后续 takeover |
+| `CHARACTER-001` | Issue #17、`src/new_mud/apps/characters/`、Character REST/PostgreSQL 合同、`client/src/features/characters/` 与三视口 H5 E2E；GM 审计、账号退休和发布级证据仍缺 |
 | `CONVERT-001` | `contracts/v1/artifacts/`、`scripts/generate_source_contracts.py`、`tests/test_contracts.py` |
 | `CLIENT-001` | `browser-matrix.json` 已批准且冻结目标版本；Issue #9 已有 Slice 1 的桌面/现代移动自动 E2E，但实际 `tested_versions` 与完整发布矩阵尚缺 |
 | `NFR-001` | `capacity-profile.json` 已批准；容量报告与两小时 soak 尚缺 |

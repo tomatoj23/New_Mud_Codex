@@ -14,7 +14,7 @@
 
 这些值表示需求追踪记录的证据成熟度，不替代 V6 对产品里程碑规定的 `not_started / in_progress / blocked / complete`。因此 `MILESTONE-001=verified` 表示已有证据证明产品里程碑 `M0=complete`；不得把产品 M0 自身写成 `verified`。
 
-当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的历史注册/登录闭环。`AUTH-001`、`AUTH-002` 仍保留 Issue #9 的 PostgreSQL、REST、安全属性和 H5 自动端到端证据；2026-08-26 的产品修订不倒写这些事实，但 RecoveryCode 已不再是现行凭据。Issue #10 建立 `AUTH-005` 的 VerifiedContactMethod/VerificationChallenge 认证权威，Issues #11–#15 已交付权威同步、投递基础、已验证邮箱最终注册、邮箱密码重置、跨实例即时认证撤销、安全通知 outbox、H5、RecoveryCode 不可逆退役和认证基线受控切换；Issue #16 已完成分层验证、无未解决 hard finding 的正式双轴复审及 GitHub 回填关闭，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。`AUTH-005` 已为 `verified`，Character Slice 2 成为下一 frontier，但尚未认领或实现。`AUTH-004` 的旧复合语义已退役，User/GameAccount 基数与 PresenceRecovery 分别由 `IDENTITY-001`、`AUTH-006` 追踪。
+当前仓库已完成 M0 与 Engine Stage E1 / Slice 1 的历史注册/登录闭环。`AUTH-001`、`AUTH-002` 仍保留 Issue #9 的 PostgreSQL、REST、安全属性和 H5 自动端到端证据；2026-08-26 的产品修订不倒写这些事实，但 RecoveryCode 已不再是现行凭据。Issue #10 建立 `AUTH-005` 的 VerifiedContactMethod/VerificationChallenge 认证权威，Issues #11–#15 已交付权威同步、投递基础、已验证邮箱最终注册、邮箱密码重置、跨实例即时认证撤销、安全通知 outbox、H5、RecoveryCode 不可逆退役和认证基线受控切换；Issue #16 已完成分层验证、无未解决 hard finding 的正式双轴复审及 GitHub 回填关闭，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。`AUTH-005` 已为 `verified`。Issue #17 已交付 Character Slice 2 的版本化 Character 创建部分，`CHARACTER-001=implemented`；父级切片仍等待 #18–#20 的连接、进入与恢复证据。`AUTH-004` 的旧复合语义已退役，User/GameAccount 基数与 PresenceRecovery 分别由 `IDENTITY-001`、`AUTH-006` 追踪。
 
 browser、capacity、recovery 三份非功能 profile 已批准，但发布级浏览器矩阵、容量、soak 和五范围恢复证据仍未完成，所以 `CLIENT-001`、`NFR-001`、`NFR-002` 与 `RELEASE-001` 继续保持 `blocked`；`MILESTONE-002` 也不因认证权威修订或单一切片完成而提升。
 
@@ -48,7 +48,7 @@ browser、capacity、recovery 三份非功能 profile 已批准，但发布级�
 | `IDENTITY-001` | `verified` | 每个实例一个 User 永久映射一个 GameAccount | V6 8.2 | 03、08、ADR-0002 | M1 | Issue #9：数据库唯一约束、迁移与并发证据 |
 | `AUTH-005` | `verified` | 新注册验证唯一邮箱且零认证状态；邮箱密码重置即时撤销全部旧认证；RecoveryCode 退役 | V6 8.1-8.7、11.2、15.1-15.2 | 08 第 2.2/4.2/4.4 节、13 第 1/10.1 节、15、16 第 2.1 节、ADR-0005 至 0008 | M1、RELEASE-001 | Issue #10 规格、Issues #11–#15 的权威与实现链、Issue #16 的 PostgreSQL/迁移/静态/H5 E2E/秘密/依赖/双轴证据，以及 `20_AUTH_BASELINE_EVIDENCE.md`；正式复审 Standards 0 hard / 1 judgement，Spec 0 hard / 0 观察；独立 `RELEASE-001` 门禁仍未满足 |
 | `AUTH-006` | `specified` | 同一 AuthSession 可恢复自己的 active/grace PresenceSnapshot；跨 AuthSession 必须显式 takeover | V6 8.6 | 11、13 第 6.4/8 节、15 | M1、RELEASE-001 | Character Slice 2 的 PresenceRecovery 与后续 takeover E2E；不得由 AUTH-005 提前实现 |
-| `CHARACTER-001` | `specified` | CharacterCreationProfile、CharacterDisplayName 与 RetiredCharacter 生命周期可审计且不自助重建 | V6 8.8 | 08 第 4.3 节、12 第 5.15 节、15 | M1、RELEASE-001 | profile hash/exact revision、NFKC/策略测试、GM 审计、关闭恢复 E2E |
+| `CHARACTER-001` | `implemented` | CharacterCreationProfile、CharacterDisplayName 与 RetiredCharacter 生命周期可审计且不自助重建 | V6 8.8 | 08 第 4.3 节、12 第 5.15 节、15 | M1、RELEASE-001 | Issue #17 已验证 profile hash/exact revision、NFKC/策略、实例内唯一、幂等/并发与 H5 创建；GM 审计、账号退休和发布级关闭恢复 E2E 仍待后续证据 |
 | `WORLD-002` | `specified` | Public V1 完整 Village topology 与逐项交互包络可声明，未验证交互显式不可用 | V6 7.2.1、7.3、11.7 | 04、09、12 | RELEASE-001 | topology / interaction envelope、UnavailableInteraction 报告 |
 | `PVP-001` | `specified` | Public V1 只允许非致命 Sparring，玩家失败采用 SafeDefeat | V6 10.4.2、11.11 | 14 | RELEASE-001 | 互认 / 致命拒绝 / SafeDefeat E2E |
 | `COMBAT-002` | `specified` | GoldenSkillChain 与日常 Character 状态隔离，首条候选链有冻结来源证据 | V6 7.16、10.3.3 | 14、09、16 | M1、M4 | golden case、source diff、envelope |

@@ -99,7 +99,7 @@
 
 按原生阻塞链完成六张 ticket：Issue #11 修订权威；#12 建立 challenge/outbox/crypto/限流投递 tracer；#13 完成已验证邮箱注册；#14 完成密码重置与即时认证撤销；#15 原子退役 RecoveryCode 并切换 H5；#16 完成分层证据。#16 首轮 hard findings 已修复，正式复审无未解决 hard finding 并已回填关闭，`AUTH-005=verified`。
 
-Character Slice 2 已成为下一 frontier，但尚未认领或实现。
+Character Slice 2 已由 Issue #17 交付 Character 创建部分；下一 frontier 是 Issue #18 的 ConnectionSession 与 `session.authenticate`，父级切片仍未完成。
 
 ### Acceptance criteria
 
@@ -115,7 +115,7 @@ Character Slice 2 已成为下一 frontier，但尚未认领或实现。
 
 ## Engine Stage E1 / Slice 2: Character Slice 2——创建角色、连接、进入与恢复闭环
 
-**Blocked by**: 无；Auth Baseline Amendment Issue #16 已关闭。当前切片尚未认领或实现。
+**Blocked by**: 无；Auth Baseline Amendment Issue #16 已关闭。Issue #17 已交付 Character 创建，当前切片继续由 #18–#20 完成连接、进入与恢复闭环。
 
 **User stories**: 作为已登录玩家，我可以创建唯一角色，建立 WebSocket，进入起始房间并取得完整最小状态；断线后可以在新连接上安全重建。覆盖 `AUTH-003`、`WORLD-001`、`CLIENT-001`、`MILESTONE-002`。
 
@@ -125,8 +125,8 @@ Character Slice 2 已成为下一 frontier，但尚未认领或实现。
 
 ### Acceptance criteria
 
-- [ ] 每个 GameAccount 最多创建一个 Character，并保留明确的 CharacterOwnership 关系。
-- [ ] 角色创建通过版本化 `CharacterCreationProfile`，提交 `CharacterDisplayName` 及仅用于展示的性别/代词；名称按 NFKC、实例内唯一和 V6 字符策略校验，`RetiredCharacter` 不得自助重建。
+- [x] 每个 GameAccount 最多创建一个 Character，并保留明确的 CharacterOwnership 关系（Issue #17）。
+- [x] 角色创建通过版本化 `CharacterCreationProfile`，提交 `CharacterDisplayName` 及仅用于展示的性别/代词；名称按 NFKC、实例内唯一和 V6 字符策略校验，`RetiredCharacter` 不得自助重建（Issue #17）。
 - [ ] 新 WebSocket 在认证前只有 ConnectionSession，`session.authenticate` 成功后才绑定现有 AuthSession。
 - [ ] `presence.enter` 只允许账号拥有的角色，并从 E0 活动批次解析起始 Room 的 exact revision。
 - [ ] 首次进入返回完整且自洽的 scene/character snapshot，H5 只在 snapshot 屏障完成后替换权威 store。
