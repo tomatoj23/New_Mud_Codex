@@ -1,8 +1,8 @@
-# 下一会话交接：Auth Baseline Amendment 已完成，Issue #17 收尾
+# 下一会话交接：Auth Baseline Amendment 已完成；Issue #17 已验证，等待获批后回填关闭
 
 > 快照日期：2026-08-29。
 >
-> 当前本地基线：`main` 的 `HEAD=7266fd8720f68557693028057b825b97750707a3`，`origin/main=b960ccbc18edab57947333a5c776688cf7c2032a`，本地 ahead 6 / behind 0，尚未 push。六个提交 `21449cf`、`ba80f9d`、`2e119d5`、`f615d08`、`ee2b023`、`7266fd8` 已交付 Issue #17 的版本化 Character 创建主体及审查修复；Issue #17 仍为 OPEN，尚有一个名称策略验收项部分通过。#14–#16 的认证关闭提交与证据继续保留在历史中。
+> 当前本地基线：`main` 已包含 Issue #17 的实现链及收尾提交 `b52da13`、复审修复 `0858610`、证据同步 `03340a8`；快照时 `origin/main=59fe7bf`，本地提交尚未 push。Issue #17 的八项验收和最终双轴复审均已通过，但 GitHub 回填/关闭因外部写入审批要求用户显式授权而尚未执行。
 >
 > 本文件是无会话记忆时的现行启动入口。它汇总继续工作必需的仓库状态、已完成边界、固定决策、未完成证据和启动顺序；不创造需求、合同或正式状态。冲突时按 `docs/19_documentation_governance.md` 回到对应权威来源。
 
@@ -21,12 +21,12 @@ git log -8 --decorate --oneline
 
 期望结果：
 
-- 分支是 `main`。快照时工作树应有三项：本文件 `docs/new_engine/NEXT_SESSION_HANDOFF.md` 是本次 #17 交接更新；`src/new_mud/apps/characters/models.py` 已修改、`src/new_mud/apps/characters/migrations/0005_presencesnapshot_resumeticketcredential_and_more.py` 未跟踪，后两项是必须保留的后续票据 WIP。若状态不同，先审计来源，不得用还原或清理命令覆盖它们。
-- `HEAD` 必须至少是 `7266fd8` 或包含它；历史还应包含 #14–#16 的 `638e8cf`、`28d6715`、`1e6e930`、`b545ed1`、`4c5a4b3` 与 `116b4fc`。快照时 `origin/main` 是 `b960ccb`，预期为 ahead 6 / behind 0；ahead 会随 #17 收尾提交增长，不作为固定合同。出现 behind 或关键提交缺失时先审计提交来源。
+- 分支是 `main`。快照时工作树应有三项：本文件 `docs/new_engine/NEXT_SESSION_HANDOFF.md` 是本次 #17 交接更新；`src/new_mud/apps/characters/models.py` 已修改、`src/new_mud/apps/characters/migrations/0005_presencesnapshot_resumeticketcredential_and_more.py` 未跟踪，后两项是必须保留的后续票据 WIP。提交本文件后只应剩后两项；若状态不同，先审计来源，不得用还原或清理命令覆盖它们。
+- `HEAD` 必须至少包含 `03340a8`，并保留 #17 的 `21449cf`、`ba80f9d`、`2e119d5`、`f615d08`、`ee2b023`、`7266fd8`、`b52da13` 与 `0858610`。快照时 `origin/main` 是 `59fe7bf`；本地 ahead 会随本交接提交增长，不作为固定合同。出现 behind 或关键提交缺失时先审计提交来源。
 - Issue #9 的 E1 / Slice 1 历史提交仍可回查；Issue #10 是现行认证修订规格；Issue #11 是权威同步检查点。
 - GitHub 原生子票 #11–#16 与阻塞链 `#11 -> #12 -> #13 -> #14 -> #15 -> #16` 均已关闭。
-- Character Slice 2 已拆为 #17–#20：#17 Character 创建、#18 ConnectionSession/`session.authenticate`、#19 `presence.enter`/最小 snapshot、#20 `session.resume`/`presence.recover`。快照时四票均 OPEN、`ready-for-agent` 且无人认领；#19 声明阻塞于 #17/#18，#20 声明阻塞于 #19。
-- 当前工作入口只收尾 #17。父级 Slice 2 清单用于追踪贡献与防止越界，不把 #18–#20 的验收并入 #17。
+- Character Slice 2 已拆为 #17–#20：#17 Character 创建、#18 ConnectionSession/`session.authenticate`、#19 `presence.enter`/最小 snapshot、#20 `session.resume`/`presence.recover`。#17 已由当前执行者认领且本地验收完成，但远端仍 OPEN；#19 声明阻塞于 #17/#18，#20 声明阻塞于 #19。
+- 当前工作入口只等待对 #17 GitHub 回填/关闭的显式授权。关闭前不启动 #18；父级 Slice 2 清单只追踪贡献与防止越界。
 
 若本机 PATH 找不到全局 `gh`，使用 `artifacts\reports\gh-cli\expanded\bin\gh.exe`；先重新读取 Issues #17–#20 及评论，远端状态覆盖本快照。当前已验证环境是 Windows 10 `10.0.19045`、仓库 `.venv` 中的 CPython `3.14.2`、PostgreSQL `18.4` 和 `requirements.lock` 的精确依赖。
 
@@ -46,9 +46,9 @@ git log -8 --decorate --oneline
 - Issue #16 的 PostgreSQL、迁移往返、Python/前端静态与构建、隔离数据库 H5 E2E、秘密与依赖检查已执行。真实 SMTP 因没有显式 opt-in、收件人和秘密授权准确记录为 1 skipped；关闭后的网络恢复复核已校验并运行官方 gitleaks `v8.30.1`，12 个确认是合成测试口令的历史命中以精确 fingerprint 豁免，全历史重扫为 `no leaks found`，CI 官方 gate 保留。首轮 Standards 1 hard / 1 judgement 与 Spec 2 hard / 0 scope creep 已由 `4c5a4b3` 修复；正式复审为 Standards 0 hard / 1 judgement、Spec 0 hard / 0 观察，完整记录见 `20_AUTH_BASELINE_EVIDENCE.md`。
 - CONTEXT 与 ADR-0005 至 ADR-0008 固定联系方式权威、密文/lookup 分离、持久 outbox 和 Access Token 必须解析 active AuthSession。
 - Auth Baseline Amendment 的运行实现、证据验收与 Issue 回填均已完成，`AUTH-005=verified`。
-- Issue #17 已实现版本化 `CharacterCreationProfile`、`Character`/`CharacterOwnership`、每 GameAccount 首发单角色容量、创建证据和幂等记录、NFKC/名称策略、active/retired roster、REST profile/roster/create、H5 创建与重登展示。角色创建目录与账号 `creation_capacity` 保持正交，H5 创建成功或 `CHARACTER_ALREADY_EXISTS` 后重新读取服务端 roster/capacity，不用本地推算。
-- #17 最近一次聚焦验证为后端 REST `20 passed`、PostgreSQL Character 并发合同 `7 passed`、Character store `5 passed`；只出现两条既知 Daphne/Python 3.16 asyncio 弃用警告。这些是聚焦证据，不替代最终全量门禁。
-- #17 双轴复审的已提交 diff 为 Standards `0 hard / 2 low judgement`；两个低等级判断是 Character/Auth HTTP 请求结构相似，以及 Character 错误文案仍聚合在 auth 消息模块，均为非阻塞建议。Spec 按 Issue #17 自身八项验收为 `7 完整 / 1 部分`：服务端 CJK 范围遗漏 Unicode 16 已分配的 Extension H `U+31350..U+323AF`；H5 原生 `maxlength=12` 按 UTF-16 code unit 计数，会提前限制合法补充平面 CJK 名称。
+- Issue #17 已实现版本化 `CharacterCreationProfile`、`Character`/`CharacterOwnership`、每 GameAccount 首发单角色容量、创建证据和幂等记录、完整 NFKC/名称策略、active/retired roster、REST profile/roster/create、H5 创建与重登展示。`b52da13` 补齐 Unicode 16 CJK Extension H `U+31350..U+323AF`，并把 H5 长度限制改为 Unicode code point 计数。
+- #17 聚焦验证为后端 REST `21 passed`、PostgreSQL Character 合同 `7 passed`、Character store `5 passed`。隔离提交树 PostgreSQL 严格串行全量为 `315 passed / 1 SMTP skipped`；Ruff/108 files format/mypy 108 source files/Django check/migration drift/typecheck/Vitest 17/H5 build 均通过。Playwright 三视口执行 24 个槽位（16 passed / 8 expected skipped），三个视口的 12-code-point Extension H 创建与重登断言均通过；Windows 清理挂起后确认 8000/5173 无监听且相关进程为 0。
+- #17 最终双轴复审以实际起点 `b960ccb` 为固定点：Standards 唯一 hard finding 已由 `0858610` 修复，复审为 `0 hard / 4 judgement`；Spec 为 `0 findings`，八项验收全部覆盖且无 #18–#20 scope creep。4 个 judgement 是 CharacterDisplayName 值对象、profile identity data clump、grant resolver 重复和 Character 文案模块位置，均为非阻塞后续深化候选。
 - 工作树中的 `PresenceSnapshot`/`ResumeTicketCredential` 与 migration `0005` 是 #19/#20 方向的未完成 WIP，不属于 #17 完成度或收尾提交。复审另记录一个中等级 WIP 观察：ticket 重复保存 snapshot 的 AuthSession/GameAccount/Character/generation，但尚无跨行一致性数据库合同；后续实现必须决定增加约束/trigger 还是从 snapshot 派生。
 
 ### 2.2 Issue 索引
@@ -63,7 +63,7 @@ git log -8 --decorate --oneline
 | #14 | 已关闭；邮箱密码重置、即时认证撤销、安全通知与 H5 | #13 |
 | #15 | 已关闭；RecoveryCode 退役与认证基线原子切换 | #14 |
 | #16 | 已关闭；分层证据、SMTP opt-in 边界与正式双轴复审 | #15 |
-| #17 | OPEN；版本化 Character 创建主体已提交，名称策略一项待修复、复验和关闭 | 无 |
+| #17 | OPEN；本地实现、全量验证与双轴复审已完成，只待用户显式授权 GitHub 回填/关闭 | 无 |
 | #18 | OPEN；ConnectionSession 与 `session.authenticate` | 无 |
 | #19 | OPEN；`presence.enter` 与最小场景 snapshot | #17、#18 |
 | #20 | OPEN；`session.resume` 与 `presence.recover` | #19 |
@@ -81,7 +81,7 @@ git log -8 --decorate --oneline
 | `AUTH-005` | `verified` | Issues #11–#16 已交付权威、运行实现、分层验证和无未解决 hard finding 的正式双轴复审 |
 | `AUTH-003` | `specified` | #17 已实现首发单 Character；active/grace PresenceSnapshot 租约、并发 enter 与 takeover 证据仍在 #19 及 Slice 3 |
 | `AUTH-006` | `specified` | PresenceRecovery 属于未来 Character Slice 2，takeover 仍独立 |
-| `CHARACTER-001` | `specified` | #17 运行实现接近完成但尚未关闭和同步正式证据；GM 审计与账号生命周期证据仍不得提前宣称 verified |
+| `CHARACTER-001` | `implemented` | #17 已验证 Character 创建；GM 审计、账号退休和发布级关闭恢复证据仍缺，不得提前宣称 verified |
 | `CLIENT-001`、`NFR-001`、`NFR-002` | `blocked` | 完整浏览器、容量/soak 与发布级恢复证据未完成 |
 | `RELEASE-001` / PublicV1Gate | `blocked` | 尚不具备公开接纳真实玩家的发布证据 |
 
@@ -116,18 +116,11 @@ git log -8 --decorate --oneline
 - 保留当前 Presence 模型/migration WIP，但 #17 的暂存、提交、复审和关闭证据只包含 #17 文件。后续票据接手 WIP 时先解决 ticket/snapshot 冗余身份字段的一致性边界。
 - CAPTCHA provider、完整发布浏览器矩阵、容量/soak 或 PublicV1Gate 完成声明。
 
-## 7. Issue #17 的收尾顺序
+## 7. 下一步
 
-1. 完成第 1 节仓库与 GitHub 检查，读取 Issue #17 正文/评论、`requirements_v6.md` 8.8、CONTEXT 的 Character 术语、08/15 的 Character 创建合同和 `plans/m0-e1-tracer-bullets.md` 的父级清单；若 #17 仍无人认领，按 issue tracker 约定添加当前执行者。完成条件：确认 #17 仍 OPEN、无新增 blocker、已有明确 assignee，且没有把 #18–#20 纳入 #17。
-2. 逐项对照 Issue #17 八项验收与六个本地提交；把父级 Slice 2 清单只作为边界和追踪来源。完成条件：维持 `A1/A2/A4–A8=完整，A3=部分`，或用新证据明确修正该结论。
-3. 保护 Presence WIP。#17 修改应集中于 `services.py`、Character 名称测试、`CharacterCreationPanel.vue` 及必要 H5 测试；使用路径限定的暂存。完成条件：`models.py` 的 129 行 Presence WIP 与未跟踪 `0005` 内容未丢失、未进入 #17 staged diff。
-4. 继续使用 `/implement #17`，按其 TDD 流程修复 A3：先加入一个由两个 Unicode 16 CJK Extension H 字符组成的合法名称回归，再扩展服务端允许范围，同时继续拒绝 `Cn` 未分配码点；移除原生 UTF-16 `maxlength` 或改为按 Unicode code point 与服务端一致的输入约束，并加入补充平面 CJK 的 H5 回归。完成条件：服务端与 H5 均允许 2–12 个合法补充平面 CJK code points，现有空白、控制、双向控制、emoji、纯数字、保留词和未分配码点测试继续通过。
-5. 先跑聚焦 REST、PostgreSQL 并发、Character store 和 Character H5 E2E，再按仓库脚本跑全量后端、Ruff/format、mypy、Django check、migration drift、前端 typecheck/test/build 及完整主视口 E2E。PostgreSQL 严格串行。完成条件：所有 #17 必做门禁通过；SMTP smoke 仍只在明确 opt-in 时运行。Windows Playwright 自管 webServer 可能在结束清理阶段挂起，验证断言结果并确认 8000/5173 无残留监听。
-6. 当前 WIP migration 会被 Django 测试发现，因此 #17 的最终 clean-baseline 证据应在不丢失 WIP的隔离干净工作树中复核，或以等价方法证明 `0005` 未参与 #17 迁移漂移和全量结论。完成条件：最终证据只对应 #17 已提交树，同时当前工作树的 WIP仍可恢复。
-7. 使用 `/code-review origin/main` 做最终 Standards + Spec 复审。Spec 的完成判定只使用 Issue #17 八项验收；父级 Slice 2 清单检查贡献和越界，不把 #18–#20 缺失报告为 #17 finding。完成条件：无未解决 hard finding；低等级判断明确记录为修复或非阻塞。
-8. 按实际证据同步 `plans/m0-e1-tracer-bullets.md`、`17_REQUIREMENTS_TRACEABILITY.md`、`18_IMPLEMENTATION_STATUS.md` 与本交接：只勾选/记录 #17 已交付的 Character 创建部分，不把 Character Slice 2、`AUTH-003`、`AUTH-006`、M1 或 PublicV1Gate 写成完成。使用路径限定的 `git add` 提交 #17 收尾和状态文档。完成条件：提交只含 #17 与证据同步，不含 Presence WIP。
-9. 向 GitHub Issue #17 回填提交、环境、命令、测试数字和最终双轴结论后关闭 Issue。完成条件：#17 为 CLOSED，工作树仍保留明确的 Presence WIP；没有 push，除非用户另行授权。
-10. #17 关闭后再按依赖推进 #18；#19 等 #17/#18，#20 等 #19。完成条件：每张票只按自身 Issue 验收实施，Slice 2 父级状态只在 #17–#20 的共同证据齐备后提升。
+1. 获得用户对“将详细提交/环境/测试/复审数据发布到 GitHub 并关闭 Issue #17”的显式授权。
+2. 授权后把第 2.1 节证据回填 Issue #17 并关闭；不 push，除非用户另行授权。
+3. 复核工作树仍只保留 Presence 模型与 migration `0005` WIP，然后再按依赖认领 #18。#19 等 #17/#18，#20 等 #19；不得把它们的验收并入 #17。
 
 ## 8. 权威来源
 
@@ -153,4 +146,4 @@ git log -8 --decorate --oneline
 - PostgreSQL 测试与全量 pytest 严格串行，避免数据库和临时目录竞争。
 - 结构检查、局部测试、内部候选或 163 smoke 都不能提升 PublicV1Gate。
 - 现行事实只更新本入口、17/18、计划或对应权威文档；归档只用于历史追溯。
-- 当前本地 #17 提交尚未 push；GitHub 回填/关闭不自动授予 push 权限，只有用户明确授权后才推送。
+- 当前本地 #17 提交尚未 push；GitHub 回填/关闭也尚未获显式授权。关闭授权与 push 授权彼此独立，只有用户分别明确授权后才执行。
