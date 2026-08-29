@@ -284,7 +284,9 @@ test("authenticated player creates one versioned character and sees the result",
 
   const profile = page.getByTestId("character-profile");
   await expect(profile).toContainText("江湖新秀");
-  const submittedName = `Ａ${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  const submittedName = Array.from(randomUUID().replaceAll("-", "").slice(0, 12), (digit) =>
+    String.fromCodePoint(0x31350 + Number.parseInt(digit, 16)),
+  ).join("");
   await nativeInput(page, "character-display-name").fill(submittedName);
   await page.getByTestId("character-gender").selectOption("female");
   await page.getByTestId("character-pronouns").selectOption("she");

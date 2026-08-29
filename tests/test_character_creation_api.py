@@ -176,6 +176,29 @@ def test_character_creation_rejects_client_supplied_initial_state_without_partia
     assert accepted.json()["initial_state_summary"]["stats"] == {}
 
 
+def test_character_creation_accepts_unicode_16_cjk_extension_h_names(client: Client) -> None:
+    start_content()
+    authenticated_client(client, username="extension_h_character_player")
+
+    display_name = "\U00031350\U00031351"
+    response = client.post(
+        reverse("character-list"),
+        {
+            "creation_profile_key": "default-v1",
+            "creation_profile_version": "1.0.0",
+            "display_name": display_name,
+            "gender": "unspecified",
+            "pronouns": "unspecified",
+        },
+        content_type="application/json",
+        secure=True,
+        headers={"idempotency-key": "character-create-extension-h"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["display_name"] == display_name
+
+
 @pytest.mark.parametrize(
     "display_name",
     (

@@ -61,6 +61,14 @@ function initializeSelection() {
     : (profile.pronoun_options[0] ?? "");
 }
 
+function limitDisplayNameLength(event: Event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  const limited = Array.from(input.value).slice(0, 12).join("");
+  if (input.value !== limited) input.value = limited;
+  characterDisplayName.value = limited;
+}
+
 async function createCharacter() {
   if (props.accessToken === null || selectedProfile.value === null) return;
   emit("busy-change", true);
@@ -134,7 +142,7 @@ watch(
       <input
         id="character-display-name"
         v-model="characterDisplayName"
-        maxlength="12"
+        @input="limitDisplayNameLength"
         autocomplete="off"
         placeholder="2–12 个中文、Latin、数字或中点"
         data-testid="character-display-name"
