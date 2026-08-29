@@ -99,6 +99,8 @@ test("registration stays separate, then login refresh and logout complete", asyn
   const project = testInfo.project.name.replace(/\W/g, "_").slice(0, 10);
   const username = `e1_${project}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const password = "safe-e2e-passphrase-42";
+  const webSockets: string[] = [];
+  page.on("websocket", (socket) => webSockets.push(socket.url()));
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "创建江湖账号" })).toBeVisible();
@@ -140,9 +142,16 @@ test("registration stays separate, then login refresh and logout complete", asyn
   await expect(page.locator("body")).not.toContainText("恢复码");
 
   await nativeInput(page, "password").fill(password);
+  const loginResponse = page.waitForResponse("**/api/v1/auth/login");
   await page.getByTestId("submit").click();
   await expect(page.getByTestId("session-panel")).toBeVisible();
   await expect(page.getByTestId("announcement")).toContainText("登录成功");
+  const accessToken = ((await (await loginResponse).json()) as { access_token: string })
+    .access_token;
+  await expect(page.getByTestId("connection-state")).toHaveText("已连接");
+  await expect(page.getByTestId("connection-authentication-state")).toHaveText("已认证");
+  expect(webSockets).toContain("ws://localhost:5173/ws/v1/game");
+  expect(JSON.stringify(await browserPersistence(page))).not.toContain(accessToken);
 
   await page.getByTestId("refresh").click();
   await expect(page.getByTestId("announcement")).toContainText("会话已安全刷新");
@@ -151,6 +160,7 @@ test("registration stays separate, then login refresh and logout complete", asyn
   await expect(page.getByTestId("session-panel")).toHaveCount(0);
   await expect(page.getByTestId("announcement")).toContainText("已安全退出");
   await expect(page.getByTestId("submit")).toBeVisible();
+  expect(JSON.stringify(await browserPersistence(page))).not.toContain(accessToken);
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

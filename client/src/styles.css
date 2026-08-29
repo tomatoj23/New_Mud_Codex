@@ -287,6 +287,35 @@ button:disabled {
   font-weight: 700;
 }
 
+.connection-status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.connection-status div {
+  padding: 10px 12px;
+  border: 1px solid #343a34;
+  background: #0b100d;
+}
+
+.connection-status dt {
+  color: #878b83;
+  font-size: 0.74rem;
+}
+
+.connection-status dd {
+  margin: 4px 0 0;
+  color: #e1b761;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.8rem;
+}
+
+.connection-error {
+  color: #df8c7d !important;
+}
+
 .session-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

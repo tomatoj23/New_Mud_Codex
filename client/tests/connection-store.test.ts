@@ -12,7 +12,7 @@ describe("connection store", () => {
     expect(store.connectionState).toBe("connecting");
     store.connected();
     store.authenticating();
-    store.authenticated();
+    store.authenticated({ authSessionId: "session-1", gameAccountId: "account-1" });
     expect(store.isConnected).toBe(true);
     expect(store.isAuthenticated).toBe(true);
     expect(JSON.stringify(store.$state)).not.toContain("access_token");
@@ -21,7 +21,7 @@ describe("connection store", () => {
   it("clears authentication state after a protocol failure", () => {
     const store = useConnectionStore();
     store.connected();
-    store.authenticated();
+    store.authenticated({ authSessionId: "session-1", gameAccountId: "account-1" });
     store.failed("TOKEN_EXPIRED");
     expect(store.isAuthenticated).toBe(false);
     expect(store.lastErrorCode).toBe("TOKEN_EXPIRED");

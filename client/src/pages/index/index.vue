@@ -5,13 +5,23 @@ import { AuthApiError } from "../../api/auth";
 import { CharacterApiError, type CharacterCreationResult } from "../../api/characters";
 import { errorMessage } from "../../features/auth/messages";
 import CharacterCreationPanel from "../../features/characters/CharacterCreationPanel.vue";
+import {
+  browserGameConnectionEnvironment,
+  GameConnection,
+} from "../../protocol/game-connection";
 import { useAuthStore } from "../../stores/auth";
 import { useCharacterStore } from "../../stores/characters";
+import { useConnectionStore } from "../../stores/connection";
 
 type Mode = "register" | "login" | "password-reset";
 
 const auth = useAuthStore();
 const characters = useCharacterStore();
+const connectionState = useConnectionStore();
+const gameConnection = new GameConnection(
+  connectionState,
+  browserGameConnectionEnvironment(),
+);
 const mode = ref<Mode>("register");
 const email = ref("");
 const verificationCode = ref("");
@@ -47,6 +57,22 @@ const verificationButtonLabel = computed(() => {
   if (resendRemaining.value > 0) return `${resendRemaining.value} 秒后可重发`;
   return sentDestination.value === null ? "发送验证码" : "重新发送验证码";
 });
+const connectionLabel = computed(
+  () =>
+    ({
+      disconnected: "已断开",
+      connecting: "连接中",
+      connected: "已连接",
+    })[connectionState.connectionState],
+);
+const connectionAuthenticationLabel = computed(
+  () =>
+    ({
+      unauthenticated: "未认证",
+      authenticating: "认证中",
+      authenticated: "已认证",
+    })[connectionState.authenticationState],
+);
 function stopCountdown() {
   if (resendTimer !== null) {
     clearInterval(resendTimer);
@@ -177,6 +203,7 @@ async function submit() {
     } else {
       characters.clearCharacterState();
       await auth.login(username.value, password.value);
+      if (auth.accessToken !== null) gameConnection.connect(auth.accessToken);
       await loadCharacterWorkspace();
       announcement.value = "登录成功。认证会话已建立。";
     }
@@ -193,8 +220,10 @@ async function refreshSession() {
   errorCode.value = null;
   try {
     await auth.refresh();
+    if (auth.accessToken !== null) gameConnection.connect(auth.accessToken);
     announcement.value = "会话已安全刷新。";
   } catch (error) {
+    gameConnection.disconnect();
     auth.clearAuthentication();
     characters.clearCharacterState();
     captureError(error);
@@ -208,9 +237,11 @@ async function logout() {
   errorCode.value = null;
   try {
     await auth.logout();
+    gameConnection.disconnect();
     characters.clearCharacterState();
     announcement.value = "已安全退出。";
   } catch (error) {
+    gameConnection.disconnect();
     captureError(error);
   } finally {
     busy.value = false;
@@ -221,10 +252,12 @@ onMounted(async () => {
   busy.value = true;
   try {
     if (await auth.retryPendingRefresh()) {
+      if (auth.accessToken !== null) gameConnection.connect(auth.accessToken);
       await loadCharacterWorkspace();
       announcement.value = "未确认的会话刷新已安全重试。";
     }
   } catch (error) {
+    gameConnection.disconnect();
     auth.clearAuthentication();
     characters.clearCharacterState();
     captureError(error);
@@ -233,7 +266,10 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(stopCountdown);
+onBeforeUnmount(() => {
+  stopCountdown();
+  gameConnection.disconnect();
+});
 </script>
 
 <template>
@@ -397,6 +433,25 @@ onBeforeUnmount(stopCountdown);
         <div class="session-panel" data-testid="session-panel">
           <p class="session-state">认证会话已建立</p>
           <p>访问凭据仅保存在当前 JavaScript 运行时内存中。</p>
+          <dl class="connection-status" data-testid="connection-status">
+            <div>
+              <dt>游戏连接</dt>
+              <dd data-testid="connection-state">{{ connectionLabel }}</dd>
+            </div>
+            <div>
+              <dt>连接认证</dt>
+              <dd data-testid="connection-authentication-state">
+                {{ connectionAuthenticationLabel }}
+              </dd>
+            </div>
+          </dl>
+          <p
+            v-if="connectionState.lastErrorCode"
+            class="connection-error"
+            data-testid="connection-error"
+          >
+            游戏连接错误：{{ connectionState.lastErrorCode }}
+          </p>
           <div class="session-actions">
             <button type="button" :disabled="busy" data-testid="refresh" @click="refreshSession">
               刷新会话

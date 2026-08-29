@@ -112,6 +112,27 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 AUTH_ACCESS_TOKEN_TTL_SECONDS = int(os.getenv("NEW_MUD_ACCESS_TOKEN_TTL_SECONDS", "900"))
+GAME_WEBSOCKET_REQUEST_RATE_LIMIT = max(
+    1,
+    int(os.getenv("NEW_MUD_GAME_WEBSOCKET_REQUEST_RATE_LIMIT", "120")),
+)
+GAME_WEBSOCKET_REQUEST_RATE_WINDOW_SECONDS = max(
+    0.001,
+    float(os.getenv("NEW_MUD_GAME_WEBSOCKET_REQUEST_RATE_WINDOW_SECONDS", "60")),
+)
+GAME_WEBSOCKET_TERMINAL_LIMIT = max(
+    1,
+    int(os.getenv("NEW_MUD_GAME_WEBSOCKET_TERMINAL_LIMIT", "4096")),
+)
+GAME_WEBSOCKET_AUTH_REVALIDATION_INTERVAL_SECONDS = max(
+    0.1,
+    float(
+        os.getenv(
+            "NEW_MUD_GAME_WEBSOCKET_AUTH_REVALIDATION_INTERVAL_SECONDS",
+            "5",
+        )
+    ),
+)
 AUTH_REFRESH_TOKEN_TTL_SECONDS = int(
     os.getenv("NEW_MUD_REFRESH_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60))
 )

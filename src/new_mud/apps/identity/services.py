@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import partial
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -16,6 +17,7 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, models, transaction
 from django.utils import timezone
 
+from .connection_sessions import notify_auth_session_invalidated
 from .models import (
     AuthSession,
     GameAccount,
@@ -485,6 +487,21 @@ def _access_claims(session: AuthSession, *, issued_at) -> dict[str, object]:
     }
 
 
+def auth_session_is_active(
+    session: AuthSession,
+    *,
+    instance_id: str | None = None,
+) -> bool:
+    return bool(
+        session.state == AuthSession.State.ACTIVE
+        and session.absolute_expires_at > timezone.now()
+        and session.user.is_active
+        and session.game_account.lifecycle == GameAccount.Lifecycle.ACTIVE
+        and session.game_account.user_id == session.user_id
+        and (instance_id is None or session.game_account.instance_id == instance_id)
+    )
+
+
 def resolve_active_auth_session(access_token: object) -> AuthSession:
     if not isinstance(access_token, str):
         raise AuthenticationFailed
@@ -504,13 +521,8 @@ def resolve_active_auth_session(access_token: object) -> AuthSession:
         session = AuthSession.objects.select_related("user", "game_account").get(pk=auth_session_id)
     except AuthSession.DoesNotExist as error:
         raise AuthenticationFailed from error
-    if (
-        session.state != AuthSession.State.ACTIVE
-        or session.absolute_expires_at <= timezone.now()
-        or not session.user.is_active
-        or session.game_account.lifecycle != GameAccount.Lifecycle.ACTIVE
-        or session.game_account.user_id != session.user_id
-        or claimed_user_id != str(session.user_id)
+    if not auth_session_is_active(session) or (
+        claimed_user_id != str(session.user_id)
         or claimed_game_account_id != session.game_account_id
     ):
         raise AuthenticationFailed
@@ -679,6 +691,13 @@ def _converge_authentication_control(
         session.revoke_reason = reason
         session.version += 1
         session.save(update_fields=("state", "revoked_at", "revoke_reason", "version"))
+        transaction.on_commit(
+            partial(
+                notify_auth_session_invalidated,
+                auth_session_id=session.pk,
+                reason_code=reason,
+            )
+        )
     return session_changed
 
 

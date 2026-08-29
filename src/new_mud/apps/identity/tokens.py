@@ -5,7 +5,9 @@ import hashlib
 import hmac
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from django.conf import settings
@@ -37,7 +39,19 @@ def encode_access_token(claims: dict[str, Any]) -> str:
     return f"{signing_input}.{signature}"
 
 
-def decode_access_token(token: str) -> dict[str, Any] | None:
+class AccessTokenDecodeStatus(StrEnum):
+    VALID = "valid"
+    EXPIRED = "expired"
+    INVALID = "invalid"
+
+
+@dataclass(frozen=True)
+class AccessTokenDecodeResult:
+    status: AccessTokenDecodeStatus
+    claims: dict[str, Any] | None = None
+
+
+def decode_access_token_result(token: str) -> AccessTokenDecodeResult:
     try:
         encoded_header, encoded_claims, provided_signature = token.split(".")
         signing_input = f"{encoded_header}.{encoded_claims}"
@@ -45,19 +59,33 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
             hmac.new(_signing_key("access"), signing_input.encode(), hashlib.sha256).digest()
         )
         if not hmac.compare_digest(provided_signature, expected_signature):
-            return None
-        padding = "=" * (-len(encoded_claims) % 4)
-        claims = json.loads(base64.urlsafe_b64decode(encoded_claims + padding))
-        if not isinstance(claims, dict):
-            return None
+            return AccessTokenDecodeResult(AccessTokenDecodeStatus.INVALID)
+        header_padding = "=" * (-len(encoded_header) % 4)
+        header = json.loads(base64.urlsafe_b64decode(encoded_header + header_padding))
+        claims_padding = "=" * (-len(encoded_claims) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(encoded_claims + claims_padding))
+        if (
+            not isinstance(header, dict)
+            or header.get("alg") != "HS256"
+            or header.get("typ") != "JWT"
+            or not isinstance(claims, dict)
+        ):
+            return AccessTokenDecodeResult(AccessTokenDecodeStatus.INVALID)
         now = int(datetime.now(UTC).timestamp())
         if claims.get("aud") != "new-mud-h5" or not isinstance(claims.get("exp"), int):
-            return None
+            return AccessTokenDecodeResult(AccessTokenDecodeStatus.INVALID)
         if claims["exp"] <= now:
-            return None
-        return claims
-    except ValueError, TypeError, json.JSONDecodeError:
+            return AccessTokenDecodeResult(AccessTokenDecodeStatus.EXPIRED, claims)
+        return AccessTokenDecodeResult(AccessTokenDecodeStatus.VALID, claims)
+    except ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError:
+        return AccessTokenDecodeResult(AccessTokenDecodeStatus.INVALID)
+
+
+def decode_access_token(token: str) -> dict[str, Any] | None:
+    result = decode_access_token_result(token)
+    if result.status != AccessTokenDecodeStatus.VALID:
         return None
+    return result.claims
 
 
 def materialize_refresh_token(credential_id: uuid.UUID, generation: int) -> str:
